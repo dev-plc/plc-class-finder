@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PL교회 교리교육 조 배치 검색</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 헤더 -->
+        <header class="header">
+            <div class="logo">PLC</div>
+            <h1 class="title">교리교육 조 배치 검색</h1>
+            <p class="subtitle">이름과 전화번호 뒷자리를 입력해주세요</p>
+        </header>
+
+        <!-- 검색 폼 -->
+        <div class="search-box">
+            <div class="input-group">
+                <label for="name">이름</label>
+                <input 
+                    type="text" 
+                    id="name" 
+                    placeholder="홍길동"
+                    autocomplete="off"
+                >
+            </div>
+            
+            <div class="input-group">
+                <label for="phone">전화번호 뒷 4자리</label>
+                <input 
+                    type="tel" 
+                    id="phone" 
+                    placeholder="1234"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    autocomplete="off"
+                >
+            </div>
+
+            <button class="search-btn" id="searchBtn">
+                <span class="btn-text">조 확인하기</span>
+                <span class="btn-icon">→</span>
+            </button>
+        </div>
+
+        <!-- 결과 표시 영역 -->
+        <div class="result-container" id="resultContainer" style="display: none;">
+            <div class="result-card">
+                <div class="result-header">
+                    <h2 class="result-title">배치 정보</h2>
+                    <button class="close-btn" id="closeBtn">✕</button>
+                </div>
+                
+                <div class="result-content">
+                    <div class="info-row">
+                        <span class="info-label">이름</span>
+                        <span class="info-value" id="resultName">-</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">조</span>
+                        <span class="info-value highlight" id="resultTeam">-</span>
+                    </div>
+                    
+                    <div class="info-row">
+                        <span class="info-label">위치</span>
+                        <span class="info-value" id="resultLocation">-</span>
+                    </div>
+                </div>
+
+                <!-- 배치도 이미지 -->
+                <div class="map-container" id="mapContainer" style="display: none;">
+                    <h3 class="map-title">조 배치도</h3>
+                    <img id="mapImage" src="" alt="조 배치도" class="map-image">
+                </div>
+            </div>
+        </div>
+
+        <!-- 에러 메시지 -->
+        <div class="error-message" id="errorMessage" style="display: none;">
+            <span class="error-icon">⚠</span>
+            <span class="error-text" id="errorText"></span>
+        </div>
+
+        <!-- 푸터 -->
+        <footer class="footer">
+            <p>PL교회 12주 교리교육</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
