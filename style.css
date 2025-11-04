@@ -58,22 +58,28 @@ body {
     margin-bottom: 40px;
 }
 
-.logo {
-    display: inline-block;
-    font-size: 32px;
-    font-weight: 800;
+.logo-container {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.logo-text {
+    font-size: 48px;
+    font-weight: 200;
     letter-spacing: 2px;
     color: var(--midnight-blue);
-    background: var(--white);
-    width: 80px;
-    height: 80px;
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 24px;
-    box-shadow: var(--shadow-lg);
-    border: 3px solid var(--midnight-blue);
+    margin-bottom: 8px;
+    font-family: 'Arial', 'Helvetica', sans-serif;
+    text-align: center;
+}
+
+.logo-subtitle {
+    font-size: 10px;
+    font-weight: 300;
+    letter-spacing: 4px;
+    color: var(--text-light);
+    opacity: 0.7;
+    text-align: center;
 }
 
 .title {
