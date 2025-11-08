@@ -3,18 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PL교회 교리교육 조 배치 검색</title>
+    <title>PL교회 교리교육 조배치 검색</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <!-- 헤더 -->
         <header class="header">
+        <div class="theme-toggle-wrapper">
+            <svg class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <button class="theme-toggle" id="themeToggle" aria-label="테마 전환">
+                <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                </div>
+            </button>
+        </div>
+            
             <div class="logo-container">
                 <div class="logo-text">PLC</div>
                 <div class="logo-subtitle">PRACTICAL LEADERSHIP CHURCH</div>
             </div>
-            <h1 class="title">교리교육 조 배치 검색</h1>
+            <h1 class="title">교리교육 조배치 검색</h1>
             <p class="subtitle">이름과 전화번호 뒷 4자리를 입력해주세요</p>
         </header>
 
@@ -90,6 +109,13 @@
         <footer class="footer">
             <p>PL교회 12주 교리교육</p>
         </footer>
+    </div>
+
+    <!-- 이미지 전체화면 모달 -->
+    <div class="image-modal" id="imageModal">
+        <button class="image-modal-close" id="modalClose">✕</button>
+        <img id="modalImage" src="" alt="배치도 확대">
+        <div class="image-modal-hint">클릭하거나 ESC를 눌러 닫기</div>
     </div>
 
     <script src="script.js"></script>

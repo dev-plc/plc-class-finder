@@ -74,6 +74,13 @@ function showResult(member) {
     resultTeam.textContent = member.team;
     resultLocation.textContent = member.location;
     
+    // 60세 이상이면 큰 글씨 모드
+    if (member.age && member.age >= 60) {
+        document.body.classList.add('large-text');
+    } else {
+        document.body.classList.remove('large-text');
+    }
+    
     // 배치도 이미지가 있는 경우
     if (member.mapImage) {
         mapImage.src = member.mapImage;
@@ -139,6 +146,50 @@ phoneInput.addEventListener('input', (e) => {
 // 입력 시 에러 메시지 숨기기
 nameInput.addEventListener('input', hideError);
 phoneInput.addEventListener('input', hideError);
+
+// 테마 전환 기능
+const themeToggle = document.getElementById('themeToggle');
+
+// 기본값은 항상 라이트 모드 (localStorage 무시)
+// 페이지 로드 시 항상 라이트 모드로 시작
+document.body.classList.remove('dark-mode');
+
+// 테마 전환 버튼
+themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark-mode');
+});
+
+// 이미지 전체화면 모달
+const imageModal = document.getElementById('imageModal');
+const modalImage = document.getElementById('modalImage');
+const modalClose = document.getElementById('modalClose');
+
+// 배치도 이미지 클릭 시 전체화면
+mapImage.addEventListener('click', () => {
+    modalImage.src = mapImage.src;
+    imageModal.classList.add('active');
+    document.body.style.overflow = 'hidden'; // 스크롤 방지
+});
+
+// 모달 닫기
+function closeModal() {
+    imageModal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+}
+
+modalClose.addEventListener('click', closeModal);
+imageModal.addEventListener('click', (e) => {
+    if (e.target === imageModal) {
+        closeModal();
+    }
+});
+
+// ESC 키로 모달 닫기
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && imageModal.classList.contains('active')) {
+        closeModal();
+    }
+});
 
 // 페이지 로드 시 데이터 로드
 window.addEventListener('load', () => {
