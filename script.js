@@ -184,10 +184,72 @@ imageModal.addEventListener('click', (e) => {
     }
 });
 
-// ESC 키로 모달 닫기
+
+// 관리자 로그인 기능
+const adminBtn = document.getElementById('adminBtn');
+const adminLoginModal = document.getElementById('adminLoginModal');
+const adminLoginClose = document.getElementById('adminLoginClose');
+const adminLoginForm = document.getElementById('adminLoginForm');
+const adminLoginError = document.getElementById('adminLoginError');
+const adminIdInput = document.getElementById('adminId');
+const adminPasswordInput = document.getElementById('adminPassword');
+
+// 관리자 계정 정보
+const ADMIN_CREDENTIALS = {
+    username: 'plc',
+    password: 'plc0110'
+};
+
+// 관리자 버튼 클릭
+adminBtn.addEventListener('click', () => {
+    adminLoginModal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => adminIdInput.focus(), 100);
+});
+
+// 로그인 모달 닫기
+adminLoginClose.addEventListener('click', closeAdminLoginModal);
+adminLoginModal.addEventListener('click', (e) => {
+    if (e.target === adminLoginModal) {
+        closeAdminLoginModal();
+    }
+});
+
+function closeAdminLoginModal() {
+    adminLoginModal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+    adminLoginForm.reset();
+    adminLoginError.style.display = 'none';
+}
+
+// 로그인 폼 제출
+adminLoginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    const username = adminIdInput.value.trim();
+    const password = adminPasswordInput.value.trim();
+    
+    if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+        // 로그인 성공
+        sessionStorage.setItem('adminLoggedIn', 'true');
+        window.location.href = 'admin.html';
+    } else {
+        // 로그인 실패
+        adminLoginError.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
+        adminLoginError.style.display = 'block';
+        adminPasswordInput.value = '';
+        adminPasswordInput.focus();
+    }
+});
+
+// ESC 키로 로그인 모달 닫기
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && imageModal.classList.contains('active')) {
-        closeModal();
+    if (e.key === 'Escape') {
+        if (adminLoginModal.classList.contains('active')) {
+            closeAdminLoginModal();
+        } else if (imageModal.classList.contains('active')) {
+            closeModal();
+        }
     }
 });
 

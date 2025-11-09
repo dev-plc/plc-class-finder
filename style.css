@@ -82,74 +82,52 @@ body * {
     position: relative;
 }
 
-/* 테마 전환 버튼 */
-.theme-toggle-wrapper {
+/* 헤더 버튼들 */
+.header-buttons {
     position: absolute;
     top: 0;
     right: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
 }
 
-.theme-icon {
+.icon-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn svg {
     color: var(--midnight-blue);
     opacity: 0.7;
     transition: all 0.3s ease;
 }
 
-body.dark-mode .theme-icon {
+.icon-btn:hover {
+    background: var(--warm-beige);
+}
+
+.icon-btn:hover svg {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+body.dark-mode .icon-btn svg {
     color: var(--midnight-blue);
     opacity: 0.8;
 }
 
-.theme-toggle {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-}
-
-.toggle-track {
-    width: 48px;
-    height: 24px;
+body.dark-mode .icon-btn:hover {
     background: var(--warm-beige);
-    border: 2px solid rgba(27, 59, 111, 0.2);
-    border-radius: 12px;
-    position: relative;
-    transition: all 0.3s ease;
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-.theme-toggle:hover .toggle-track {
-    border-color: rgba(27, 59, 111, 0.4);
-}
-
-body.dark-mode .toggle-track {
-    background: var(--warm-beige);
-    border-color: rgba(91, 140, 216, 0.3);
-}
-
-body.dark-mode .theme-toggle:hover .toggle-track {
-    border-color: rgba(91, 140, 216, 0.5);
-}
-
-.toggle-thumb {
-    width: 18px;
-    height: 18px;
-    background: var(--midnight-blue);
-    border-radius: 50%;
-    position: absolute;
-    top: 1px;
-    left: 1px;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-body.dark-mode .toggle-thumb {
-    transform: translateX(24px);
-    background: var(--midnight-blue);
-}
 
 .logo-container {
     text-align: center;
@@ -500,6 +478,197 @@ body.dark-mode .toggle-thumb {
     font-size: 13px;
     color: var(--text-light);
     font-weight: 500;
+}
+
+/* 테마 전환 버튼 */
+.theme-toggle-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.theme-icon {
+    color: var(--midnight-blue);
+    opacity: 0.7;
+    transition: all 0.3s ease;
+}
+
+body.dark-mode .theme-icon {
+    color: var(--midnight-blue);
+    opacity: 0.8;
+}
+
+.theme-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.toggle-track {
+    width: 48px;
+    height: 24px;
+    background: var(--warm-beige);
+    border: 2px solid rgba(27, 59, 111, 0.2);
+    border-radius: 12px;
+    position: relative;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.theme-toggle:hover .toggle-track {
+    border-color: rgba(27, 59, 111, 0.4);
+}
+
+body.dark-mode .toggle-track {
+    background: var(--warm-beige);
+    border-color: rgba(91, 140, 216, 0.3);
+}
+
+body.dark-mode .theme-toggle:hover .toggle-track {
+    border-color: rgba(91, 140, 216, 0.5);
+}
+
+.toggle-thumb {
+    width: 18px;
+    height: 18px;
+    background: var(--midnight-blue);
+    border-radius: 50%;
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+body.dark-mode .toggle-thumb {
+    transform: translateX(24px);
+    background: var(--midnight-blue);
+}
+
+/* 관리자 로그인 모달 */
+.admin-login-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9998;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.admin-login-modal.active {
+    display: flex;
+}
+
+.admin-login-content {
+    background: var(--white);
+    border-radius: 24px;
+    padding: 32px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.4s ease-out;
+}
+
+.admin-login-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.admin-login-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--midnight-blue);
+}
+
+.admin-login-close {
+    background: var(--milk-beige);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 18px;
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.admin-login-close:hover {
+    background: var(--warm-beige);
+    color: var(--text-dark);
+}
+
+.admin-login-form .input-group {
+    margin-bottom: 20px;
+}
+
+.admin-login-form .input-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--midnight-blue);
+    margin-bottom: 8px;
+}
+
+.admin-login-form .input-group input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px;
+    border: 2px solid var(--warm-beige);
+    border-radius: 12px;
+    background: var(--milk-beige);
+    color: var(--text-dark);
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.admin-login-form .input-group input:focus {
+    outline: none;
+    border-color: var(--midnight-blue);
+    background: var(--white);
+    box-shadow: 0 0 0 3px rgba(27, 59, 111, 0.1);
+}
+
+.admin-login-btn {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--midnight-blue) 0%, var(--navy) 100%);
+    color: var(--white);
+    border: none;
+    border-radius: 12px;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-md);
+    margin-top: 8px;
+}
+
+.admin-login-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.admin-login-btn:active {
+    transform: translateY(0);
+}
+
+.admin-login-error {
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(220, 38, 38, 0.1);
+    border-left: 4px solid var(--error-red);
+    border-radius: 8px;
+    color: var(--error-red);
+    font-size: 14px;
+    font-weight: 600;
 }
 
 /* 50세 이상 큰 글씨 모드 */
