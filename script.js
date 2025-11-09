@@ -62,7 +62,7 @@ function searchMember() {
     if (member) {
         showResult(member);
     } else {
-        showError('일치하는 정보를 찾을 수 없습니다.<br>이름과 전화번호를 다시 확인해주세요.');
+        showError('일치하는 정보를 찾을 수 없습니다.<br>이름과 전화번호를 다시 확인해주세요.<br><br>주변 교역자에게 문의하시거나<br>하단의 <strong>문의</strong> 또는 <strong>오류 신고</strong>를 이용해주세요.');
     }
 }
 
@@ -242,7 +242,7 @@ adminLoginForm.addEventListener('submit', (e) => {
     }
 });
 
-// ESC 키로 로그인 모달 닫기
+// ESC 키로 모달 닫기
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         if (adminLoginModal.classList.contains('active')) {
