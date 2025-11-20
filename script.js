@@ -197,7 +197,7 @@ const adminPasswordInput = document.getElementById('adminPassword');
 // 관리자 계정 정보
 const ADMIN_CREDENTIALS = {
     username: 'plc',
-    password: 'plc0110'
+    password: 'plc1234'
 };
 
 // 관리자 버튼 클릭
@@ -258,4 +258,5 @@ window.addEventListener('load', () => {
     loadData();
     nameInput.focus();
 });
+
 
