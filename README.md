@@ -1,143 +1,149 @@
-# PL교회 교리교육 조 배치 검색기
+# ☕ PL Cafe 메뉴판
 
-## 📋 프로젝트 소개
-교회 교리교육 성도들이 자신의 조 배치 정보를 쉽게 찾을 수 있도록 만든 웹 검색 시스템입니다.
+교회 카페를 위한 귀여운 주문 시스템 POC
 
-## ✨ 주요 기능
+## 🎨 기능
 
-### 일반 사용자 모드
-- 이름 + 전화번호 뒷 4자리로 조 검색
-- 조, 위치 정보 표시
-- 조별 배치도 이미지 표시 및 확대 보기
-- 다크/라이트 테마 전환
-- 60세 이상 자동 큰 글씨 모드
-- 모바일 최적화된 반응형 디자인
+### 고객 화면 (index.html)
+- 귀여운 메뉴판 디자인
+- 메뉴 선택 및 장바구니
+- 주문자 정보 입력 (이름, 구분)
+- 주문하기 기능
 
-### 관리자 모드 (신규)
-- **검색 모드**: 이름만으로 검색 가능 (동명이인 처리)
-- **조별 보기**: 모든 조를 카드 형식으로 표시 및 조원 목록 확인
-- **개인별 보기**: 전체 조원 명단을 카드 형식으로 표시
-- 실시간 검색/필터링 기능
-- 관리자 계정 로그인 (plc / plc0110)
+### 직원 화면 (staff.html)
+- 실시간 주문 현황
+- 주문 상태 관리 (대기중/준비중/완료)
+- 필터링 기능
+- 통계 표시
 
-## 🚀 사용 방법
+## 🚀 실행 방법
 
-### 일반 사용자
-1. 웹사이트 접속
-2. 이름과 전화번호 뒷 4자리 입력
-3. "조 확인하기" 버튼 클릭
-4. 조, 위치, 배치도 확인
+### 로컬에서 테스트
+1. 프로젝트 폴더를 엽니다
+2. `index.html`을 더블클릭하거나 Live Server로 실행
+3. 고객 화면에서 주문 테스트
+4. 직원 화면(`staff.html`)에서 주문 확인
 
-### 관리자
-1. 우측 상단 관리자 아이콘 클릭
-2. 아이디: `plc`, 비밀번호: `plc0110` 입력
-3. 3가지 모드 중 선택하여 사용:
-   - **검색 모드**: 이름으로 빠른 검색
-   - **조별 보기**: 조 단위 관리
-   - **개인별 보기**: 전체 명단 확인
+### GitHub Pages로 배포
+1. GitHub 저장소 생성
+2. 파일들을 업로드
+3. Settings → Pages에서 배포 설정
+4. `main` 브랜치 선택
+5. 배포 완료!
 
-### 로컬 서버 실행 (개발용)
-```bash
-python -m http.server 8000
-```
-그 후 브라우저에서 `http://localhost:8000` 접속
+## 📱 사용 방법
 
-## 📝 데이터 업데이트 방법
+### 고객용
+1. 메뉴판 접속 (`index.html`)
+2. 이름과 구분 입력
+3. 원하는 메뉴 선택 (클릭)
+4. "주문하기" 버튼 클릭
+5. 완료!
 
-### 1. Google Sheets에서 CSV 다운로드
-- 파일 → 다운로드 → 쉼표로 구분된 값(.csv)
+### 직원용
+1. 직원 화면 접속 (`staff.html`)
+2. 실시간으로 주문 확인
+3. "준비 시작" → "완료" 버튼으로 상태 관리
+4. 필터로 주문 상태별 조회
 
-### 2. CSV 구조
-```
-Location,Team,name,number
-웨슬리홀,남 1,[이름],
-웨슬리홀,남 1,[이름],
-```
+## 💾 현재 저장 방식
 
-**중요:** `name` 열은 "이름+전화번호뒷4자리" 형식
+**LocalStorage 사용 중**
+- 브라우저에 데이터 저장
+- 같은 PC/브라우저에서만 작동
+- POC 용도로 충분
 
-### 3. JSON 변환
-수동으로 `data.json` 파일을 업데이트하거나, 스크립트를 사용하여 변환합니다.
+## 🔥 Firebase 업그레이드 (선택사항)
 
-## 🖼️ 배치도 이미지 추가 방법
+실제 운영을 위해 Firebase로 업그레이드하면:
+- ✅ 핸드폰으로 주문 가능
+- ✅ 여러 기기에서 실시간 동기화
+- ✅ 주문 내역 영구 저장
 
-### 1. 이미지 파일 준비
-- `images` 폴더에 조별 배치도 이미지 저장
-- 파일명 예시: `남1.jpg`, `여5.png` 등
+### Firebase 설정 방법
 
-### 2. data.json에 이미지 경로 추가
-```json
-{
-  "location": "칼빈채플",
-  "team": "방송팀",
-  "name": "테스트",
-  "phone": "1111",
-  "mapImage": "images/남1.jpg"
-}
-```
+1. **Firebase 프로젝트 생성**
+   - https://console.firebase.google.com/ 접속
+   - "프로젝트 추가" 클릭
+   - 프로젝트 이름: "plcafe" 입력
 
-## 📱 QR 코드 생성
+2. **Realtime Database 활성화**
+   - 좌측 메뉴 → Realtime Database
+   - "데이터베이스 만들기" 클릭
+   - 테스트 모드로 시작
 
-웹사이트 배포 후 다음 사이트에서 QR 코드 생성:
-- https://www.qr-code-generator.com/
-- https://www.the-qrcode-generator.com/
+3. **Firebase 설정 코드 받기**
+   - 프로젝트 설정 → 웹 앱 추가
+   - Firebase 설정 객체 복사
 
-## 🌐 배포 방법 (GitHub Pages)
+4. **코드에 적용**
+   - `scripts/firebase-config.js` 파일 생성
+   - 아래 코드 붙여넣기:
 
-### 1. GitHub 저장소 생성
-1. GitHub에 새 repository 생성
-2. 파일 업로드 (index.html, style.css, script.js, data.json)
+```javascript
+// Firebase SDK 로드
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-### 2. GitHub Pages 활성화
-1. Settings → Pages
-2. Source: Deploy from a branch
-3. Branch: main → /(root) → Save
+// Firebase 설정 (여기에 본인의 설정 입력)
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
 
-### 3. 접속 URL
-- 일반 사용자: `https://<사용자명>.github.io/<저장소명>/`
-- 관리자: `https://<사용자명>.github.io/<저장소명>/admin.html`
+// Firebase 초기화
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
 
-## 📁 파일 구조
-```
-교리교육 조배치 검색기/
-├── index.html          # 메인 페이지 (일반 사용자)
-├── admin.html          # 관리자 페이지
-├── style.css           # 공통 스타일시트
-├── admin.css           # 관리자 전용 스타일
-├── script.js           # 메인 페이지 로직
-├── admin.js            # 관리자 페이지 로직
-├── data.json           # 성도 데이터 (291명)
-├── images/             # 배치도 이미지
-│   ├── 1107_웨슬리_v2.jpg
-│   ├── 1107_칼빈.jpg
-│   └── 자모 영아실 안내.jpg
-├── convert_*.py        # 데이터 변환 스크립트들
-└── README.md           # 이 파일
+export { database, ref, push, onValue, update };
 ```
 
-## 🎨 디자인
-- **컬러 테마**
-  - 배경: 밀크베이지 (#F5F1E8)
-  - 메인: 미드나이트 블루 (#1B3B6F)
-  - 로고: PLC
-- **다크 모드 지원**
-- **반응형 디자인** (모바일, 태블릿, 데스크톱)
+5. **HTML 파일 수정**
+   - customer.js, staff.js를 Firebase 버전으로 교체
+   - 자세한 코드는 필요시 제공
 
-## 📊 현재 데이터
-- 총 성도 수: 291명
-- 조 구성: 새1~새7, 남1~남9, 여1~여7, 청1~청7, DG1~DG5, M1~M5, W1~W5
-- 위치: 웨슬리홀, 칼빈채플, 자모영아실
+## 📝 메뉴 수정 방법
 
-## ⚠️ 주의사항
-- 전화번호는 뒷 4자리만 사용 (개인정보 보호)
-- 관리자 계정 정보는 관리자에게만 공유
-- 데이터 업데이트 시 `data.json` 파일만 교체하면 됩니다
-- 브라우저에서 직접 파일을 열 때 CORS 에러가 발생할 수 있습니다 (로컬 서버 사용 권장)
-- 관리자 로그인은 세션 스토리지를 사용하여 보안 유지
+`index.html`의 메뉴 섹션에서:
 
-## 📞 문의
-문제가 발생하면 교회 담당자에게 연락주세요.
+```html
+<div class="menu-card" data-menu="메뉴이름" data-price="가격">
+    <div class="menu-icon">🎯</div>
+    <h3 class="menu-name">메뉴이름</h3>
+    <p class="menu-price">가격원</p>
+    <button class="btn-select">선택하기</button>
+</div>
+```
 
----
-**PL교회 12주 교리교육**
+## 🎨 디자인 수정
+
+### 색상 변경
+`styles/customer.css`:
+- 메인 컬러: `#ff6b9d` (핑크)
+- 그라데이션: `#ffecd2` → `#fcb69f`
+
+`styles/staff.css`:
+- 메인 컬러: `#667eea` (보라)
+- 그라데이션: `#667eea` → `#764ba2`
+
+### 아이콘 변경
+이모지를 원하는 것으로 교체하세요!
+
+## 💡 향후 개선 아이디어
+
+- [ ] Firebase 연동으로 실시간 동기화
+- [ ] 메뉴 이미지 추가
+- [ ] 옵션 선택 기능 (HOT/ICE, 샷 추가 등)
+- [ ] 주문 알림 사운드
+- [ ] 다크 모드
+- [ ] 주문 통계 대시보드
+
+## 📧 문의
+
+문제가 있거나 개선 아이디어가 있으면 알려주세요!
 
