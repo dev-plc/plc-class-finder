@@ -259,4 +259,3 @@ window.addEventListener('load', () => {
     nameInput.focus();
 });
 
-
