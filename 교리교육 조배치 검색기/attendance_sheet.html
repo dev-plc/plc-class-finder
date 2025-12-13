@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>교리교육 출석부 생성기</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .upload-section {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border: 2px dashed #ddd;
+        }
+
+        .file-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        input[type="file"] {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #45a049;
+        }
+
+        .btn-secondary {
+            background: #2196F3;
+            color: white;
+            margin-left: 10px;
+        }
+
+        .btn-secondary:hover {
+            background: #0b7dda;
+        }
+
+        .btn-print {
+            background: #ff9800;
+            color: white;
+        }
+
+        .btn-print:hover {
+            background: #e68900;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .team-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .team-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+
+        .team-checkbox input {
+            cursor: pointer;
+        }
+
+        .attendance-sheets {
+            display: none;
+        }
+
+        .sheet {
+            page-break-after: always;
+            margin-bottom: 30px;
+            background: white;
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .sheet-header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #000;
+            position: relative;
+        }
+
+        .sheet-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .sheet-subtitle {
+            font-size: 15px;
+            color: #000;
+            font-weight: normal;
+        }
+
+        .lunch-summary {
+            position: absolute;
+            top: 0;
+            left: 0;
+            font-size: 19px;
+            color: #000;
+            font-weight: bold;
+            padding: 5px 10px;
+        }
+
+        .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            border: 2px solid #000;
+        }
+
+        .attendance-table th {
+            background: white;
+            color: #000;
+            padding: 10px 6px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 1px solid #000;
+            border-bottom: 2px solid #000;
+        }
+
+        .attendance-table td {
+            padding: 8px 6px;
+            text-align: center;
+            border: 1px solid #000;
+            font-size: 13px;
+            background: white;
+        }
+
+        .attendance-table tr:nth-child(even) {
+            background: white;
+        }
+
+        .attendance-table tr:hover {
+            background: white;
+        }
+
+        .attendance-table td.id-col {
+            text-align: left;
+            font-weight: 500;
+            padding-left: 12px;
+            font-size: 17px !important;
+            color: #000;
+            white-space: nowrap; /* 인쇄 시에도 이름+번호가 한 줄로 나오도록 */
+        }
+
+        .lunch-col {
+            background: white !important;
+        }
+
+        .attendance-table th.lunch-col {
+            background: white !important;
+        }
+
+        .attendance-table td.lunch-col {
+            background: white !important;
+        }
+
+        .attendance-table td.lunch-col.present {
+            background: #f5f5f5 !important;
+        }
+
+        .attendance-table td.lunch-col.absent {
+            background: white !important;
+        }
+
+        .attendance-table td.lunch-col .attendance-box {
+            background: transparent !important;
+        }
+
+        .check-col {
+            width: 46px;
+            height: 32px;
+            text-align: center;
+            padding: 0;
+            vertical-align: middle;
+        }
+
+        .attendance-box {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: normal;
+            background: white;
+            color: #000;
+            line-height: 1;
+            min-height: 32px;
+        }
+
+        .attendance-box.empty {
+            border: none;
+            background: white;
+        }
+
+        .attendance-box.present {
+            background: white;
+            color: #000;
+            border: none;
+        }
+
+        .attendance-box.absent {
+            background: white;
+            color: #000;
+            border: none;
+        }
+
+        .attendance-box.special {
+            background: white;
+            color: #000;
+            border: none;
+            font-size: 10px;
+        }
+
+        .info-box {
+            background: white;
+            padding: 15px;
+            border: 1px solid #000;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #000;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 50px;
+            color: #999;
+            font-size: 16px;
+        }
+
+        /* 인쇄 스타일 */
+        @media print {
+            /* 일반 출석부는 landscape */
+            @page {
+                margin: 0;
+                size: A4 landscape;
+                marks: none;
+            }
+            
+            /* 김밥 계수표는 portrait */
+            body:has(.lunch-sheet) @page,
+            .lunch-sheet @page {
+                size: A4 portrait !important;
+                margin: 1cm !important;
+            }
+
+            @page :first {
+                margin: 0;
+            }
+
+            @page :left {
+                margin: 0;
+            }
+
+            @page :right {
+                margin: 0;
+            }
+
+            body {
+                background: white;
+                padding: 0;
+                margin: 0;
+            }
+
+            /* 브라우저 기본 머리글/바닥글 완전 제거 */
+            @page {
+                @top-left { content: ""; }
+                @top-center { content: ""; }
+                @top-right { content: ""; }
+                @bottom-left { content: ""; }
+                @bottom-center { content: ""; }
+                @bottom-right { content: ""; }
+            }
+
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+
+            h1,
+            .subtitle,
+            .upload-section,
+            .controls,
+            .team-selector,
+            .info-box {
+                display: none !important;
+            }
+
+            .sheet {
+                page-break-after: always;
+                page-break-inside: avoid;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 30px;
+                margin-bottom: 30px;
+                background: white;
+                box-shadow: none;
+            }
+
+            .sheet:last-child {
+                page-break-after: auto;
+            }
+
+            .sheet-header {
+                border-bottom: 2px solid #000;
+                margin-bottom: 20px;
+                padding-bottom: 12px;
+                position: relative;
+            }
+
+            .sheet-title {
+                font-size: 28px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 4px;
+                letter-spacing: 0.5px;
+            }
+
+            .sheet-subtitle {
+                font-size: 15px;
+                color: #000;
+                font-weight: normal;
+            }
+
+            .lunch-summary {
+                position: absolute;
+                top: 0;
+                left: 0;
+                font-size: 19px;
+                color: #000;
+                font-weight: bold;
+                padding: 5px 10px;
+            }
+
+            .attendance-table {
+                font-size: 13px;
+                border-collapse: collapse;
+                width: 100%;
+                border: 2px solid #000;
+                margin-top: 15px;
+            }
+
+            .attendance-table th,
+            .attendance-table td {
+                padding: 8px 6px;
+                border: 1px solid #000;
+            }
+
+            .attendance-table th {
+                background: white !important;
+                color: #000;
+                padding: 10px 6px;
+                text-align: center;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid #000;
+                border-bottom: 2px solid #000;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .attendance-table th.lunch-col,
+            .attendance-table td.lunch-col {
+                background: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .attendance-table td.lunch-col.present {
+                background: #f5f5f5 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .attendance-table td.lunch-col.absent {
+                background: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .attendance-table td.lunch-col .attendance-box {
+                background: transparent !important;
+            }
+
+            .lunch-summary {
+                font-size: 19px; /* 화면과 동일하게 크게 표시 */
+                border: none;
+            }
+
+            .attendance-table td {
+                padding: 8px 6px;
+                text-align: center;
+                border: 1px solid #000;
+                font-size: 13px;
+                background: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .check-col {
+                width: 46px;
+                height: 32px;
+                text-align: center;
+                padding: 0;
+                vertical-align: middle;
+            }
+
+            .attendance-box {
+                width: 100%;
+                height: 100%;
+                border: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 20px;
+                font-weight: normal;
+                background: white;
+                color: #000;
+                line-height: 1;
+                min-height: 32px;
+            }
+
+            .attendance-box.present {
+                background: white !important;
+                border: none;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .attendance-box.absent {
+                background: white !important;
+                border: none;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .attendance-box.special {
+                background: white !important;
+                font-size: 9px;
+                border: none;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .attendance-box.empty {
+                background: white !important;
+                border: none;
+            }
+
+            .check-col {
+                width: 40px;
+                padding: 0;
+            }
+
+            .attendance-table td.id-col {
+                text-align: left;
+                font-weight: 500;
+                padding-left: 12px;
+                font-size: 17px !important;
+                color: #000;
+            }
+
+            @page {
+                margin: 1cm;
+                size: A4 landscape;
+                marks: none;
+            }
+
+            @page :first {
+                margin: 1cm;
+            }
+
+            @page :left {
+                margin: 1cm;
+            }
+
+            @page :right {
+                margin: 1cm;
+            }
+
+            /* 브라우저 기본 페이지 번호 및 경로 숨기기 */
+            @media print {
+                @page {
+                    margin-bottom: 0;
+                }
+            }
+
+            /* 프린트 시에도 hidden 클래스가 적용된 요소 숨김 */
+            .hidden {
+                display: none !important;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* 김밥 계수표 전용 스타일 */
+        .lunch-sheet {
+            padding: 8px;
+        }
+
+        .lunch-header {
+            margin-bottom: 5px;
+            padding-bottom: 4px;
+        }
+
+        .lunch-header .sheet-title {
+            font-size: 18px;
+        }
+
+        .lunch-header .sheet-subtitle {
+            font-size: 11px;
+        }
+
+        .lunch-header .lunch-summary {
+            font-size: 13px;
+        }
+
+        .lunch-teams-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 5px;
+            margin-top: 8px;
+        }
+
+        .lunch-team-block {
+            border: 2px solid #000;
+            padding: 4px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .lunch-team-header {
+            font-weight: bold;
+            font-size: 14px;
+            padding: 4px;
+            background: #f0f0f0;
+            border-bottom: 2px solid #000;
+            margin-bottom: 4px;
+            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .lunch-team-name {
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .lunch-count {
+            font-size: 14px;
+            color: #000;
+            font-weight: bold;
+        }
+
+        .lunch-members-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .lunch-member-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 3px;
+            padding: 2px 3px;
+            font-size: 12px;
+        }
+
+        .lunch-member-id {
+            flex: 1;
+            font-size: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .lunch-member-status {
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
+            min-width: 15px;
+            text-align: center;
+        }
+
+        /* 인쇄 시 김밥 계수표 최적화 */
+        @media print {
+            /* 김밥 계수표 모드일 때 페이지 방향 변경 */
+            body.lunch-mode @page {
+                size: A4 portrait !important;
+                margin: 1cm !important;
+            }
+            
+            .lunch-sheet {
+                padding: 5px !important;
+                margin: 0 !important;
+                page-break-after: always;
+                page-break-inside: avoid;
+            }
+
+            .lunch-sheet:last-child {
+                page-break-after: auto;
+            }
+
+            .lunch-header {
+                margin-bottom: 3px !important;
+                padding-bottom: 3px !important;
+            }
+
+            .lunch-header .sheet-title {
+                font-size: 14px !important;
+                margin-bottom: 1px !important;
+            }
+
+            .lunch-header .sheet-subtitle {
+                font-size: 9px !important;
+            }
+
+            .lunch-header .lunch-summary {
+                font-size: 10px !important;
+                padding: 1px 4px !important;
+            }
+
+            .lunch-teams-grid {
+                grid-template-columns: repeat(6, 1fr) !important;
+                gap: 4px !important;
+                margin-top: 5px !important;
+            }
+
+            .lunch-team-block {
+                padding: 3px !important;
+                page-break-inside: avoid;
+                border: 1.5px solid #000 !important;
+                display: flex !important;
+                flex-direction: column !important;
+            }
+
+            .lunch-team-header {
+                font-size: 11px !important;
+                padding: 3px !important;
+                margin-bottom: 3px !important;
+                flex-shrink: 0 !important;
+            }
+
+            .lunch-team-name {
+                font-size: 11px !important;
+            }
+
+            .lunch-count {
+                font-size: 11px !important;
+            }
+
+            .lunch-members-list {
+                gap: 1px !important;
+            }
+
+            .lunch-member-row {
+                gap: 2px !important;
+                padding: 1px 2px !important;
+                font-size: 10px !important;
+            }
+
+            .lunch-member-id {
+                font-size: 10px !important;
+            }
+
+            .lunch-member-status {
+                font-size: 10px !important;
+                min-width: 12px !important;
+            }
+
+            .sheet {
+                padding: 5px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 교리교육 출석부 생성기</h1>
+        <p class="subtitle">CSV 파일을 업로드하면 조별 출석부가 자동으로 생성됩니다</p>
+
+        <div class="upload-section">
+            <div class="mode-selector" style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #333;">작업 모드 선택:</label>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" id="modeAttendance" onclick="setMode('attendance')" style="background: #2196F3;">📋 일반 출석부</button>
+                    <button class="btn btn-secondary" id="modeLunch" onclick="setMode('lunch')" style="background: #9C27B0;">🍙 김밥 계수</button>
+                </div>
+            </div>
+            <div class="file-input-wrapper">
+                <input type="file" id="csvFile" accept=".csv" />
+                <button class="btn btn-primary" onclick="loadCSV()">📁 CSV 파일 불러오기</button>
+            </div>
+            <div class="info-box" id="fileInfo" style="display: none;">
+                <strong>파일 정보:</strong> <span id="fileName"></span> | 
+                <strong>총 조 수:</strong> <span id="teamCount"></span>개
+            </div>
+        </div>
+
+        <div class="controls" id="controls" style="display: none;">
+            <button class="btn btn-print" onclick="printAll()">🖨️ 전체 인쇄</button>
+            <button class="btn btn-secondary" onclick="selectAllTeams()">전체 선택</button>
+            <button class="btn btn-secondary" onclick="deselectAllTeams()">전체 해제</button>
+            <button class="btn btn-print" onclick="printSelected()">선택한 조만 인쇄</button>
+        </div>
+
+        <div class="team-selector" id="teamSelector" style="display: none;"></div>
+
+        <div class="attendance-sheets" id="attendanceSheets"></div>
+    </div>
+
+    <script>
+        let teamsData = [];
+        let dateHeaders = []; // CSV에서 파싱한 날짜 헤더
+        let currentMode = 'attendance'; // 'attendance' 또는 'lunch'
+
+        function loadCSV() {
+            const fileInput = document.getElementById('csvFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('CSV 파일을 선택해주세요.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                parseCSV(text);
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const teams = {};
+            let isFirstLine = true;
+
+            lines.forEach((line, index) => {
+                const parts = line.split(',');
+
+                // 첫 번째 줄(헤더)에서 날짜 정보 파싱
+                if (isFirstLine) {
+                    // 헤더: NOTE,Lunch,Location,Team,ID,11/02,11/09,...
+                    // 5번째 컬럼(ID) 이후가 날짜들
+                    dateHeaders = parts.slice(5).map(d => d.trim()).filter(d => d);
+                    // 12주차까지 제한 (없으면 빈 칸으로 채움)
+                    while (dateHeaders.length < 12) {
+                        dateHeaders.push('');
+                    }
+                    dateHeaders = dateHeaders.slice(0, 12);
+                    isFirstLine = false;
+                    return;
+                }
+
+                if (parts.length < 5) return;
+
+                // CSV 컬럼 구조: NOTE(0), Lunch(1), Location(2), Team(3), ID(4), 출석데이터들(5~)
+                const note = parts[0].trim();
+                const lunch = parts[1].trim(); // 김밥 여부
+                const location = parts[2].trim();
+                const team = parts[3].trim();
+                const idField = parts[4].trim();
+
+                // 빈 줄 스킵
+                if (!location || !team || !idField) return;
+
+                // NOTE가 숫자만 있는 줄은 합계/구분선이므로 스킵
+                if (note && /^\d+$/.test(note)) return;
+
+                // 출석 데이터 추출 (5번째 컬럼부터)
+                const attendanceData = parts.slice(5).map(d => d.trim());
+                // 12주차까지 확장 (부족하면 빈 문자열로 채움)
+                while (attendanceData.length < 12) {
+                    attendanceData.push('');
+                }
+                const attendance = attendanceData.slice(0, 12);
+
+                const teamKey = `${location}_${team}`;
+
+                if (!teams[teamKey]) {
+                    teams[teamKey] = {
+                        location: location,
+                        team: team,
+                        members: []
+                    };
+                }
+
+                // ID를 그대로 저장 (이름+전화번호 분리하지 않음)
+                teams[teamKey].members.push({
+                    id: idField, // ID 그대로 저장
+                    note: note || '', // NOTE 저장
+                    lunch: lunch || '', // 김밥 여부 저장
+                    attendance: attendance // 출석 데이터 저장
+                });
+            });
+
+            teamsData = Object.values(teams);
+            displaySheets();
+            displayControls();
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            // 버튼 스타일 업데이트
+            document.getElementById('modeAttendance').style.background = mode === 'attendance' ? '#2196F3' : '#ccc';
+            document.getElementById('modeLunch').style.background = mode === 'lunch' ? '#9C27B0' : '#ccc';
+            
+            // body 클래스 업데이트 (화면에서는 필요 없지만 일관성을 위해)
+            if (mode === 'lunch') {
+                document.body.classList.add('lunch-mode');
+            } else {
+                document.body.classList.remove('lunch-mode');
+            }
+            
+            // 데이터가 있으면 다시 표시
+            if (teamsData.length > 0) {
+                displaySheets();
+                displayControls();
+            }
+        }
+
+        function displaySheets() {
+            const container = document.getElementById('attendanceSheets');
+            container.innerHTML = '';
+            container.style.display = 'block';
+
+            // DocumentFragment 사용하여 성능 향상
+            const fragment = document.createDocumentFragment();
+
+            if (currentMode === 'attendance') {
+                // 일반 출석부 모드
+                teamsData.forEach((team, index) => {
+                    const sheet = createSheet(team, index);
+                    fragment.appendChild(sheet);
+                });
+            } else {
+                // 김밥 계수 모드
+                const lunchSheets = createLunchSheets();
+                lunchSheets.forEach(sheet => {
+                    fragment.appendChild(sheet);
+                });
+            }
+
+            container.appendChild(fragment);
+        }
+
+        // 김밥 개수 계산 함수 ([이름]는 2개, 나머지는 1개)
+        function getLunchCount(member) {
+            if (member.lunch !== 'O') return 0;
+            // [이름]는 2개로 카운트
+            if (member.id === '[이름]') return 2;
+            return 1;
+        }
+
+        // 팀의 총 김밥 개수 계산
+        function calculateTeamLunchCount(members) {
+            return members.reduce((total, member) => total + getLunchCount(member), 0);
+        }
+
+        function createSheet(team, index) {
+            const sheet = document.createElement('div');
+            sheet.className = 'sheet';
+            sheet.id = `sheet-${index}`;
+            sheet.dataset.teamKey = `${team.location}_${team.team}`;
+
+            // 김밥 개수 계산
+            const lunchCount = calculateTeamLunchCount(team.members);
+
+            const header = document.createElement('div');
+            header.className = 'sheet-header';
+            header.innerHTML = `
+                <div class="sheet-subtitle">전교인 교리교육 출석부</div>
+                <div class="sheet-title">${team.location} - ${team.team}</div>
+                <div class="lunch-summary">김밥: ${lunchCount}개</div>
+            `;
+
+            const table = document.createElement('table');
+            table.className = 'attendance-table';
+
+            // 테이블 헤더
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            headerRow.innerHTML = `
+                <th style="width: 45px;">번호</th>
+                <th class="lunch-col" style="width: 45px;">김밥</th>
+                <th style="width: 200px;">NOTE</th>
+                <th style="width: 85px;">ID</th>
+                ${dateHeaders.map((date, idx) => `<th class="check-col">${date || `${idx + 1}주차`}</th>`).join('')}
+            `;
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // 테이블 바디
+            const tbody = document.createElement('tbody');
+            team.members.forEach((member, idx) => {
+                const row = document.createElement('tr');
+                
+                // 출석 상태에 따라 표시
+                const attendanceCells = member.attendance.map(status => {
+                    if (!status || status === '') {
+                        return '<td class="check-col"><div class="attendance-box empty"></div></td>';
+                    }
+                    const statusClass = status === 'O' ? 'present' : 
+                                       status === 'X' ? 'absent' : 
+                                       'special';
+                    return `<td class="check-col"><div class="attendance-box ${statusClass}">${status}</div></td>`;
+                }).join('');
+
+                // NOTE 표시
+                const noteDisplay = member.note || '';
+                const noteClass = noteDisplay === 'O' ? 'present' : 
+                                noteDisplay === 'X' ? 'absent' : 
+                                'empty';
+
+                // 김밥 여부 표시 ([이름]는 O(2), 나머지는 O)
+                let lunchDisplay = '';
+                if (member.lunch === 'O') {
+                    lunchDisplay = member.id === '[이름]' ? 'O(2)' : 'O';
+                } else if (member.lunch === 'X') {
+                    lunchDisplay = 'X';
+                }
+                const lunchClass = lunchDisplay ? (lunchDisplay.includes('O') ? 'present' : 'absent') : 'empty';
+                const lunchCellClass = lunchDisplay && lunchDisplay.includes('O') ? 'lunch-col present' : 'lunch-col absent';
+
+                row.innerHTML = `
+                    <td>${idx + 1}</td>
+                    <td class="check-col ${lunchCellClass}"><div class="attendance-box ${lunchClass}">${lunchDisplay}</div></td>
+                    <td class="check-col"><div class="attendance-box ${noteClass}">${noteDisplay}</div></td>
+                    <td class="id-col">${member.id}</td>
+                    ${attendanceCells}
+                `;
+                tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+
+            sheet.appendChild(header);
+            sheet.appendChild(table);
+
+            return sheet;
+        }
+
+        function createLunchSheets() {
+            const sheets = [];
+            
+            // 위치별로 팀 그룹화: 칼빈 / 웨슬리&자모영아
+            const calvinTeams = teamsData.filter(team => team.location === '칼빈채플');
+            const wesleyTeams = teamsData.filter(team => team.location === '웨슬리홀' || team.location === '자모영아실');
+
+            // 칼빈 시트 생성
+            if (calvinTeams.length > 0) {
+                sheets.push(createLunchSheet('칼빈채플', calvinTeams, 0));
+            }
+
+            // 웨슬리&자모영아 시트 생성
+            if (wesleyTeams.length > 0) {
+                sheets.push(createLunchSheet('웨슬리홀 & 자모영아실', wesleyTeams, sheets.length));
+            }
+
+            return sheets;
+        }
+
+        function createLunchSheet(title, teams, index) {
+            const sheet = document.createElement('div');
+            sheet.className = 'sheet lunch-sheet';
+            sheet.id = `lunch-sheet-${index}`;
+
+            // 전체 김밥 개수 계산
+            let totalLunchCount = 0;
+            teams.forEach(team => {
+                const lunchCount = calculateTeamLunchCount(team.members);
+                totalLunchCount += lunchCount;
+            });
+
+            const header = document.createElement('div');
+            header.className = 'sheet-header lunch-header';
+            header.innerHTML = `
+                <div class="sheet-subtitle">김밥 배분용 계수표</div>
+                <div class="sheet-title">${title}</div>
+                <div class="lunch-summary">총 ${totalLunchCount}개</div>
+            `;
+
+            // 그리드 컨테이너 생성
+            const gridContainer = document.createElement('div');
+            gridContainer.className = 'lunch-teams-grid';
+
+            teams.forEach(team => {
+                // 팀별 김밥 개수 계산
+                const lunchCount = calculateTeamLunchCount(team.members);
+                
+                // 김밥 먹는 사람과 먹지 않는 사람 분리
+                const withLunch = team.members.filter(m => m.lunch === 'O');
+                const withoutLunch = team.members.filter(m => m.lunch !== 'O');
+                
+                // 팀 블록 생성
+                const teamBlock = document.createElement('div');
+                teamBlock.className = 'lunch-team-block';
+                
+                // 팀 헤더
+                const teamHeader = document.createElement('div');
+                teamHeader.className = 'lunch-team-header';
+                
+                // 자모영아실에 배치되는 조는 팀 이름 우측에 (자모실) 표시
+                const teamNameDisplay = (team.location === '자모영아실') 
+                    ? `${team.team} (자모실)` 
+                    : team.team;
+                
+                teamHeader.innerHTML = `
+                    <span class="lunch-team-name">${teamNameDisplay}</span>
+                    <span class="lunch-count">${lunchCount}개</span>
+                `;
+                teamBlock.appendChild(teamHeader);
+                
+                // 멤버 리스트 생성 (O가 위, X가 아래)
+                const membersList = document.createElement('div');
+                membersList.className = 'lunch-members-list';
+                
+                // 김밥 먹는 사람 먼저 (O)
+                withLunch.forEach(member => {
+                    const memberRow = document.createElement('div');
+                    memberRow.className = 'lunch-member-row';
+                    // [이름]는 2개이므로 "O(2)"로 표시, 나머지는 "O"
+                    const statusDisplay = member.id === '[이름]' ? 'O(2)' : 'O';
+                    memberRow.innerHTML = `
+                        <div class="lunch-member-id">${member.id}</div>
+                        <div class="lunch-member-status">${statusDisplay}</div>
+                    `;
+                    membersList.appendChild(memberRow);
+                });
+                
+                // 김밥 먹지 않는 사람 나중에 (X)
+                withoutLunch.forEach(member => {
+                    const memberRow = document.createElement('div');
+                    memberRow.className = 'lunch-member-row';
+                    memberRow.innerHTML = `
+                        <div class="lunch-member-id">${member.id}</div>
+                        <div class="lunch-member-status">X</div>
+                    `;
+                    membersList.appendChild(memberRow);
+                });
+                
+                teamBlock.appendChild(membersList);
+                
+                gridContainer.appendChild(teamBlock);
+            });
+
+            sheet.appendChild(header);
+            sheet.appendChild(gridContainer);
+
+            return sheet;
+        }
+
+        function displayControls() {
+            document.getElementById('controls').style.display = 'flex';
+            document.getElementById('fileInfo').style.display = 'block';
+            document.getElementById('fileName').textContent = document.getElementById('csvFile').files[0].name;
+            
+            if (currentMode === 'attendance') {
+                document.getElementById('teamCount').textContent = teamsData.length;
+                
+                const selector = document.getElementById('teamSelector');
+                selector.innerHTML = '';
+                selector.style.display = 'flex';
+
+                teamsData.forEach((team, index) => {
+                    const checkbox = document.createElement('div');
+                    checkbox.className = 'team-checkbox';
+                    checkbox.innerHTML = `
+                        <input type="checkbox" id="team-${index}" checked onchange="updateSheetVisibility(${index})">
+                        <label for="team-${index}">${team.location} - ${team.team} (${team.members.length}명)</label>
+                    `;
+                    selector.appendChild(checkbox);
+                });
+            } else {
+                // 김밥 계수 모드에서는 조 선택기 숨김
+                document.getElementById('teamCount').textContent = '김밥 계수 모드';
+                document.getElementById('teamSelector').style.display = 'none';
+            }
+        }
+
+        function updateSheetVisibility(index) {
+            if (currentMode === 'lunch') return; // 김밥 계수 모드에서는 사용 안 함
+            
+            const checkbox = document.getElementById(`team-${index}`);
+            const sheet = document.getElementById(`sheet-${index}`);
+            if (checkbox && sheet) {
+                if (checkbox.checked) {
+                    sheet.classList.remove('hidden');
+                } else {
+                    sheet.classList.add('hidden');
+                }
+            }
+        }
+
+        function selectAllTeams() {
+            if (currentMode === 'lunch') return; // 김밥 계수 모드에서는 사용 안 함
+            
+            teamsData.forEach((team, index) => {
+                const checkbox = document.getElementById(`team-${index}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    updateSheetVisibility(index);
+                }
+            });
+        }
+
+        function deselectAllTeams() {
+            if (currentMode === 'lunch') return; // 김밥 계수 모드에서는 사용 안 함
+            
+            teamsData.forEach((team, index) => {
+                const checkbox = document.getElementById(`team-${index}`);
+                if (checkbox) {
+                    checkbox.checked = false;
+                    updateSheetVisibility(index);
+                }
+            });
+        }
+
+        function printAll() {
+            if (currentMode === 'lunch') {
+                // 김밥 계수 모드: body에 lunch-mode 클래스 추가하여 세로 방향으로 인쇄
+                document.body.classList.add('lunch-mode');
+                
+                // 모든 김밥 시트 표시
+                const lunchSheets = document.querySelectorAll('[id^="lunch-sheet-"]');
+                lunchSheets.forEach(sheet => {
+                    sheet.classList.remove('hidden');
+                });
+            } else {
+                // 일반 출석부 모드: lunch-mode 클래스 제거
+                document.body.classList.remove('lunch-mode');
+                
+                // 모든 출석부 시트 표시
+                teamsData.forEach((team, index) => {
+                    const sheet = document.getElementById(`sheet-${index}`);
+                    if (sheet) {
+                        sheet.classList.remove('hidden');
+                    }
+                });
+            }
+            
+            setTimeout(() => {
+                window.print();
+                // 인쇄 후 클래스 복원
+                if (currentMode !== 'lunch') {
+                    document.body.classList.remove('lunch-mode');
+                }
+            }, 100);
+        }
+
+        function printSelected() {
+            if (currentMode === 'lunch') {
+                // 김밥 계수 모드에서는 전체 인쇄와 동일
+                printAll();
+                return;
+            }
+            
+            // 일반 출석부 모드: lunch-mode 클래스 제거
+            document.body.classList.remove('lunch-mode');
+            
+            // 선택된 시트만 표시하고 나머지 숨김
+            teamsData.forEach((team, index) => {
+                const checkbox = document.getElementById(`team-${index}`);
+                const sheet = document.getElementById(`sheet-${index}`);
+                if (checkbox && sheet) {
+                    if (checkbox.checked) {
+                        sheet.classList.remove('hidden');
+                    } else {
+                        sheet.classList.add('hidden');
+                    }
+                }
+            });
+
+            setTimeout(() => {
+                window.print();
+                // 인쇄 후 클래스 복원
+                document.body.classList.remove('lunch-mode');
+            }, 100);
+        }
+
+        // 파일 드래그 앤 드롭 지원
+        const container = document.querySelector('.container');
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            container.style.border = '2px dashed #4CAF50';
+        });
+
+        container.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            container.style.border = 'none';
+        });
+
+        container.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            container.style.border = 'none';
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].name.endsWith('.csv')) {
+                document.getElementById('csvFile').files = files;
+                loadCSV();
+            }
+        });
+    </script>
+</body>
+</html>
+
