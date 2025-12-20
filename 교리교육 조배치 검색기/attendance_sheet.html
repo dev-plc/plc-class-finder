@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>교리교육 출석부 생성기</title>
+    <!-- PDF/이미지 다운로드를 위한 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -90,6 +93,15 @@
             background: #0b7dda;
         }
 
+        .btn-download {
+            background: #FF9800;
+            color: white;
+        }
+
+        .btn-download:hover {
+            background: #F57C00;
+        }
+
         .btn-print {
             background: #ff9800;
             color: white;
@@ -171,6 +183,9 @@
             color: #000;
             font-weight: bold;
             padding: 5px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
         }
 
         .attendance-table {
@@ -460,6 +475,9 @@
             .lunch-summary {
                 font-size: 19px; /* 화면과 동일하게 크게 표시 */
                 border: none;
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 2px !important;
             }
 
             .attendance-table td {
@@ -592,6 +610,13 @@
             font-size: 13px;
         }
 
+        .staff-info {
+            font-size: 15px;
+            color: #000;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
         .lunch-teams-grid {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
@@ -701,6 +726,12 @@
                 padding: 1px 4px !important;
             }
 
+            .staff-info {
+                font-size: 14px !important;
+                color: #000 !important;
+                font-weight: 600 !important;
+            }
+
             .lunch-teams-grid {
                 grid-template-columns: repeat(6, 1fr) !important;
                 gap: 4px !important;
@@ -768,6 +799,34 @@
                     <button class="btn btn-secondary" id="modeLunch" onclick="setMode('lunch')" style="background: #9C27B0;">🍙 김밥 계수</button>
                 </div>
             </div>
+            
+            <!-- 김밥 계수 모드일 때만 보이는 교역자 설정 -->
+            <div id="staffSettings" style="display: none; margin-bottom: 12px; padding: 10px 14px; background: #fafafa; border-radius: 6px; border: 1px solid #e0e0e0;">
+                <div style="display: flex; gap: 16px; align-items: center; font-size: 13px;">
+                    <span style="color: #555; font-weight: 500;">👔 교역자:</span>
+                    <label style="display: flex; align-items: center; gap: 6px; color: #666;">
+                        칼빈
+                        <input type="number" id="calvinStaffCount" value="" min="0" placeholder="0" style="width: 45px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; text-align: center; transition: all 0.2s;">
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; color: #666;">
+                        웨슬리
+                        <input type="number" id="wesleyStaffCount" value="" min="0" placeholder="0" style="width: 45px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; text-align: center; transition: all 0.2s;">
+                    </label>
+                </div>
+            </div>
+            
+            <style>
+                #staffSettings input[type="number"]:focus {
+                    outline: none;
+                    border-color: #4CAF50;
+                    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+                }
+                
+                #staffSettings input[type="number"]:hover {
+                    border-color: #bbb;
+                }
+            </style>
+            
             <div class="file-input-wrapper">
                 <input type="file" id="csvFile" accept=".csv" />
                 <button class="btn btn-primary" onclick="loadCSV()">📁 CSV 파일 불러오기</button>
@@ -780,6 +839,8 @@
 
         <div class="controls" id="controls" style="display: none;">
             <button class="btn btn-print" onclick="printAll()">🖨️ 전체 인쇄</button>
+            <button class="btn btn-download" onclick="downloadAsPDF(this)">📄 PDF 다운로드</button>
+            <button class="btn btn-download" onclick="downloadAsImage(this)">🖼️ 이미지 다운로드</button>
             <button class="btn btn-secondary" onclick="selectAllTeams()">전체 선택</button>
             <button class="btn btn-secondary" onclick="deselectAllTeams()">전체 해제</button>
             <button class="btn btn-print" onclick="printSelected()">선택한 조만 인쇄</button>
@@ -812,24 +873,61 @@
             reader.readAsText(file, 'UTF-8');
         }
 
+        // CSV 라인을 파싱하는 함수 (쉼표로 분리하되 따옴표 처리)
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
         function parseCSV(text) {
             const lines = text.split('\n');
             const teams = {};
             let isFirstLine = true;
 
             lines.forEach((line, index) => {
-                const parts = line.split(',');
+                // 빈 줄 스킵
+                if (!line.trim()) return;
+                
+                const parts = parseCSVLine(line);
 
                 // 첫 번째 줄(헤더)에서 날짜 정보 파싱
                 if (isFirstLine) {
                     // 헤더: NOTE,Lunch,Location,Team,ID,11/02,11/09,...
                     // 5번째 컬럼(ID) 이후가 날짜들
-                    dateHeaders = parts.slice(5).map(d => d.trim()).filter(d => d);
-                    // 12주차까지 제한 (없으면 빈 칸으로 채움)
-                    while (dateHeaders.length < 12) {
+                    // 빈 문자열을 제거하지 않고 그대로 유지 (출석 데이터와 인덱스 맞추기 위해)
+                    dateHeaders = parts.slice(5).map(d => d.trim());
+                    // 날짜가 있으면 그대로 사용 (제한하지 않음)
+                    // 단, 최대 12주차까지만 사용하도록 제한 (빈 칸으로 채움)
+                    const maxWeeks = 12;
+                    while (dateHeaders.length < maxWeeks) {
                         dateHeaders.push('');
                     }
-                    dateHeaders = dateHeaders.slice(0, 12);
+                    dateHeaders = dateHeaders.slice(0, maxWeeks);
+                    
+                    // 디버깅: 헤더 정보 출력
+                    console.log('CSV 헤더 파싱:', {
+                        dateHeaders: dateHeaders,
+                        dateHeadersLength: dateHeaders.length,
+                        lastDateIndex: dateHeaders.length - 1,
+                        lastDate: dateHeaders[dateHeaders.length - 1]
+                    });
+                    
                     isFirstLine = false;
                     return;
                 }
@@ -851,11 +949,25 @@
 
                 // 출석 데이터 추출 (5번째 컬럼부터)
                 const attendanceData = parts.slice(5).map(d => d.trim());
-                // 12주차까지 확장 (부족하면 빈 문자열로 채움)
-                while (attendanceData.length < 12) {
+                // dateHeaders와 동일한 길이로 맞추기 (부족하면 빈 문자열로 채움)
+                const maxWeeks = dateHeaders.length || 12;
+                while (attendanceData.length < maxWeeks) {
                     attendanceData.push('');
                 }
-                const attendance = attendanceData.slice(0, 12);
+                const attendance = attendanceData.slice(0, maxWeeks);
+                
+                // 디버깅: [이름]인 경우 상세 정보 출력
+                if (idField === '[이름]') {
+                    console.log('[이름] CSV 파싱:', {
+                        lineIndex: index,
+                        parts: parts,
+                        partsLength: parts.length,
+                        attendanceData: attendanceData,
+                        attendance: attendance,
+                        dateHeaders: dateHeaders,
+                        dateHeadersLength: dateHeaders.length
+                    });
+                }
 
                 const teamKey = `${location}_${team}`;
 
@@ -886,6 +998,9 @@
             // 버튼 스타일 업데이트
             document.getElementById('modeAttendance').style.background = mode === 'attendance' ? '#2196F3' : '#ccc';
             document.getElementById('modeLunch').style.background = mode === 'lunch' ? '#9C27B0' : '#ccc';
+            
+            // 교역자 설정 표시/숨김
+            document.getElementById('staffSettings').style.display = mode === 'lunch' ? 'block' : 'none';
             
             // body 클래스 업데이트 (화면에서는 필요 없지만 일관성을 위해)
             if (mode === 'lunch') {
@@ -926,9 +1041,76 @@
             container.appendChild(fragment);
         }
 
+        // 실제 출석 데이터가 있는 가장 마지막 날짜 열의 인덱스 찾기
+        function getLatestDateIndex() {
+            if (teamsData.length === 0) return -1;
+            
+            // 모든 멤버의 attendance를 확인해서 값이 있는 가장 큰 인덱스 찾기
+            let maxIndex = -1;
+            
+            teamsData.forEach(team => {
+                team.members.forEach(member => {
+                    if (!member.attendance) return;
+                    
+                    // 각 멤버의 마지막 값이 있는 인덱스 찾기
+                    for (let i = member.attendance.length - 1; i >= 0; i--) {
+                        const value = member.attendance[i];
+                        if (value && value.trim() !== '') {
+                            if (i > maxIndex) {
+                                maxIndex = i;
+                            }
+                            break;
+                        }
+                    }
+                });
+            });
+            
+            console.log('가장 마지막 날짜 인덱스 찾기:', {
+                maxIndex: maxIndex,
+                maxDate: dateHeaders[maxIndex]
+            });
+            
+            return maxIndex;
+        }
+
+        // 가장 마지막 날짜 열에 '돌봄'이 있는지 확인
+        function isDolbomOnLatestDate(member) {
+            // CSV 헤더의 가장 마지막 날짜 인덱스 찾기
+            const latestIndex = getLatestDateIndex();
+            if (latestIndex === -1) {
+                return false;
+            }
+            
+            // 해당 날짜(인덱스)의 attendance 값 확인
+            const attendanceValue = member.attendance && member.attendance[latestIndex];
+            const isDolbom = attendanceValue && attendanceValue.trim() === '돌봄';
+            
+            // 디버깅: 특정 인원 로그 출력
+            if (member.id === '[이름]' || member.id === '[이름]' || member.id === '[이름]') {
+                console.log(`${member.id} 디버깅:`, {
+                    latestIndex: latestIndex,
+                    latestDate: dateHeaders[latestIndex],
+                    attendance: member.attendance,
+                    attendanceAtLatestIndex: attendanceValue,
+                    attendanceValueRaw: `"${attendanceValue}"`,
+                    isDolbom: isDolbom,
+                    lunchValue: member.lunch
+                });
+            }
+            
+            return isDolbom;
+        }
+
         // 김밥 개수 계산 함수 ([이름]는 2개, 나머지는 1개)
+        // 가장 마지막 날짜 열에 '돌봄'이 있으면 김밥 미계수
         function getLunchCount(member) {
             if (member.lunch !== 'O') return 0;
+            
+            // 가장 마지막 날짜 열에 '돌봄'이면 0개
+            if (isDolbomOnLatestDate(member)) {
+                return 0;
+            }
+            
             // [이름]는 2개로 카운트
             if (member.id === '[이름]') return 2;
             return 1;
@@ -994,15 +1176,20 @@
                                 noteDisplay === 'X' ? 'absent' : 
                                 'empty';
 
-                // 김밥 여부 표시 ([이름]는 O(2), 나머지는 O)
+                // 김밥 여부 표시 ([이름]는 O(2), 나머지는 O, 가장 마지막 날짜 열에 돌봄인 경우 돌봄)
                 let lunchDisplay = '';
                 if (member.lunch === 'O') {
-                    lunchDisplay = member.id === '[이름]' ? 'O(2)' : 'O';
+                    // 가장 마지막 날짜 열에 '돌봄'인 경우 '돌봄' 표시
+                    if (isDolbomOnLatestDate(member)) {
+                        lunchDisplay = '돌봄';
+                    } else {
+                        lunchDisplay = member.id === '[이름]' ? 'O(2)' : 'O';
+                    }
                 } else if (member.lunch === 'X') {
                     lunchDisplay = 'X';
                 }
-                const lunchClass = lunchDisplay ? (lunchDisplay.includes('O') ? 'present' : 'absent') : 'empty';
-                const lunchCellClass = lunchDisplay && lunchDisplay.includes('O') ? 'lunch-col present' : 'lunch-col absent';
+                const lunchClass = lunchDisplay ? (lunchDisplay.includes('O') ? 'present' : lunchDisplay === '돌봄' ? 'special' : 'absent') : 'empty';
+                const lunchCellClass = lunchDisplay && lunchDisplay.includes('O') ? 'lunch-col present' : lunchDisplay === '돌봄' ? 'lunch-col absent' : 'lunch-col absent';
 
                 row.innerHTML = `
                     <td>${idx + 1}</td>
@@ -1024,30 +1211,39 @@
         function createLunchSheets() {
             const sheets = [];
             
+            // 입력된 교역자 김밥 개수 가져오기 (빈 값은 0으로 처리)
+            const calvinStaffCount = parseInt(document.getElementById('calvinStaffCount').value) || 0;
+            const wesleyStaffCount = parseInt(document.getElementById('wesleyStaffCount').value) || 0;
+            
             // 위치별로 팀 그룹화: 칼빈 / 웨슬리&자모영아
             const calvinTeams = teamsData.filter(team => team.location === '칼빈채플');
             const wesleyTeams = teamsData.filter(team => team.location === '웨슬리홀' || team.location === '자모영아실');
 
-            // 칼빈 시트 생성
+            // 칼빈 시트 생성 (교역자 포함)
             if (calvinTeams.length > 0) {
-                sheets.push(createLunchSheet('칼빈채플', calvinTeams, 0));
+                const staffGroups = calvinStaffCount > 0 ? [{ name: '칼빈', count: calvinStaffCount }] : [];
+                sheets.push(createLunchSheet('칼빈채플', calvinTeams, 0, staffGroups));
             }
 
-            // 웨슬리&자모영아 시트 생성
+            // 웨슬리&자모영아 시트 생성 (교역자 포함)
             if (wesleyTeams.length > 0) {
-                sheets.push(createLunchSheet('웨슬리홀 & 자모영아실', wesleyTeams, sheets.length));
+                const staffGroups = wesleyStaffCount > 0 ? [{ name: '웨슬리', count: wesleyStaffCount }] : [];
+                sheets.push(createLunchSheet('웨슬리홀 & 자모영아실', wesleyTeams, sheets.length, staffGroups));
             }
 
             return sheets;
         }
 
-        function createLunchSheet(title, teams, index) {
+        function createLunchSheet(title, teams, index, staffGroups = []) {
             const sheet = document.createElement('div');
             sheet.className = 'sheet lunch-sheet';
             sheet.id = `lunch-sheet-${index}`;
 
-            // 전체 김밥 개수 계산
+            // 전체 김밥 개수 계산 (교역자 포함)
             let totalLunchCount = 0;
+            staffGroups.forEach(group => {
+                totalLunchCount += group.count;
+            });
             teams.forEach(team => {
                 const lunchCount = calculateTeamLunchCount(team.members);
                 totalLunchCount += lunchCount;
@@ -1055,23 +1251,38 @@
 
             const header = document.createElement('div');
             header.className = 'sheet-header lunch-header';
+            
+            // 교역자 정보 HTML 생성
+            let staffInfoHTML = '';
+            if (staffGroups.length > 0 && staffGroups.some(g => g.count > 0)) {
+                const totalStaffCount = staffGroups.reduce((sum, g) => sum + g.count, 0);
+                staffInfoHTML = `<div class="staff-info">교역자 ${totalStaffCount}개</div>`;
+            }
+            
             header.innerHTML = `
                 <div class="sheet-subtitle">김밥 배분용 계수표</div>
                 <div class="sheet-title">${title}</div>
-                <div class="lunch-summary">총 ${totalLunchCount}개</div>
+                <div class="lunch-summary">
+                    <div>총 ${totalLunchCount}개</div>
+                    ${staffInfoHTML}
+                </div>
             `;
 
             // 그리드 컨테이너 생성
             const gridContainer = document.createElement('div');
             gridContainer.className = 'lunch-teams-grid';
+            
+            // 교역자 박스는 제거하고 일반 조들만 그리드에 추가
 
             teams.forEach(team => {
                 // 팀별 김밥 개수 계산
                 const lunchCount = calculateTeamLunchCount(team.members);
                 
                 // 김밥 먹는 사람과 먹지 않는 사람 분리
-                const withLunch = team.members.filter(m => m.lunch === 'O');
+                // lunch === 'O'이지만 가장 마지막 날짜 열에 '돌봄'인 사람은 별도로 분리
+                const withLunch = team.members.filter(m => m.lunch === 'O' && !isDolbomOnLatestDate(m));
                 const withoutLunch = team.members.filter(m => m.lunch !== 'O');
+                const dolbomMembers = team.members.filter(m => m.lunch === 'O' && isDolbomOnLatestDate(m));
                 
                 // 팀 블록 생성
                 const teamBlock = document.createElement('div');
@@ -1081,10 +1292,13 @@
                 const teamHeader = document.createElement('div');
                 teamHeader.className = 'lunch-team-header';
                 
-                // 자모영아실에 배치되는 조는 팀 이름 우측에 (자모실) 표시
-                const teamNameDisplay = (team.location === '자모영아실') 
-                    ? `${team.team} (자모실)` 
-                    : team.team;
+                // 특수 위치 표시
+                let teamNameDisplay = team.team;
+                if (team.location === '자모영아실') {
+                    teamNameDisplay = `${team.team} (자모실)`;
+                } else if (team.location === '에듀센터') {
+                    teamNameDisplay = `${team.team} (에듀)`;
+                }
                 
                 teamHeader.innerHTML = `
                     <span class="lunch-team-name">${teamNameDisplay}</span>
@@ -1092,7 +1306,7 @@
                 `;
                 teamBlock.appendChild(teamHeader);
                 
-                // 멤버 리스트 생성 (O가 위, X가 아래)
+                // 멤버 리스트 생성 (O가 위, X와 돌봄이 아래)
                 const membersList = document.createElement('div');
                 membersList.className = 'lunch-members-list';
                 
@@ -1105,6 +1319,17 @@
                     memberRow.innerHTML = `
                         <div class="lunch-member-id">${member.id}</div>
                         <div class="lunch-member-status">${statusDisplay}</div>
+                    `;
+                    membersList.appendChild(memberRow);
+                });
+                
+                // 돌봄 상태인 사람 (돌봄)
+                dolbomMembers.forEach(member => {
+                    const memberRow = document.createElement('div');
+                    memberRow.className = 'lunch-member-row';
+                    memberRow.innerHTML = `
+                        <div class="lunch-member-id">${member.id}</div>
+                        <div class="lunch-member-status">돌봄</div>
                     `;
                     membersList.appendChild(memberRow);
                 });
@@ -1257,6 +1482,114 @@
                 // 인쇄 후 클래스 복원
                 document.body.classList.remove('lunch-mode');
             }, 100);
+        }
+
+        // PDF 다운로드 함수 (화면 전체를 하나의 PDF로)
+        async function downloadAsPDF(button) {
+            const { jsPDF } = window.jspdf;
+            const container = document.getElementById('attendanceSheets');
+            
+            if (teamsData.length === 0) {
+                alert('다운로드할 출석부가 없습니다.');
+                return;
+            }
+
+            // 로딩 표시
+            const originalText = button.textContent;
+            button.textContent = '⏳ PDF 생성 중...';
+            button.disabled = true;
+
+            try {
+                // 전체 컨테이너를 이미지로 변환
+                const canvas = await html2canvas(container, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                    windowWidth: container.scrollWidth,
+                    windowHeight: container.scrollHeight
+                });
+                
+                const imgData = canvas.toDataURL('image/png');
+                
+                // PDF 크기 계산 (A4 세로 방향)
+                const pdfWidth = 210; // A4 너비 (mm)
+                const pdfHeight = 297; // A4 높이 (mm)
+                const imgWidth = pdfWidth - 20; // 좌우 여백 10mm
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                // 이미지가 한 페이지보다 길면 여러 페이지로 분할
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                let heightLeft = imgHeight;
+                let position = 0;
+                
+                // 첫 페이지
+                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                heightLeft -= (pdfHeight - 20);
+                
+                // 추가 페이지
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 10, position + 10, imgWidth, imgHeight);
+                    heightLeft -= (pdfHeight - 20);
+                }
+                
+                // 파일명 생성 (현재 날짜 + 모드)
+                const date = new Date().toISOString().split('T')[0];
+                const mode = currentMode === 'lunch' ? '김밥계수' : '출석부';
+                pdf.save(`교리교육_${mode}_전체_${date}.pdf`);
+                
+            } catch (error) {
+                console.error('PDF 생성 오류:', error);
+                alert('PDF 생성 중 오류가 발생했습니다.');
+            } finally {
+                button.textContent = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // 이미지 다운로드 함수 (화면 전체를 하나의 이미지로)
+        async function downloadAsImage(button) {
+            const container = document.getElementById('attendanceSheets');
+            
+            if (teamsData.length === 0) {
+                alert('다운로드할 출석부가 없습니다.');
+                return;
+            }
+
+            // 로딩 표시
+            const originalText = button.textContent;
+            button.textContent = '⏳ 이미지 생성 중...';
+            button.disabled = true;
+
+            try {
+                // 전체 컨테이너를 이미지로 변환
+                const canvas = await html2canvas(container, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                    windowWidth: container.scrollWidth,
+                    windowHeight: container.scrollHeight
+                });
+                
+                // 이미지 다운로드
+                const link = document.createElement('a');
+                const date = new Date().toISOString().split('T')[0];
+                const mode = currentMode === 'lunch' ? '김밥계수' : '출석부';
+                
+                link.download = `교리교육_${mode}_전체_${date}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                
+            } catch (error) {
+                console.error('이미지 생성 오류:', error);
+                alert('이미지 생성 중 오류가 발생했습니다.');
+            } finally {
+                button.textContent = originalText;
+                button.disabled = false;
+            }
         }
 
         // 파일 드래그 앤 드롭 지원

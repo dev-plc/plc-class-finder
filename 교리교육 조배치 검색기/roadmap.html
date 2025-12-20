@@ -798,7 +798,7 @@
             <div class="header-meta">
                 <div class="meta-item">
                     <span class="meta-label">대상 인원</span>
-                    <span class="meta-value">291명</span>
+                    <span class="meta-value">110개 조</span>
                 </div>
                 <div class="meta-item">
                     <span class="meta-label">개발 기간</span>
@@ -824,7 +824,8 @@
                 </h3>
                 <ul class="overview-list">
                     <li>조배치 검색 시스템 구축 완료</li>
-                    <li>291명 성도 데이터 관리</li>
+                    <li>110개 조 데이터 관리</li>
+                    <li>출석부 생성 시스템 (일반/김밥계수)</li>
                     <li>반응형 웹 디자인 적용</li>
                     <li>관리자 모드 구현</li>
                     <li>GitHub Pages 배포 완료</li>
@@ -905,6 +906,12 @@
                                 <div class="feature-item">관리자 로그인</div>
                                 <div class="feature-item">반응형 디자인</div>
                                 <div class="feature-item">이미지 확대 보기</div>
+                                <div class="feature-item">출석부 자동 생성 (CSV)</div>
+                                <div class="feature-item">김밥 계수표 생성</div>
+                                <div class="feature-item">교역자 김밥 관리</div>
+                                <div class="feature-item">조별/개인별 보기</div>
+                                <div class="feature-item">돌봄 자동 제외</div>
+                                <div class="feature-item">인쇄 최적화</div>
                             </div>
 
                             <div class="tech-stack">
@@ -943,6 +950,20 @@
                                         <div class="tech-content">
                                             <div class="tech-name">GitHub Pages (Static Hosting)</div>
                                             <div class="tech-purpose">무료 호스팅, 자동 배포 (Git Push 시), HTTPS 자동 적용, CDN을 통한 빠른 로딩</div>
+                                        </div>
+                                    </div>
+                                    <div class="tech-item">
+                                        <div class="tech-icon">📋</div>
+                                        <div class="tech-content">
+                                            <div class="tech-name">CSV Parser & Generator (출석부 시스템)</div>
+                                            <div class="tech-purpose">CSV 파일 파싱으로 출석부 자동 생성, 12주차 출석 데이터 관리, 김밥 계수 자동 계산 (돌봄 제외), A4 인쇄 최적화</div>
+                                        </div>
+                                    </div>
+                                    <div class="tech-item">
+                                        <div class="tech-icon">🍙</div>
+                                        <div class="tech-content">
+                                            <div class="tech-name">Dynamic Layout System (김밥 계수표)</div>
+                                            <div class="tech-purpose">조별 김밥 먹는/안먹는 사람 자동 분류, 교역자 김밥 개수 설정 UI, 6열 그리드 레이아웃, 세로 방향 인쇄 최적화</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1455,9 +1476,10 @@
         <!-- 푸터 -->
         <footer class="footer">
             <p><strong>PL교회 교리교육 시스템 개발 로드맵</strong></p>
-            <p>작성일: 2025년 11월 | 문의: 교리교육 담당자</p>
+            <p>최종 업데이트: 2025년 12월 | 문의: 교리교육 담당자</p>
             <p style="margin-top: 20px; color: var(--gray-500);">
-                본 문서는 교리교육 시스템의 단계별 개발 계획을 담고 있습니다.
+                본 문서는 교리교육 시스템의 단계별 개발 계획을 담고 있습니다.<br>
+                Phase 0 완료: 조배치 검색기 + 출석부 생성 시스템 + 김밥 계수표
             </p>
         </footer>
     </div>
