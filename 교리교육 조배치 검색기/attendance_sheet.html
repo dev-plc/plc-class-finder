@@ -619,14 +619,14 @@
 
         .lunch-teams-grid {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 5px;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
             margin-top: 8px;
         }
 
         .lunch-team-block {
             border: 2px solid #000;
-            padding: 4px;
+            padding: 3px;
             background: white;
             display: flex;
             flex-direction: column;
@@ -634,11 +634,11 @@
 
         .lunch-team-header {
             font-weight: bold;
-            font-size: 14px;
-            padding: 4px;
+            font-size: 12px;
+            padding: 3px;
             background: #f0f0f0;
             border-bottom: 2px solid #000;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
             text-align: center;
             display: flex;
             justify-content: space-between;
@@ -647,12 +647,12 @@
         }
 
         .lunch-team-name {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: bold;
         }
 
         .lunch-count {
-            font-size: 14px;
+            font-size: 18px;
             color: #000;
             font-weight: bold;
         }
@@ -660,31 +660,31 @@
         .lunch-members-list {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: 1px;
         }
 
         .lunch-member-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 3px;
-            padding: 2px 3px;
-            font-size: 12px;
+            gap: 2px;
+            padding: 1px 2px;
+            font-size: 9px;
         }
 
         .lunch-member-id {
             flex: 1;
-            font-size: 12px;
+            font-size: 9px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
         .lunch-member-status {
-            font-size: 12px;
+            font-size: 9px;
             font-weight: bold;
             color: #000;
-            min-width: 15px;
+            min-width: 12px;
             text-align: center;
         }
 
@@ -733,13 +733,13 @@
             }
 
             .lunch-teams-grid {
-                grid-template-columns: repeat(6, 1fr) !important;
-                gap: 4px !important;
+                grid-template-columns: repeat(8, 1fr) !important;
+                gap: 3px !important;
                 margin-top: 5px !important;
             }
 
             .lunch-team-block {
-                padding: 3px !important;
+                padding: 2px !important;
                 page-break-inside: avoid;
                 border: 1.5px solid #000 !important;
                 display: flex !important;
@@ -747,37 +747,37 @@
             }
 
             .lunch-team-header {
-                font-size: 11px !important;
-                padding: 3px !important;
-                margin-bottom: 3px !important;
+                font-size: 10px !important;
+                padding: 2px !important;
+                margin-bottom: 2px !important;
                 flex-shrink: 0 !important;
             }
 
             .lunch-team-name {
-                font-size: 11px !important;
+                font-size: 16px !important;
             }
 
             .lunch-count {
-                font-size: 11px !important;
+                font-size: 16px !important;
             }
 
             .lunch-members-list {
-                gap: 1px !important;
+                gap: 0.5px !important;
             }
 
             .lunch-member-row {
-                gap: 2px !important;
-                padding: 1px 2px !important;
-                font-size: 10px !important;
+                gap: 1px !important;
+                padding: 0.5px 1px !important;
+                font-size: 8px !important;
             }
 
             .lunch-member-id {
-                font-size: 10px !important;
+                font-size: 8px !important;
             }
 
             .lunch-member-status {
-                font-size: 10px !important;
-                min-width: 12px !important;
+                font-size: 8px !important;
+                min-width: 10px !important;
             }
 
             .sheet {
@@ -828,8 +828,8 @@
             </style>
             
             <div class="file-input-wrapper">
-                <input type="file" id="csvFile" accept=".csv" />
-                <button class="btn btn-primary" onclick="loadCSV()">📁 CSV 파일 불러오기</button>
+                <input type="file" id="csvFile" accept=".csv" multiple />
+                <button class="btn btn-primary" onclick="loadCSV()">📁 CSV 파일 불러오기 (여러 개 선택 가능)</button>
             </div>
             <div class="info-box" id="fileInfo" style="display: none;">
                 <strong>파일 정보:</strong> <span id="fileName"></span> | 
@@ -856,21 +856,35 @@
         let dateHeaders = []; // CSV에서 파싱한 날짜 헤더
         let currentMode = 'attendance'; // 'attendance' 또는 'lunch'
 
-        function loadCSV() {
+        async function loadCSV() {
             const fileInput = document.getElementById('csvFile');
-            const file = fileInput.files[0];
+            const files = fileInput.files;
 
-            if (!file) {
+            if (files.length === 0) {
                 alert('CSV 파일을 선택해주세요.');
                 return;
             }
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const text = e.target.result;
-                parseCSV(text);
-            };
-            reader.readAsText(file, 'UTF-8');
+            // 여러 파일을 읽어서 텍스트 배열로 저장
+            const fileTexts = [];
+            const fileNames = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                fileNames.push(file.name);
+                
+                const text = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = reject;
+                    reader.readAsText(file, 'UTF-8');
+                });
+                
+                fileTexts.push(text);
+            }
+
+            // 여러 CSV 파일을 합쳐서 파싱
+            parseMultipleCSV(fileTexts, fileNames);
         }
 
         // CSV 라인을 파싱하는 함수 (쉼표로 분리하되 따옴표 처리)
@@ -895,7 +909,49 @@
             return result;
         }
 
-        function parseCSV(text) {
+        // 여러 CSV 파일을 합쳐서 파싱하는 함수
+        function parseMultipleCSV(fileTexts, fileNames) {
+            if (fileTexts.length === 0) return;
+
+            // 첫 번째 파일에서 헤더 추출
+            const firstLines = fileTexts[0].split('\n');
+            let headerLine = '';
+            
+            for (let line of firstLines) {
+                if (line.trim()) {
+                    headerLine = line;
+                    break;
+                }
+            }
+
+            // 모든 파일의 데이터 라인을 합침 (헤더 제외)
+            let allDataLines = [];
+            
+            fileTexts.forEach((text, index) => {
+                const lines = text.split('\n');
+                let isFirstLine = true;
+                
+                lines.forEach(line => {
+                    if (!line.trim()) return;
+                    
+                    // 첫 번째 줄(헤더)은 건너뛰기
+                    if (isFirstLine) {
+                        isFirstLine = false;
+                        return;
+                    }
+                    
+                    allDataLines.push(line);
+                });
+            });
+
+            // 헤더 + 합쳐진 데이터로 하나의 CSV 텍스트 생성
+            const combinedCSV = headerLine + '\n' + allDataLines.join('\n');
+            
+            // 기존 parseCSV 함수 호출
+            parseCSV(combinedCSV, fileNames);
+        }
+
+        function parseCSV(text, fileNames = null) {
             const lines = text.split('\n');
             const teams = {};
             let isFirstLine = true;
@@ -1294,14 +1350,15 @@
                 
                 // 특수 위치 표시
                 let teamNameDisplay = team.team;
+                let locationBadge = '';
                 if (team.location === '자모영아실') {
-                    teamNameDisplay = `${team.team} (자모실)`;
+                    locationBadge = ' <span style="font-size: 11px;">(자모실)</span>';
                 } else if (team.location === '에듀센터') {
-                    teamNameDisplay = `${team.team} (에듀)`;
+                    locationBadge = ' <span style="font-size: 11px;">(에듀)</span>';
                 }
                 
                 teamHeader.innerHTML = `
-                    <span class="lunch-team-name">${teamNameDisplay}</span>
+                    <span class="lunch-team-name">${teamNameDisplay}${locationBadge}</span>
                     <span class="lunch-count">${lunchCount}개</span>
                 `;
                 teamBlock.appendChild(teamHeader);
@@ -1359,7 +1416,14 @@
         function displayControls() {
             document.getElementById('controls').style.display = 'flex';
             document.getElementById('fileInfo').style.display = 'block';
-            document.getElementById('fileName').textContent = document.getElementById('csvFile').files[0].name;
+            
+            // 여러 파일인 경우 파일명 표시
+            const files = document.getElementById('csvFile').files;
+            if (files.length === 1) {
+                document.getElementById('fileName').textContent = files[0].name;
+            } else {
+                document.getElementById('fileName').textContent = `${files.length}개 파일 (${Array.from(files).map(f => f.name).join(', ')})`;
+            }
             
             if (currentMode === 'attendance') {
                 document.getElementById('teamCount').textContent = teamsData.length;
@@ -1592,7 +1656,7 @@
             }
         }
 
-        // 파일 드래그 앤 드롭 지원
+        // 파일 드래그 앤 드롭 지원 (여러 파일 가능)
         const container = document.querySelector('.container');
         container.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -1612,9 +1676,19 @@
             container.style.border = 'none';
 
             const files = e.dataTransfer.files;
-            if (files.length > 0 && files[0].name.endsWith('.csv')) {
-                document.getElementById('csvFile').files = files;
+            
+            // CSV 파일만 필터링
+            const csvFiles = Array.from(files).filter(f => f.name.endsWith('.csv'));
+            
+            if (csvFiles.length > 0) {
+                // FileList를 직접 할당할 수 없으므로 DataTransfer 객체 사용
+                const dataTransfer = new DataTransfer();
+                csvFiles.forEach(file => dataTransfer.items.add(file));
+                document.getElementById('csvFile').files = dataTransfer.files;
+                
                 loadCSV();
+            } else {
+                alert('CSV 파일을 드롭해주세요.');
             }
         });
     </script>
