@@ -1,13 +1,19 @@
 // 1. 설정 데이터
 const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
 //이미지 https://postimages.org/ 업로드해서 링크받기
+/*
 const locationMapImages = {
     "웨슬리홀": "https://lh3.googleusercontent.com/u/0/d/1dBML_CRlbFX-hLiYAT29MhtG6Hz0NlWb",
     //"칼빈": "https://lh3.googleusercontent.com/u/0/d/19ji7bvxmiqKCcvavyAehAxx3N4e-yIR_",
     "칼빈": "https://i.postimg.cc/hjTSJ8jD/1221-kalbin.jpg",
     "자모영아실": "https://lh3.googleusercontent.com/u/0/d/13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
 };
-
+*/
+const locationMapImages = {
+    "웨슬리홀": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1dBML_CRlbFX-hLiYAT29MhtG6Hz0NlWb",
+    "칼빈": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=19ji7bvxmiqKCcvavyAehAxx3N4e-yIR_",
+    "자모영아실": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
+};
 let memberData = [];
 
 // 2. DOM 요소 선택
@@ -159,6 +165,7 @@ window.addEventListener('load', () => {
     loadData();
     initEventListeners();
 });
+
 
 
 
