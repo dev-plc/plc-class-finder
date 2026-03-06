@@ -1,6 +1,7 @@
 // 1. 설정 데이터
 const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
 
+// [수정본] 구글 드라이브 직링크 형식으로 교체
 const locationMapImages = {
     "웨슬리홀": "https://drive.google.com/uc?export=view&id=1dBML_CRlbFX-hLiYAT29MhtG6Hz0NlWb",
     "칼빈": "https://drive.google.com/uc?export=view&id=19ji7bvxmiqKCcvavyAehAxx3N4e-yIR_",
@@ -86,12 +87,16 @@ function displayResult(member) {
     elements.resultTeam.textContent = member.team;
     elements.resultLocation.textContent = member.location;
 
-    const mapUrl = locationMapImages[member.location.trim()];
+    // trim()을 추가하여 앞뒤 공백을 제거하고 매칭합니다.
+    const pureLocation = member.location.trim();
+    const mapUrl = locationMapImages[pureLocation];
+
     if (mapUrl) {
         elements.mapImage.src = mapUrl;
         elements.mapContainer.style.display = 'block';
     } else {
         elements.mapContainer.style.display = 'none';
+        console.warn("매칭되는 지도 없음:", pureLocation);
     }
 
     elements.resultContainer.style.display = 'block';
@@ -154,4 +159,5 @@ window.addEventListener('load', () => {
     loadData();
     initEventListeners();
 });
+
 
