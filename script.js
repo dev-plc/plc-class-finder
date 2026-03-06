@@ -158,6 +158,42 @@ function initEventListeners() {
     elements.phoneInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') searchMember();
     });
+    // 이미지 모달 제어 함수
+function initModal() {
+    const imageModal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+    const mapImage = document.getElementById('mapImage');
+    const modalClose = document.getElementById('modalClose');
+
+    // 1. 작은 지도 이미지를 클릭하면 모달 열기
+    mapImage.addEventListener('click', () => {
+        modalImage.src = mapImage.src; // 현재 보고 있는 지도를 모달에 복사
+        imageModal.classList.add('active');
+        document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
+    });
+
+    // 2. 모달 영역 전체(이미지 포함)를 클릭하면 닫기
+    imageModal.addEventListener('click', () => {
+        closeModal();
+    });
+
+    // 3. 닫기 버튼(X)을 눌러도 닫기
+    modalClose.addEventListener('click', (e) => {
+        e.stopPropagation(); // 이벤트 전파 방지 (중복 클릭 방지)
+        closeModal();
+    });
+
+    // 4. ESC 키를 누르면 닫기
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && imageModal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    function closeModal() {
+        imageModal.classList.remove('active');
+        document.body.style.overflow = 'auto'; // 스크롤 복구
+    }
 }
 
 // 6. 실행
@@ -165,6 +201,7 @@ window.addEventListener('load', () => {
     loadData();
     initEventListeners();
 });
+
 
 
 
