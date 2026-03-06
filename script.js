@@ -131,12 +131,17 @@ function renderTeamMembers(members, teamName) {
     
     titleElement.textContent = `👥 ${teamName} 조원 명단 (${members.length}명)`;
     
-    listElement.innerHTML = members.map(m => `
-        <div class="team-member-item">
-            <span class="member-name">${m.name}</span>
-            <span class="member-role-tag">${m.role || '조원'}</span>
+listElement.innerHTML = myTeamMembers.map(m => `
+    <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee;">
+        <div style="display: flex; align-items: center; gap: 5px;">
+            <span style="font-weight: bold; font-size: 15px;">${m.name}</span>
+            <span style="color: #888; font-size: 13px;">(${m.phone})</span>
         </div>
-    `).join('');
+        <span style="font-size: 11px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">
+            ${m.role || '조원'}
+        </span>
+    </div>
+`).join('');
 }
 
 function showError(msg) {
@@ -229,4 +234,5 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
 
