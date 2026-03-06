@@ -134,13 +134,16 @@ function initEventListeners() {
     elements.adminClose.addEventListener('click', () => {
         elements.adminModal.classList.remove('active');
     });
-
+// 관리자 로그인 처리
     elements.adminForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const id = document.getElementById('adminId').value;
         const pw = document.getElementById('adminPassword').value;
+        
         if (id === 'plc' && pw === 'plc1234') {
-            alert("로그인 성공!");
+            alert("로그인 성공! 관리자 페이지로 이동합니다.");
+            // 관리자 전용 페이지인 admin.html로 이동
+            window.location.href = 'admin.html'; 
         } else {
             document.getElementById('adminLoginError').style.display = 'block';
             document.getElementById('adminLoginError').textContent = "비밀번호가 틀렸습니다.";
@@ -192,3 +195,4 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal(); // <-- 모달 기능도 잊지 말고 실행
 });
+
