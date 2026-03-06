@@ -93,7 +93,6 @@ function displayResult(member) {
     elements.resultTeam.textContent = member.team;
     elements.resultLocation.textContent = member.location;
 
-    // trim()을 추가하여 앞뒤 공백을 제거하고 매칭합니다.
     const pureLocation = member.location.trim();
     const mapUrl = locationMapImages[pureLocation];
 
@@ -102,7 +101,6 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'block';
     } else {
         elements.mapContainer.style.display = 'none';
-        console.warn("매칭되는 지도 없음:", pureLocation);
     }
 
     elements.resultContainer.style.display = 'block';
@@ -134,33 +132,32 @@ function initEventListeners() {
     elements.adminClose.addEventListener('click', () => {
         elements.adminModal.classList.remove('active');
     });
-// 관리자 로그인 처리 부분 수정
-elements.adminForm.addEventListener('submit', (e) => {
-    e.preventDefault(); // 1. 폼의 기본 새로고침 동작을 완전히 막음
-    e.stopPropagation(); // 2. 이벤트가 위로 퍼지는 것을 막음
 
-    const id = document.getElementById('adminId').value;
-    const pw = document.getElementById('adminPassword').value;
-    
-// 관리자 로그인 처리 부분
-    if (id === 'plc' && pw === 'plc1234') {
-        alert("로그인 성공!");
-        // ★ 이 줄이 반드시 있어야 admin.html에서 index.html로 튕기지 않습니다.
-        sessionStorage.setItem('adminLoggedIn', 'true'); 
-        window.location.href = 'admin.html'; 
-    }} else {
-        const errorElement = document.getElementById('adminLoginError');
-        errorElement.style.display = 'block';
-        errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
-    }
-});
+    // 관리자 로그인 처리
+    elements.adminForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const id = document.getElementById('adminId').value;
+        const pw = document.getElementById('adminPassword').value;
+        
+        if (id === 'plc' && pw === 'plc1234') {
+            alert("로그인 성공!");
+            sessionStorage.setItem('adminLoggedIn', 'true'); 
+            window.location.href = 'admin.html'; 
+        } else {
+            const errorElement = document.getElementById('adminLoginError');
+            errorElement.style.display = 'block';
+            errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
+        }
+    });
 
     elements.phoneInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') searchMember();
     });
-} // <-- 여기서 initEventListeners 함수가 닫혀야 합니다.
+}
 
-// 6. 이미지 모달 제어 함수 (독립적으로 정의)
+// 6. 이미지 모달 제어 함수
 function initModal() {
     const imageModal = document.getElementById('imageModal');
     const modalImage = document.getElementById('modalImage');
@@ -198,8 +195,5 @@ function initModal() {
 window.addEventListener('load', () => {
     loadData();
     initEventListeners();
-    initModal(); // <-- 모달 기능도 잊지 말고 실행
+    initModal();
 });
-
-
-
