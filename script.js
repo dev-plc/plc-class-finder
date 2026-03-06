@@ -134,21 +134,24 @@ function initEventListeners() {
     elements.adminClose.addEventListener('click', () => {
         elements.adminModal.classList.remove('active');
     });
-// 관리자 로그인 처리
-    elements.adminForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const id = document.getElementById('adminId').value;
-        const pw = document.getElementById('adminPassword').value;
-        
-        if (id === 'plc' && pw === 'plc1234') {
-            alert("로그인 성공! 관리자 페이지로 이동합니다.");
-            // 관리자 전용 페이지인 admin.html로 이동
-            window.location.href = 'admin.html'; 
-        } else {
-            document.getElementById('adminLoginError').style.display = 'block';
-            document.getElementById('adminLoginError').textContent = "비밀번호가 틀렸습니다.";
-        }
-    });
+// 관리자 로그인 처리 부분 수정
+elements.adminForm.addEventListener('submit', (e) => {
+    e.preventDefault(); // 1. 폼의 기본 새로고침 동작을 완전히 막음
+    e.stopPropagation(); // 2. 이벤트가 위로 퍼지는 것을 막음
+
+    const id = document.getElementById('adminId').value;
+    const pw = document.getElementById('adminPassword').value;
+    
+    if (id === 'plc' && pw === 'plc1234') {
+        alert("로그인 성공!");
+        // replace를 사용하면 뒤로가기 시 다시 로그인 창이 뜨는 것을 방지하며 확실히 이동합니다.
+        window.location.replace('admin.html'); 
+    } else {
+        const errorElement = document.getElementById('adminLoginError');
+        errorElement.style.display = 'block';
+        errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
+    }
+});
 
     elements.phoneInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') searchMember();
@@ -195,4 +198,5 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal(); // <-- 모달 기능도 잊지 말고 실행
 });
+
 
