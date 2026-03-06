@@ -154,3 +154,4 @@ window.addEventListener('load', () => {
     loadData();
     initEventListeners();
 });
+
