@@ -142,11 +142,13 @@ elements.adminForm.addEventListener('submit', (e) => {
     const id = document.getElementById('adminId').value;
     const pw = document.getElementById('adminPassword').value;
     
+// 관리자 로그인 처리 부분
     if (id === 'plc' && pw === 'plc1234') {
         alert("로그인 성공!");
-        // replace를 사용하면 뒤로가기 시 다시 로그인 창이 뜨는 것을 방지하며 확실히 이동합니다.
-        window.location.replace('admin.html'); 
-    } else {
+        // ★ 이 줄이 반드시 있어야 admin.html에서 index.html로 튕기지 않습니다.
+        sessionStorage.setItem('adminLoggedIn', 'true'); 
+        window.location.href = 'admin.html'; 
+    }} else {
         const errorElement = document.getElementById('adminLoginError');
         errorElement.style.display = 'block';
         errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
@@ -198,5 +200,6 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal(); // <-- 모달 기능도 잊지 말고 실행
 });
+
 
 
