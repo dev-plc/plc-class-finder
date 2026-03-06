@@ -86,13 +86,14 @@ function searchMember() {
         showError("일치하는 정보를 찾을 수 없습니다.<br>입력 내용을 확인해주세요.");
     }
 }
-
+// 검색 결과 표시 함수 수정
 function displayResult(member) {
     elements.errorMessage.style.display = 'none';
     elements.resultName.textContent = member.name;
     elements.resultTeam.textContent = member.team;
     elements.resultLocation.textContent = member.location;
 
+    // 1. 지도 이미지 표시 로직
     const pureLocation = member.location.trim();
     const mapUrl = locationMapImages[pureLocation];
 
@@ -103,8 +104,39 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'none';
     }
 
+    // 2. 튜터/서브튜터 권한 확인 및 조원 목록 표시
+    // role 필드에 '튜터'라는 글자가 포함되어 있는지 확인합니다.
+    const isTutor = member.role && (member.role.includes('튜터') || member.role.includes('관리자'));
+    
+    // 조원 목록을 출력할 영역이 필요합니다 (HTML에 추가 예정)
+    const memberListContainer = document.getElementById('teamMemberListContainer');
+    
+    if (isTutor) {
+        // 같은 팀원 찾기
+        const teamMembers = memberData.filter(m => m.team === member.team);
+        renderTeamMembers(teamMembers, member.team);
+        memberListContainer.style.display = 'block';
+    } else {
+        memberListContainer.style.display = 'none';
+    }
+
     elements.resultContainer.style.display = 'block';
     elements.resultContainer.scrollIntoView({ behavior: 'smooth' });
+}
+
+// 조원 목록을 화면에 그리는 함수
+function renderTeamMembers(members, teamName) {
+    const listElement = document.getElementById('teamMemberList');
+    const titleElement = document.getElementById('teamListTitle');
+    
+    titleElement.textContent = `👥 ${teamName} 조원 명단 (${members.length}명)`;
+    
+    listElement.innerHTML = members.map(m => `
+        <div class="team-member-item">
+            <span class="member-name">${m.name}</span>
+            <span class="member-role-tag">${m.role || '조원'}</span>
+        </div>
+    `).join('');
 }
 
 function showError(msg) {
@@ -197,3 +229,4 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
