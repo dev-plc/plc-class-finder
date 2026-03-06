@@ -32,11 +32,17 @@ const teamMembersList = document.getElementById('teamMembersList');
 const teamFilter = document.getElementById('teamFilter');
 const memberFilter = document.getElementById('memberFilter');
 
-// 데이터 로드
+const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
+
 async function loadData() {
     try {
-        const response = await fetch('data.json');
-        memberData = await response.json();
+        const response = await fetch(GOOGLE_SHEET_CSV_URL);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const csvText = await response.text();
+        
+        // CSV 파싱 (index.html에서 썼던 것과 동일한 로직)
+        memberData = parseCSV(csvText);
+        
         console.log('✅ 데이터 로드 완료:', memberData.length, '명');
         
         // 초기 렌더링
@@ -44,10 +50,24 @@ async function loadData() {
         renderMembersView();
     } catch (error) {
         console.error('❌ 데이터 로드 실패:', error);
-        alert('데이터를 불러오는데 실패했습니다.');
+        alert('구글 시트 데이터를 불러오는데 실패했습니다.');
     }
 }
 
+// parseCSV 함수도 admin.js에 추가해주어야 합니다.
+function parseCSV(csvText) {
+    const lines = csvText.split('\n').filter(line => line.trim() !== "");
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+    return lines.slice(1).map(line => {
+        const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        const obj = {};
+        headers.forEach((header, i) => {
+            obj[header] = values[i] ? values[i].trim().replace(/"/g, '') : "";
+        });
+        return obj;
+    });
+}
 // 테마 전환
 document.body.classList.remove('dark-mode');
 themeToggle.addEventListener('click', () => {
@@ -348,4 +368,5 @@ window.addEventListener('load', () => {
     loadData();
     searchNameInput.focus();
 });
+
 
