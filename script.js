@@ -115,22 +115,18 @@ function showError(msg) {
     elements.resultContainer.style.display = 'none';
 }
 
-// 5. 이벤트 리스너 통합 (이 부분이 실행되어야 다크모드/로그인이 됩니다)
+// 5. 이벤트 리스너 통합
 function initEventListeners() {
-    // 검색 버튼
     elements.searchBtn.addEventListener('click', searchMember);
     
-    // 닫기 버튼
     elements.closeBtn.addEventListener('click', () => {
         elements.resultContainer.style.display = 'none';
     });
 
-    // 다크모드 전환
     elements.themeToggle.addEventListener('click', () => {
         document.body.classList.toggle('dark-mode');
     });
 
-    // 관리자 모달 제어
     elements.adminBtn.addEventListener('click', () => {
         elements.adminModal.classList.add('active');
     });
@@ -139,51 +135,45 @@ function initEventListeners() {
         elements.adminModal.classList.remove('active');
     });
 
-    // 관리자 로그인 처리
     elements.adminForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const id = document.getElementById('adminId').value;
         const pw = document.getElementById('adminPassword').value;
-        
         if (id === 'plc' && pw === 'plc1234') {
             alert("로그인 성공!");
-            // window.location.href = 'admin.html'; // 필요시 주석 해제
         } else {
             document.getElementById('adminLoginError').style.display = 'block';
             document.getElementById('adminLoginError').textContent = "비밀번호가 틀렸습니다.";
         }
     });
 
-    // 엔터키 지원
     elements.phoneInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') searchMember();
     });
-    // 이미지 모달 제어 함수
+} // <-- 여기서 initEventListeners 함수가 닫혀야 합니다.
+
+// 6. 이미지 모달 제어 함수 (독립적으로 정의)
 function initModal() {
     const imageModal = document.getElementById('imageModal');
     const modalImage = document.getElementById('modalImage');
     const mapImage = document.getElementById('mapImage');
     const modalClose = document.getElementById('modalClose');
 
-    // 1. 작은 지도 이미지를 클릭하면 모달 열기
     mapImage.addEventListener('click', () => {
-        modalImage.src = mapImage.src; // 현재 보고 있는 지도를 모달에 복사
+        modalImage.src = mapImage.src;
         imageModal.classList.add('active');
-        document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
+        document.body.style.overflow = 'hidden';
     });
 
-    // 2. 모달 영역 전체(이미지 포함)를 클릭하면 닫기
     imageModal.addEventListener('click', () => {
         closeModal();
     });
 
-    // 3. 닫기 버튼(X)을 눌러도 닫기
     modalClose.addEventListener('click', (e) => {
-        e.stopPropagation(); // 이벤트 전파 방지 (중복 클릭 방지)
+        e.stopPropagation();
         closeModal();
     });
 
-    // 4. ESC 키를 누르면 닫기
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && imageModal.classList.contains('active')) {
             closeModal();
@@ -192,20 +182,13 @@ function initModal() {
 
     function closeModal() {
         imageModal.classList.remove('active');
-        document.body.style.overflow = 'auto'; // 스크롤 복구
+        document.body.style.overflow = 'auto';
     }
 }
 
-// 6. 실행
+// 7. 실행
 window.addEventListener('load', () => {
     loadData();
     initEventListeners();
+    initModal(); // <-- 모달 기능도 잊지 말고 실행
 });
-
-
-
-
-
-
-
-
