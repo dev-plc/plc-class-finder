@@ -1,3 +1,6 @@
+// [설정] 구글 시트 CSV 주소
+const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
+
 // 데이터 저장 변수
 let memberData = [];
 
@@ -17,16 +20,45 @@ const mapContainer = document.getElementById('mapContainer');
 const mapImage = document.getElementById('mapImage');
 const errorText = document.getElementById('errorText');
 
-// 데이터 로드 함수
+// [기능 추가] CSV 파싱 함수: 구글 시트 데이터를 객체 배열로 변환
+function parseCSV(csvText) {
+    const lines = csvText.split('\n');
+    if (lines.length === 0) return [];
+    
+    // 첫 줄(헤더) 추출 및 정리
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const result = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const obj = {};
+        // 쉼표로 구분하되 따옴표 내부의 쉼표는 무시하는 정규식
+        const currentline = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+
+        headers.forEach((header, index) => {
+            let value = currentline[index] ? currentline[index].trim() : "";
+            obj[header] = value.replace(/"/g, ''); // 따옴표 제거
+        });
+        result.push(obj);
+    }
+    return result;
+}
+
+// 데이터 로드 함수 (구글 시트 연동형)
 async function loadData() {
     try {
-        const response = await fetch('data.json');
-        memberData = await response.json();
+        const response = await fetch(GOOGLE_SHEET_CSV_URL);
+        if (!response.ok) throw new Error('네트워크 응답이 올바르지 않습니다.');
         
-        console.log('✅ 데이터 로드 완료:', memberData.length, '명');
+        const csvText = await response.text();
+        memberData = parseCSV(csvText);
+        
+        console.log('✅ 구글 시트 실시간 데이터 로드 완료:', memberData.length, '명');
     } catch (error) {
         console.error('❌ 데이터 로드 실패:', error);
-        showError('데이터를 불러오는데 실패했습니다.');
+        showError('데이터를 불러오는데 실패했습니다. 시트 설정을 확인해주세요.');
     }
 }
 
@@ -35,28 +67,17 @@ function searchMember() {
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
     
-    // 입력 검증
-    if (!name) {
-        showError('이름을 입력해주세요.');
-        nameInput.focus();
-        return;
-    }
-    
-    if (!phone) {
-        showError('전화번호 뒷 4자리를 입력해주세요.');
-        phoneInput.focus();
-        return;
-    }
-    
+    if (!name) { showError('이름을 입력해주세요.'); nameInput.focus(); return; }
+    if (!phone) { showError('전화번호 뒷 4자리를 입력해주세요.'); phoneInput.focus(); return; }
     if (phone.length !== 4 || !/^\d{4}$/.test(phone)) {
         showError('전화번호 뒷 4자리를 정확히 입력해주세요.');
         phoneInput.focus();
         return;
     }
     
-    // 데이터 검색
+    // 데이터 검색 (구글 시트의 열 이름 name, phone과 일치해야 함)
     const member = memberData.find(m => 
-        m.name === name && m.phone === phone
+        String(m.name).trim() === name && String(m.phone).trim() === phone
     );
     
     if (member) {
@@ -74,15 +95,15 @@ function showResult(member) {
     resultTeam.textContent = member.team;
     resultLocation.textContent = member.location;
     
-    // 60세 이상이면 큰 글씨 모드
-    if (member.age && member.age >= 60) {
+    // 60세 이상 대형 글자 모드 (시트에 age 열이 있는 경우)
+    if (member.age && parseInt(member.age) >= 60) {
         document.body.classList.add('large-text');
     } else {
         document.body.classList.remove('large-text');
     }
     
-    // 배치도 이미지가 있는 경우
-    if (member.mapImage) {
+    // 배치도 이미지 처리
+    if (member.mapImage && member.mapImage.startsWith('http')) {
         mapImage.src = member.mapImage;
         mapContainer.style.display = 'block';
     } else {
@@ -90,30 +111,23 @@ function showResult(member) {
     }
     
     resultContainer.style.display = 'block';
-    
-    // 결과로 스크롤
     setTimeout(() => {
         resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
 }
 
-// 에러 메시지 표시
+// 에러 메시지 제어
 function showError(message) {
     errorText.innerHTML = message;
     errorMessage.style.display = 'flex';
     resultContainer.style.display = 'none';
-    
     setTimeout(() => {
         errorMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
 }
 
-// 에러 메시지 숨기기
-function hideError() {
-    errorMessage.style.display = 'none';
-}
+function hideError() { errorMessage.style.display = 'none'; }
 
-// 결과 닫기
 function closeResult() {
     resultContainer.style.display = 'none';
     nameInput.value = '';
@@ -121,141 +135,31 @@ function closeResult() {
     nameInput.focus();
 }
 
-// 이벤트 리스너
+// 이벤트 리스너 설정
 searchBtn.addEventListener('click', searchMember);
 closeBtn.addEventListener('click', closeResult);
 
-// Enter 키로 검색
-nameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        phoneInput.focus();
-    }
-});
-
-phoneInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        searchMember();
-    }
-});
-
-// 전화번호 입력 시 숫자만 입력 가능
-phoneInput.addEventListener('input', (e) => {
-    e.target.value = e.target.value.replace(/[^0-9]/g, '');
-});
-
-// 입력 시 에러 메시지 숨기기
+nameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') phoneInput.focus(); });
+phoneInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchMember(); });
+phoneInput.addEventListener('input', (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ''); });
 nameInput.addEventListener('input', hideError);
 phoneInput.addEventListener('input', hideError);
 
-// 테마 전환 기능
+// 테마 설정 (초기값 라이트)
 const themeToggle = document.getElementById('themeToggle');
-
-// 기본값은 항상 라이트 모드 (localStorage 무시)
-// 페이지 로드 시 항상 라이트 모드로 시작
 document.body.classList.remove('dark-mode');
+themeToggle.addEventListener('click', () => { document.body.classList.toggle('dark-mode'); });
 
-// 테마 전환 버튼
-themeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('dark-mode');
-});
-
-// 이미지 전체화면 모달
+// 이미지 모달 기능
 const imageModal = document.getElementById('imageModal');
 const modalImage = document.getElementById('modalImage');
 const modalClose = document.getElementById('modalClose');
 
-// 배치도 이미지 클릭 시 전체화면
 mapImage.addEventListener('click', () => {
     modalImage.src = mapImage.src;
     imageModal.classList.add('active');
-    document.body.style.overflow = 'hidden'; // 스크롤 방지
-});
-
-// 모달 닫기
-function closeModal() {
-    imageModal.classList.remove('active');
-    document.body.style.overflow = 'auto';
-}
-
-modalClose.addEventListener('click', closeModal);
-imageModal.addEventListener('click', (e) => {
-    if (e.target === imageModal) {
-        closeModal();
-    }
-});
-
-
-// 관리자 로그인 기능
-const adminBtn = document.getElementById('adminBtn');
-const adminLoginModal = document.getElementById('adminLoginModal');
-const adminLoginClose = document.getElementById('adminLoginClose');
-const adminLoginForm = document.getElementById('adminLoginForm');
-const adminLoginError = document.getElementById('adminLoginError');
-const adminIdInput = document.getElementById('adminId');
-const adminPasswordInput = document.getElementById('adminPassword');
-
-// 관리자 계정 정보
-const ADMIN_CREDENTIALS = {
-    username: 'plc',
-    password: 'plc1234'
-};
-
-// 관리자 버튼 클릭
-adminBtn.addEventListener('click', () => {
-    adminLoginModal.classList.add('active');
     document.body.style.overflow = 'hidden';
-    setTimeout(() => adminIdInput.focus(), 100);
 });
 
-// 로그인 모달 닫기
-adminLoginClose.addEventListener('click', closeAdminLoginModal);
-adminLoginModal.addEventListener('click', (e) => {
-    if (e.target === adminLoginModal) {
-        closeAdminLoginModal();
-    }
-});
-
-function closeAdminLoginModal() {
-    adminLoginModal.classList.remove('active');
-    document.body.style.overflow = 'auto';
-    adminLoginForm.reset();
-    adminLoginError.style.display = 'none';
-}
-
-// 로그인 폼 제출
-adminLoginForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    
-    const username = adminIdInput.value.trim();
-    const password = adminPasswordInput.value.trim();
-    
-    if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-        // 로그인 성공
-        sessionStorage.setItem('adminLoggedIn', 'true');
-        window.location.href = 'admin.html';
-    } else {
-        // 로그인 실패
-        adminLoginError.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
-        adminLoginError.style.display = 'block';
-        adminPasswordInput.value = '';
-        adminPasswordInput.focus();
-    }
-});
-
-// ESC 키로 모달 닫기
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        if (adminLoginModal.classList.contains('active')) {
-            closeAdminLoginModal();
-        } else if (imageModal.classList.contains('active')) {
-            closeModal();
-        }
-    }
-});
-
-// 페이지 로드 시 데이터 로드
-window.addEventListener('load', () => {
-    loadData();
-    nameInput.focus();
-});
-
+function closeModal() {
+    imageModal.classList
