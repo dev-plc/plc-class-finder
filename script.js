@@ -1,6 +1,6 @@
 // 1. 설정 데이터
 const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
-
+//이미지 https://postimages.org/ 업로드해서 링크받기
 const locationMapImages = {
     "웨슬리홀": "https://lh3.googleusercontent.com/u/0/d/1dBML_CRlbFX-hLiYAT29MhtG6Hz0NlWb",
     //"칼빈": "https://lh3.googleusercontent.com/u/0/d/19ji7bvxmiqKCcvavyAehAxx3N4e-yIR_",
@@ -159,6 +159,7 @@ window.addEventListener('load', () => {
     loadData();
     initEventListeners();
 });
+
 
 
 
