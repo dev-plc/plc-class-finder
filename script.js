@@ -140,8 +140,17 @@ function displayResult(member) {
     elements.resultContainer.style.display = 'block';
     elements.resultContainer.scrollIntoView({ behavior: 'smooth' });
 }
+// 6. 직책별 우선순위 설정 (숫자가 낮을수록 상단 노출)
+const rolePriority = {
+    "관리자": 1,
+    "튜터": 2,
+    "서브튜터": 3,
+    "조원": 4,
+    "": 4 // 직책이 없는 경우
+};
 
-// 6. 조원 목록 그리기 (로직 보강)
+
+// 7. 조원 목록 그리기 (정렬 로직 수정 버전)
 function renderTeamMembers(members, teamName, role) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
@@ -149,7 +158,7 @@ function renderTeamMembers(members, teamName, role) {
     
     if (!listElement || !titleElement || !container) return;
 
-    // 권한이 없으면(일반 조원이면) 아예 표시 안 함
+    // 권한 확인 (튜터, 서브튜터, 관리자만 목록 열람 가능)
     if (!role || role.trim() === '') {
         container.style.display = 'none';
         return;
@@ -158,13 +167,31 @@ function renderTeamMembers(members, teamName, role) {
     container.style.display = 'block';
     titleElement.textContent = `👥 ${teamName} 조원 명단 (${members.length}명)`;
     
-    const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    // [수정된 정렬 로직]
+    const sortedMembers = [...members].sort((a, b) => {
+        const roleA = a.role || "";
+        const roleB = b.role || "";
+        
+        // 1순위: 직책 우선순위 비교 (관리자 > 튜터 > 서브튜터 > 조원)
+        const priorityA = rolePriority[roleA] || 4;
+        const priorityB = rolePriority[roleB] || 4;
+        
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB;
+        }
+        
+        // 2순위: 직책이 같으면 이름 가나다순 비교
+        return a.name.localeCompare(b.name, 'ko');
+    });
 
     listElement.innerHTML = sortedMembers.map((m, index) => {
         const borderStyle = index === 0 
             ? "border-top: 1px dashed #ddd;" 
             : "border-top: 1px solid #eee;";
 
+        // 직책 강조 (관리자/튜터는 색상을 다르게 줄 수도 있습니다)
+        const roleLabel = m.role || '조원';
+        
         return `
             <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle}">
                 <div style="display: flex; align-items: center;">
@@ -173,21 +200,20 @@ function renderTeamMembers(members, teamName, role) {
                     </span>
                 </div>
                 <span style="font-size: 11px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">
-                    ${m.role || '조원'}
+                    ${roleLabel}
                 </span>
             </div>
         `;
     }).join('');
 }
-
-// 7. 에러 표시 함수 (누락되었던 부분 추가)
+// 8. 에러 표시 함수 (누락되었던 부분 추가)
 function showError(msg) {
     elements.errorText.innerHTML = msg;
     elements.errorMessage.style.display = 'flex';
     elements.resultContainer.style.display = 'none';
 }
 
-// 8. 이벤트 리스너 및 모달 제어 (기존과 동일)
+// 9. 이벤트 리스너 및 모달 제어 (기존과 동일)
 function initEventListeners() {
     elements.searchBtn.addEventListener('click', searchMember);
     elements.closeBtn.addEventListener('click', () => { elements.resultContainer.style.display = 'none'; });
@@ -233,10 +259,11 @@ function initModal() {
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 }
 
-// 9. 실행
+// 10. 실행
 window.addEventListener('load', () => {
     loadData();
     initEventListeners();
     initModal();
 });
+
 
