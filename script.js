@@ -89,20 +89,33 @@ function searchMember() {
     }
 }
 
-// 5. 검색 결과 표시 (수정됨)
+// 5. 검색 결과 표시
+function toggleRow(row, value, target) {
+    if (value && value.trim() !== "") {
+        target.textContent = value;
+        if (row) row.style.display = 'flex';
+    } else {
+        if (row) row.style.display = 'none';
+    }
+}
+
 function displayResult(member) {
     elements.errorMessage.style.display = 'none';
     
     const memberListContainer = document.getElementById('teamMemberListContainer');
-    // 초기화
     if (memberListContainer) memberListContainer.style.display = 'none';
 
-    // 정보 행 표시 로직 (중략...)
-    toggleRow(elements.resultName.closest('.info-row'), member.name, elements.resultName);
-    toggleRow(elements.resultTeam.closest('.info-row'), member.team, elements.resultTeam);
-    toggleRow(elements.resultLocation.closest('.info-row'), member.location, elements.resultLocation);
+    // 각 정보 행(row)을 찾아서 표시하거나 숨김
+    // HTML 구조상 .info-row 가 존재해야 합니다.
+    const nameRow = elements.resultName ? elements.resultName.closest('.info-row') : null;
+    const teamRow = elements.resultTeam ? elements.resultTeam.closest('.info-row') : null;
+    const locationRow = elements.resultLocation ? elements.resultLocation.closest('.info-row') : null;
 
-    // 이미지 처리
+    toggleRow(nameRow, member.name, elements.resultName);
+    toggleRow(teamRow, member.team, elements.resultTeam);
+    toggleRow(locationRow, member.location, elements.resultLocation);
+
+    // 이미지 및 팀원 목록
     const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
     if (mapUrl) {
@@ -112,15 +125,14 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'none';
     }
 
-    // 튜터/관리자 권한 확인 및 팀원 목록 렌더링
+    // 튜터 권한 확인 (member.role 인자 추가 전달)
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
         member.role.includes('관리자')
     );
     
-    // 호출 시 member.role을 반드시 전달해야 합니다.
-    if (isTutor && member.team) {
+    if (isTutor && member.team && memberListContainer) {
         const teamMembers = memberData.filter(m => m.team === member.team);
         renderTeamMembers(teamMembers, member.team, member.role);
     }
@@ -227,3 +239,4 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
