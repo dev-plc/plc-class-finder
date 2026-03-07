@@ -150,7 +150,7 @@ const rolePriority = {
 };
 
 
-// 7. 조원 목록 그리기 (정렬 로직 수정 버전)
+// 7. 조원 목록 그리기 (정렬 + 김밥 + 출석 UI 추가)
 function renderTeamMembers(members, teamName, role) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
@@ -158,7 +158,6 @@ function renderTeamMembers(members, teamName, role) {
     
     if (!listElement || !titleElement || !container) return;
 
-    // 권한 확인 (튜터, 서브튜터, 관리자만 목록 열람 가능)
     if (!role || role.trim() === '') {
         container.style.display = 'none';
         return;
@@ -167,20 +166,14 @@ function renderTeamMembers(members, teamName, role) {
     container.style.display = 'block';
     titleElement.textContent = `👥 ${teamName} 조원 명단 (${members.length}명)`;
     
-    // [수정된 정렬 로직]
+    // [정렬 로직] 관리자 > 튜터 > 서브튜터 > 조원 순, 이후 이름순
     const sortedMembers = [...members].sort((a, b) => {
-        const roleA = a.role || "";
-        const roleB = b.role || "";
-        
-        // 1순위: 직책 우선순위 비교 (관리자 > 튜터 > 서브튜터 > 조원)
-        const priorityA = rolePriority[roleA] || 4;
-        const priorityB = rolePriority[roleB] || 4;
+        const priorityA = rolePriority[a.role] || 4;
+        const priorityB = rolePriority[b.role] || 4;
         
         if (priorityA !== priorityB) {
             return priorityA - priorityB;
         }
-        
-        // 2순위: 직책이 같으면 이름 가나다순 비교
         return a.name.localeCompare(b.name, 'ko');
     });
 
@@ -189,22 +182,32 @@ function renderTeamMembers(members, teamName, role) {
             ? "border-top: 1px dashed #ddd;" 
             : "border-top: 1px solid #eee;";
 
-        // 직책 강조 (관리자/튜터는 색상을 다르게 줄 수도 있습니다)
-        const roleLabel = m.role || '조원';
-        
+        // 김밥 여부 표시
+        const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? '<span style="margin-left:4px;" title="김밥 대상자">🍱</span>' : '';
+        // 출석 여부 (UI 체크 상태)
+        const isChecked = (m.attendance && m.attendance.toUpperCase() === 'O') ? 'checked' : '';
+
         return `
             <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle}">
-                <div style="display: flex; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" ${isChecked} 
+                        style="width: 18px; height: 18px; cursor: pointer;"
+                        onclick="toggleAttendanceUI('${m.name}', '${m.phone}', this.checked)">
                     <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
-                        ${m.name} (${m.phone}) 
+                        ${m.name}(${m.phone}) ${lunchIcon}
                     </span>
                 </div>
                 <span style="font-size: 11px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">
-                    ${roleLabel}
+                    ${m.role || '조원'}
                 </span>
             </div>
         `;
     }).join('');
+}
+
+function toggleAttendanceUI(name, phone, checked) {
+    console.log(`[출석 변경 로그] ${name}(${phone}) -> ${checked ? 'O' : 'X'}`);
+    // 실제 저장 기능을 위해서는 Google Apps Script API가 필요합니다.
 }
 // 8. 에러 표시 함수 (누락되었던 부분 추가)
 function showError(msg) {
@@ -265,5 +268,6 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
 
 
