@@ -66,16 +66,38 @@ function parseCSV(csvText) {
     });
 }
 
-// 4. 검색 및 결과 표시
+// 4. 검색 로직
+function searchMember() {
+    const name = elements.nameInput.value.trim();
+    const phone = elements.phoneInput.value.trim();
+
+    if (!name || !phone) {
+        showError("이름과 번호 4자리를 입력해주세요.");
+        return;
+    }
+
+    // 데이터에서 일치하는 사람 찾기
+    const member = memberData.find(m => 
+        String(m.name) === name && String(m.phone) === phone
+    );
+
+    if (member) {
+        displayResult(member);
+    } else {
+        showError("일치하는 정보를 찾을 수 없습니다.<br>입력 내용을 확인해주세요.");
+    }
+}
+
+// 5. 검색 결과 표시
 function displayResult(member) {
     elements.errorMessage.style.display = 'none';
     
-    // 1. 개별 정보 행 제어
+    // 개별 정보 행 제어
     const nameRow = elements.resultName.closest('.info-row');
     const teamRow = elements.resultTeam.closest('.info-row');
     const locationRow = elements.resultLocation.closest('.info-row');
 
-    // [이름] 값이 없으면 행 전체 숨김
+    // [이름] 처리
     if (member.name && member.name.trim() !== "") {
         elements.resultName.textContent = member.name;
         if(nameRow) nameRow.style.display = 'flex';
@@ -83,7 +105,7 @@ function displayResult(member) {
         if(nameRow) nameRow.style.display = 'none';
     }
 
-    // [조] 값이 없으면 행 전체 숨김
+    // [조] 처리
     if (member.team && member.team.trim() !== "") {
         elements.resultTeam.textContent = member.team;
         if(teamRow) teamRow.style.display = 'flex';
@@ -91,7 +113,7 @@ function displayResult(member) {
         if(teamRow) teamRow.style.display = 'none';
     }
 
-    // [위치] 값이 없으면 행 전체 숨김
+    // [위치] 처리
     if (member.location && member.location.trim() !== "") {
         elements.resultLocation.textContent = member.location;
         if(locationRow) locationRow.style.display = 'flex';
@@ -99,7 +121,7 @@ function displayResult(member) {
         if(locationRow) locationRow.style.display = 'none';
     }
 
-    // 2. 지도 이미지 영역 제어
+    // 지도 이미지 영역 제어
     const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
 
@@ -110,7 +132,7 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'none';
     }
 
-    // 3. 튜터/서브튜터 명단 영역 (구분선 포함된 컨테이너)
+    // 튜터/서브튜터 명단 영역
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
@@ -119,20 +141,19 @@ function displayResult(member) {
     
     const memberListContainer = document.getElementById('teamMemberListContainer');
     
-    // 권한이 있고, 조 정보가 실제 있을 때만 구분선이 포함된 컨테이너 노출
     if (isTutor && memberListContainer && member.team && member.team.trim() !== "") {
         const teamMembers = memberData.filter(m => m.team === member.team);
         renderTeamMembers(teamMembers, member.team);
-        memberListContainer.style.display = 'block'; // 여기서 구분선(border-top)이 나타남
+        memberListContainer.style.display = 'block';
     } else if (memberListContainer) {
-        memberListContainer.style.display = 'none';  // 권한 없으면 구분선까지 통째로 숨김
+        memberListContainer.style.display = 'none';
     }
 
     elements.resultContainer.style.display = 'block';
     elements.resultContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// 5. 조원 목록을 화면에 그리는 함수
+// 6. 조원 목록 그리기
 function renderTeamMembers(members, teamName) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
@@ -163,7 +184,7 @@ function showError(msg) {
     elements.resultContainer.style.display = 'none';
 }
 
-// 6. 이벤트 리스너 통합
+// 7. 이벤트 리스너 통합
 function initEventListeners() {
     elements.searchBtn.addEventListener('click', searchMember);
     
@@ -185,8 +206,6 @@ function initEventListeners() {
 
     elements.adminForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        e.stopPropagation();
-
         const id = document.getElementById('adminId').value;
         const pw = document.getElementById('adminPassword').value;
         
@@ -206,7 +225,7 @@ function initEventListeners() {
     });
 }
 
-// 7. 이미지 모달 제어 함수
+// 8. 이미지 모달 제어
 function initModal() {
     const imageModal = document.getElementById('imageModal');
     const modalImage = document.getElementById('modalImage');
@@ -221,36 +240,27 @@ function initModal() {
         document.body.style.overflow = 'hidden';
     });
 
-    if (imageModal) {
-        imageModal.addEventListener('click', () => {
-            closeModal();
-        });
-    }
-
-    if (modalClose) {
-        modalClose.addEventListener('click', (e) => {
-            e.stopPropagation();
-            closeModal();
-        });
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && imageModal && imageModal.classList.contains('active')) {
-            closeModal();
+    function closeModal() {
+        if(imageModal) {
+            imageModal.classList.remove('active');
+            document.body.style.overflow = 'auto';
         }
+    }
+
+    if (imageModal) imageModal.addEventListener('click', closeModal);
+    if (modalClose) modalClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeModal();
     });
 
-    function closeModal() {
-        imageModal.classList.remove('active');
-        document.body.style.overflow = 'auto';
-    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
 }
 
-// 8. 실행
+// 9. 실행
 window.addEventListener('load', () => {
     loadData();
     initEventListeners();
     initModal();
 });
-
-
