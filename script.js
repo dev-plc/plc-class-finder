@@ -89,22 +89,49 @@ function searchMember() {
 
 function displayResult(member) {
     elements.errorMessage.style.display = 'none';
-    elements.resultName.textContent = member.name;
-    elements.resultTeam.textContent = member.team;
-    elements.resultLocation.textContent = member.location;
+    
+    // 각 정보 행(row)을 찾습니다.
+    const nameRow = elements.resultName.closest('.info-row');
+    const teamRow = elements.resultTeam.closest('.info-row');
+    const locationRow = elements.resultLocation.closest('.info-row');
 
-    // 1. 지도 이미지 표시 로직
-    const pureLocation = member.location.trim();
+    // 1. 데이터 입력 및 노출 제어
+    // 이름 처리
+    if (member.name && member.name.trim() !== "") {
+        elements.resultName.textContent = member.name;
+        nameRow.style.display = 'flex';
+    } else {
+        nameRow.style.display = 'none';
+    }
+
+    // 조 처리
+    if (member.team && member.team.trim() !== "") {
+        elements.resultTeam.textContent = member.team;
+        teamRow.style.display = 'flex';
+    } else {
+        teamRow.style.display = 'none';
+    }
+
+    // 위치 처리
+    if (member.location && member.location.trim() !== "") {
+        elements.resultLocation.textContent = member.location;
+        locationRow.style.display = 'flex';
+    } else {
+        locationRow.style.display = 'none';
+    }
+
+    // 2. 지도 이미지 표시 로직
+    const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
 
-    if (mapUrl) {
+    if (mapUrl && pureLocation !== "") {
         elements.mapImage.src = mapUrl;
         elements.mapContainer.style.display = 'block';
     } else {
         elements.mapContainer.style.display = 'none';
     }
 
-    // 2. 튜터/서브튜터/관리자 권한 확인 및 조원 목록 표시
+    // 3. 튜터/서브튜터/관리자 권한 확인 및 조원 목록 표시
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
@@ -113,7 +140,7 @@ function displayResult(member) {
     
     const memberListContainer = document.getElementById('teamMemberListContainer');
     
-    if (isTutor && memberListContainer) {
+    if (isTutor && memberListContainer && member.team) {
         const teamMembers = memberData.filter(m => m.team === member.team);
         renderTeamMembers(teamMembers, member.team);
         memberListContainer.style.display = 'block';
@@ -245,3 +272,4 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
