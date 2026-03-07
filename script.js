@@ -37,16 +37,18 @@ const elements = {
     adminForm: document.getElementById('adminLoginForm')
 };
 
-// 3. 데이터 로드 및 파싱
+// 3. 데이터 로드 및 파싱 (보강된 버전)
 async function loadData() {
     try {
         const response = await fetch(GOOGLE_SHEET_CSV_URL);
-        if (!response.ok) throw new Error('Network response was not ok');
+        if (!response.ok) throw new Error('데이터를 불러올 수 없습니다.');
         const csvText = await response.text();
         memberData = parseCSV(csvText);
         console.log("✅ Data Loaded:", memberData.length, "members");
     } catch (error) {
         console.error("❌ Fetch Error:", error);
+        // 사용자에게 데이터 로드 실패를 알림 (선택 사항)
+        alert("데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침 해주세요.");
     }
 }
 
@@ -76,7 +78,6 @@ function searchMember() {
         return;
     }
 
-    // 데이터에서 일치하는 사람 찾기
     const member = memberData.find(m => 
         String(m.name) === name && String(m.phone) === phone
     );
@@ -92,36 +93,29 @@ function searchMember() {
 function displayResult(member) {
     elements.errorMessage.style.display = 'none';
     
-    // 개별 정보 행 제어
+    const memberListContainer = document.getElementById('teamMemberListContainer');
+    if (memberListContainer) {
+        memberListContainer.style.borderTop = "none";
+        memberListContainer.style.display = 'none';
+    }
+
     const nameRow = elements.resultName.closest('.info-row');
     const teamRow = elements.resultTeam.closest('.info-row');
     const locationRow = elements.resultLocation.closest('.info-row');
 
-    // [이름] 처리
-    if (member.name && member.name.trim() !== "") {
-        elements.resultName.textContent = member.name;
-        if(nameRow) nameRow.style.display = 'flex';
-    } else {
-        if(nameRow) nameRow.style.display = 'none';
-    }
+    const toggleRow = (row, value, target) => {
+        if (value && value.trim() !== "") {
+            target.textContent = value;
+            if (row) row.style.display = 'flex';
+        } else {
+            if (row) row.style.display = 'none';
+        }
+    };
 
-    // [조] 처리
-    if (member.team && member.team.trim() !== "") {
-        elements.resultTeam.textContent = member.team;
-        if(teamRow) teamRow.style.display = 'flex';
-    } else {
-        if(teamRow) teamRow.style.display = 'none';
-    }
+    toggleRow(nameRow, member.name, elements.resultName);
+    toggleRow(teamRow, member.team, elements.resultTeam);
+    toggleRow(locationRow, member.location, elements.resultLocation);
 
-    // [위치] 처리
-    if (member.location && member.location.trim() !== "") {
-        elements.resultLocation.textContent = member.location;
-        if(locationRow) locationRow.style.display = 'flex';
-    } else {
-        if(locationRow) locationRow.style.display = 'none';
-    }
-
-    // 지도 이미지 영역 제어
     const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
 
@@ -132,21 +126,16 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'none';
     }
 
-    // 튜터/서브튜터 명단 영역
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
         member.role.includes('관리자')
     );
     
-    const memberListContainer = document.getElementById('teamMemberListContainer');
-    
     if (isTutor && memberListContainer && member.team && member.team.trim() !== "") {
         const teamMembers = memberData.filter(m => m.team === member.team);
         renderTeamMembers(teamMembers, member.team);
         memberListContainer.style.display = 'block';
-    } else if (memberListContainer) {
-        memberListContainer.style.display = 'none';
     }
 
     elements.resultContainer.style.display = 'block';
@@ -157,58 +146,52 @@ function displayResult(member) {
 function renderTeamMembers(members, teamName) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
+    const container = document.getElementById('teamMemberListContainer'); 
     
-    if (!listElement || !titleElement) return;
+    if (!listElement || !titleElement || !container) return;
 
+    container.style.borderTop = "1px dashed #ddd";
     titleElement.textContent = `👥 ${teamName} 조원 명단 (${members.length}명)`;
     
     const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
-    listElement.innerHTML = sortedMembers.map(m => `
-        <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 8px; border-bottom: 1px solid #eee;">
-            <div style="display: flex; align-items: center;">
-                <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
-                    ${m.name}${m.phone}
+    listElement.innerHTML = sortedMembers.map((m, index) => {
+        const isLast = index === sortedMembers.length - 1;
+        const borderStyle = isLast ? "" : "border-bottom: 1px solid #eee;";
+
+        return `
+            <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 8px; ${borderStyle}">
+                <div style="display: flex; align-items: center;">
+                    <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
+                        ${m.name}${m.phone}
+                    </span>
+                </div>
+                <span style="font-size: 11px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">
+                    ${m.role || '조원'}
                 </span>
             </div>
-            <span style="font-size: 11px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">
-                ${m.role || '조원'}
-            </span>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
+// 7. 에러 표시 함수 (누락되었던 부분 추가)
 function showError(msg) {
     elements.errorText.innerHTML = msg;
     elements.errorMessage.style.display = 'flex';
     elements.resultContainer.style.display = 'none';
 }
 
-// 7. 이벤트 리스너 통합
+// 8. 이벤트 리스너 및 모달 제어 (기존과 동일)
 function initEventListeners() {
     elements.searchBtn.addEventListener('click', searchMember);
-    
-    elements.closeBtn.addEventListener('click', () => {
-        elements.resultContainer.style.display = 'none';
-    });
-
-    elements.themeToggle.addEventListener('click', () => {
-        document.body.classList.toggle('dark-mode');
-    });
-
-    elements.adminBtn.addEventListener('click', () => {
-        elements.adminModal.classList.add('active');
-    });
-
-    elements.adminClose.addEventListener('click', () => {
-        elements.adminModal.classList.remove('active');
-    });
-
+    elements.closeBtn.addEventListener('click', () => { elements.resultContainer.style.display = 'none'; });
+    elements.themeToggle.addEventListener('click', () => { document.body.classList.toggle('dark-mode'); });
+    elements.adminBtn.addEventListener('click', () => { elements.adminModal.classList.add('active'); });
+    elements.adminClose.addEventListener('click', () => { elements.adminModal.classList.remove('active'); });
     elements.adminForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const id = document.getElementById('adminId').value;
         const pw = document.getElementById('adminPassword').value;
-        
         if (id === 'plc' && pw === 'plc1234') {
             alert("로그인 성공!");
             sessionStorage.setItem('adminLoggedIn', 'true'); 
@@ -219,43 +202,29 @@ function initEventListeners() {
             errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
         }
     });
-
-    elements.phoneInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchMember();
-    });
+    elements.phoneInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchMember(); });
 }
 
-// 8. 이미지 모달 제어
 function initModal() {
     const imageModal = document.getElementById('imageModal');
     const modalImage = document.getElementById('modalImage');
     const mapImage = document.getElementById('mapImage');
     const modalClose = document.getElementById('modalClose');
-
     if (!mapImage) return;
-
     mapImage.addEventListener('click', () => {
         modalImage.src = mapImage.src;
         imageModal.classList.add('active');
         document.body.style.overflow = 'hidden';
     });
-
     function closeModal() {
         if(imageModal) {
             imageModal.classList.remove('active');
             document.body.style.overflow = 'auto';
         }
     }
-
     if (imageModal) imageModal.addEventListener('click', closeModal);
-    if (modalClose) modalClose.addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeModal();
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeModal();
-    });
+    if (modalClose) modalClose.addEventListener('click', (e) => { e.stopPropagation(); closeModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 }
 
 // 9. 실행
