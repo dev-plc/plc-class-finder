@@ -67,60 +67,39 @@ function parseCSV(csvText) {
 }
 
 // 4. 검색 및 결과 표시
-function searchMember() {
-    const name = elements.nameInput.value.trim();
-    const phone = elements.phoneInput.value.trim();
-
-    if (!name || !phone) {
-        showError("이름과 번호 4자리를 입력해주세요.");
-        return;
-    }
-
-    const member = memberData.find(m => 
-        String(m.name) === name && String(m.phone) === phone
-    );
-
-    if (member) {
-        displayResult(member);
-    } else {
-        showError("일치하는 정보를 찾을 수 없습니다.<br>입력 내용을 확인해주세요.");
-    }
-}
-
 function displayResult(member) {
     elements.errorMessage.style.display = 'none';
     
-    // 각 정보 행(row)을 찾습니다.
+    // 1. 개별 정보 행 제어
     const nameRow = elements.resultName.closest('.info-row');
     const teamRow = elements.resultTeam.closest('.info-row');
     const locationRow = elements.resultLocation.closest('.info-row');
 
-    // 1. 데이터 입력 및 노출 제어
-    // 이름 처리
+    // [이름] 값이 없으면 행 전체 숨김
     if (member.name && member.name.trim() !== "") {
         elements.resultName.textContent = member.name;
-        nameRow.style.display = 'flex';
+        if(nameRow) nameRow.style.display = 'flex';
     } else {
-        nameRow.style.display = 'none';
+        if(nameRow) nameRow.style.display = 'none';
     }
 
-    // 조 처리
+    // [조] 값이 없으면 행 전체 숨김
     if (member.team && member.team.trim() !== "") {
         elements.resultTeam.textContent = member.team;
-        teamRow.style.display = 'flex';
+        if(teamRow) teamRow.style.display = 'flex';
     } else {
-        teamRow.style.display = 'none';
+        if(teamRow) teamRow.style.display = 'none';
     }
 
-    // 위치 처리
+    // [위치] 값이 없으면 행 전체 숨김
     if (member.location && member.location.trim() !== "") {
         elements.resultLocation.textContent = member.location;
-        locationRow.style.display = 'flex';
+        if(locationRow) locationRow.style.display = 'flex';
     } else {
-        locationRow.style.display = 'none';
+        if(locationRow) locationRow.style.display = 'none';
     }
 
-    // 2. 지도 이미지 표시 로직
+    // 2. 지도 이미지 영역 제어
     const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
 
@@ -131,7 +110,7 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'none';
     }
 
-    // 3. 튜터/서브튜터/관리자 권한 확인 및 조원 목록 표시
+    // 3. 튜터/서브튜터 명단 영역 (구분선 포함된 컨테이너)
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
@@ -140,12 +119,13 @@ function displayResult(member) {
     
     const memberListContainer = document.getElementById('teamMemberListContainer');
     
-    if (isTutor && memberListContainer && member.team) {
+    // 권한이 있고, 조 정보가 실제 있을 때만 구분선이 포함된 컨테이너 노출
+    if (isTutor && memberListContainer && member.team && member.team.trim() !== "") {
         const teamMembers = memberData.filter(m => m.team === member.team);
         renderTeamMembers(teamMembers, member.team);
-        memberListContainer.style.display = 'block';
+        memberListContainer.style.display = 'block'; // 여기서 구분선(border-top)이 나타남
     } else if (memberListContainer) {
-        memberListContainer.style.display = 'none';
+        memberListContainer.style.display = 'none';  // 권한 없으면 구분선까지 통째로 숨김
     }
 
     elements.resultContainer.style.display = 'block';
@@ -272,4 +252,5 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
 
