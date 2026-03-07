@@ -148,21 +148,21 @@ function renderTeamMembers(members, teamName) {
     const titleElement = document.getElementById('teamListTitle');
     const container = document.getElementById('teamMemberListContainer'); 
     
-    // 요소가 없으면 중단
     if (!listElement || !titleElement || !container) return;
 
-    // 1. 컨테이너 설정: 상단 점선 하나만 명확하게 표시하고 패딩 조정
-    container.style.borderTop = "1px dashed #ddd";
-    container.style.paddingTop = "20px"; // 선과 제목 사이 간격
-    container.style.marginTop = "20px";
+    // [수정] 컨테이너 자체에 선을 긋지 않습니다. (중복 방지)
+    container.style.borderTop = "none"; 
     
     titleElement.textContent = `👥 ${teamName} 조원 명단 (${members.length}명)`;
     
     const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
     listElement.innerHTML = sortedMembers.map((m, index) => {
-        // 2. 첫 번째 사람(0)은 윗줄 없음, 두 번째 사람부터 윗줄(실선) 생성
-        const borderStyle = index === 0 ? "" : "border-top: 1px solid #eee;";
+        // [수정] 첫 번째 조원 위에는 점선(dashed), 두 번째 조원부터는 실선(solid)
+        // 만약 아예 선을 하나만 남기고 싶다면 index === 0 ? "border-top: 1px dashed #ddd;" : "border-top: 1px solid #eee;"
+        const borderStyle = index === 0 
+            ? "border-top: 1px dashed #ddd;"  // 최상단 구분선 하나만 점선으로
+            : "border-top: 1px solid #eee;"; // 조원 사이는 연한 실선
 
         return `
             <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle}">
@@ -238,4 +238,5 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
 
