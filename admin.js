@@ -75,12 +75,16 @@ themeToggle.addEventListener('click', () => {
 });
 
 // 로그아웃
-logoutBtn.addEventListener('click', () => {
-    if (confirm('로그아웃 하시겠습니까?')) {
-        sessionStorage.removeItem('adminLoggedIn');
-        window.location.href = 'index.html';
-    }
-});
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+        if (confirm("로그아웃 하시겠습니까?")) {
+            // 세션 정보 삭제
+            sessionStorage.removeItem('adminLoggedIn');
+            // 로그인 페이지(index.html)로 이동
+            window.location.href = 'index.html';
+        }
+    });
+}
 
 // 탭 전환
 tabBtns.forEach(btn => {
@@ -368,5 +372,6 @@ window.addEventListener('load', () => {
     loadData();
     searchNameInput.focus();
 });
+
 
 
