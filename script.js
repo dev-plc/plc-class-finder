@@ -142,13 +142,22 @@ function displayResult(member) {
     elements.resultContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// 6. 조원 목록 그리기 (완벽한 선 제어 버전)
-function renderTeamMembers(members, teamName) {
+// 6. 조원 목록 그리기 (완벽한 선 제어 버전 + 일반 조원 숨김 처리 반영)
+function renderTeamMembers(members, teamName, role) { // 함수 호출 시 3번째 인자로 role(권한)을 넘겨주어야 합니다.
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
     const container = document.getElementById('teamMemberListContainer'); 
     
     if (!listElement || !titleElement || !container) return;
+
+    // [추가] 일반 조원(role이 비어있음)인 경우: 빈 공간과 이중선이 남지 않도록 컨테이너 자체를 완전히 숨김 처리
+    if (!role || role.trim() === '') {
+        container.style.display = 'none';
+        return; // 이후의 목록 그리기 로직을 실행하지 않고 종료
+    }
+
+    // [추가] 관리자/튜터 등 권한이 있는 경우: 컨테이너를 화면에 표시
+    container.style.display = 'block';
 
     // [수정] 컨테이너 자체에 선을 긋지 않습니다. (중복 방지)
     container.style.borderTop = "none"; 
@@ -159,7 +168,6 @@ function renderTeamMembers(members, teamName) {
 
     listElement.innerHTML = sortedMembers.map((m, index) => {
         // [수정] 첫 번째 조원 위에는 점선(dashed), 두 번째 조원부터는 실선(solid)
-        // 만약 아예 선을 하나만 남기고 싶다면 index === 0 ? "border-top: 1px dashed #ddd;" : "border-top: 1px solid #eee;"
         const borderStyle = index === 0 
             ? "border-top: 1px dashed #ddd;"  // 최상단 구분선 하나만 점선으로
             : "border-top: 1px solid #eee;"; // 조원 사이는 연한 실선
@@ -178,7 +186,6 @@ function renderTeamMembers(members, teamName) {
         `;
     }).join('');
 }
-
 // 7. 에러 표시 함수 (누락되었던 부분 추가)
 function showError(msg) {
     elements.errorText.innerHTML = msg;
@@ -238,5 +245,6 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
 
 
