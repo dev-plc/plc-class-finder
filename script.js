@@ -142,25 +142,30 @@ function displayResult(member) {
     elements.resultContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// 6. 조원 목록 그리기
+// 6. 조원 목록 그리기 (완벽한 선 제어 버전)
 function renderTeamMembers(members, teamName) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
     const container = document.getElementById('teamMemberListContainer'); 
     
+    // 요소가 없으면 중단
     if (!listElement || !titleElement || !container) return;
 
+    // 1. 컨테이너 설정: 상단 점선 하나만 명확하게 표시하고 패딩 조정
     container.style.borderTop = "1px dashed #ddd";
+    container.style.paddingTop = "20px"; // 선과 제목 사이 간격
+    container.style.marginTop = "20px";
+    
     titleElement.textContent = `👥 ${teamName} 조원 명단 (${members.length}명)`;
     
     const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
     listElement.innerHTML = sortedMembers.map((m, index) => {
-        const isLast = index === sortedMembers.length - 1;
-        const borderStyle = isLast ? "" : "border-bottom: 1px solid #eee;";
+        // 2. 첫 번째 사람(0)은 윗줄 없음, 두 번째 사람부터 윗줄(실선) 생성
+        const borderStyle = index === 0 ? "" : "border-top: 1px solid #eee;";
 
         return `
-            <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 8px; ${borderStyle}">
+            <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle}">
                 <div style="display: flex; align-items: center;">
                     <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
                         ${m.name}${m.phone}
@@ -233,3 +238,4 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
