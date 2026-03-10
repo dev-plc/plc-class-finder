@@ -1,5 +1,5 @@
 // 1. 설정 데이터
-const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
+//const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
 //이미지 https://postimages.org/ 업로드해서 링크받기
 /*
 const locationMapImages = {
@@ -9,6 +9,10 @@ const locationMapImages = {
     "자모영아실": "https://lh3.googleusercontent.com/u/0/d/13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
 };
 */
+
+// 발급받은 구글 스크립트 웹앱 URL을 아래에 붙여넣으세요.
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyyk-BXGlQc14jgCP4rOmnrwEBnp7fb6f42r3-WxvizrkZDY-s3KQw6j4FzTulZ7WrAXw/exec";
+
 const locationMapImages = {
     "웨슬리": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1uf8JK3Vt00aHLkBDO-0QHe7zSwb6hrlt",
     "칼빈": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1TKKEIrej8kwfFINw4j1GQRbUUhCgV-DV",
@@ -37,6 +41,29 @@ const elements = {
     adminForm: document.getElementById('adminLoginForm')
 };
 
+// 3. 데이터 로드 (실시간 구글 API 방식으로 변경)
+async function loadData() {
+    try {
+        // 브라우저 캐싱 방지를 위해 URL 끝에 타임스탬프 추가
+        const noCacheUrl = GAS_API_URL + "?t=" + new Date().getTime();
+        
+        const response = await fetch(noCacheUrl);
+        if (!response.ok) throw new Error('네트워크 응답이 정상이 아닙니다.');
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            memberData = result.data;
+            console.log("✅ Live Data Loaded:", memberData.length, "members");
+        } else {
+            throw new Error(result.message);
+        }
+    } catch (error) {
+        console.error("❌ Fetch Error:", error);
+        alert("데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침 해주세요.");
+    }
+}
+/*
 // 3. 데이터 로드 및 파싱 (보강된 버전)
 async function loadData() {
     try {
@@ -67,7 +94,7 @@ function parseCSV(csvText) {
         return obj;
     });
 }
-
+*/
 // 4. 검색 로직
 function searchMember() {
     const name = elements.nameInput.value.trim();
@@ -204,8 +231,6 @@ function renderTeamMembers(members, teamName, role) {
         `;
     }).join('');
 }
-// 발급받은 구글 스크립트 웹앱 URL을 아래에 붙여넣으세요.
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyyk-BXGlQc14jgCP4rOmnrwEBnp7fb6f42r3-WxvizrkZDY-s3KQw6j4FzTulZ7WrAXw/exec";
 
 async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
     const status = checked ? 'O' : 'X';
@@ -314,8 +339,3 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
-
-
-
-
-
