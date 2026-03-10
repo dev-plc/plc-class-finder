@@ -32,6 +32,7 @@ const elements = {
     resultName: document.getElementById('resultName'),
     resultTeam: document.getElementById('resultTeam'),
     resultLocation: document.getElementById('resultLocation'),
+    resultLunch: document.getElementById('resultLunch'),
     mapContainer: document.getElementById('mapContainer'),
     mapImage: document.getElementById('mapImage'),
     themeToggle: document.getElementById('themeToggle'),
@@ -137,10 +138,14 @@ function displayResult(member) {
     const nameRow = elements.resultName ? elements.resultName.closest('.info-row') : null;
     const teamRow = elements.resultTeam ? elements.resultTeam.closest('.info-row') : null;
     const locationRow = elements.resultLocation ? elements.resultLocation.closest('.info-row') : null;
+    const lunchRow = elements.resultLunch ? elements.resultLunch.closest('.info-row') : null; // 🍙 추가
 
     toggleRow(nameRow, member.name, elements.resultName);
     toggleRow(teamRow, member.team, elements.resultTeam);
     toggleRow(locationRow, member.location, elements.resultLocation);
+    // 🍙 김밥 여부 표시 추가 (O가 아니면 기본적으로 X로 표시)
+    const lunchStatus = (member.lunch && String(member.lunch).trim().toUpperCase() === 'O') ? 'O' : 'X';
+    toggleRow(lunchRow, lunchStatus, elements.resultLunch);
 
     // 이미지 및 팀원 목록
     const pureLocation = member.location ? member.location.trim() : "";
@@ -343,4 +348,5 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
 
