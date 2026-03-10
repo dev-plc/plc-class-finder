@@ -192,7 +192,7 @@ function renderTeamMembers(members, teamName, role) {
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" ${isChecked} 
                         style="width: 18px; height: 18px; cursor: pointer;"
-                        onclick="toggleAttendanceUI('${m.name}', '${m.phone}', this.checked)">
+                        onclick="toggleAttendanceUI('${m.name}', '${m.phone}', this.checked, this)">
                     <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
                         ${m.name}(${m.phone}) ${lunchIcon}
                     </span>
@@ -205,9 +205,39 @@ function renderTeamMembers(members, teamName, role) {
     }).join('');
 }
 
-function toggleAttendanceUI(name, phone, checked) {
-    console.log(`[출석 변경 로그] ${name}(${phone}) -> ${checked ? 'O' : 'X'}`);
-    // 실제 저장 기능을 위해서는 Google Apps Script API가 필요합니다.
+function toggleAttendanceUI(name, phone, checked, checkboxElement) {
+    const status = checked ? 'O' : 'X';
+    console.log(`[출석 변경 요청] ${name}(${phone}) -> ${status}`);
+
+    // 통신 중 중복 클릭 방지를 위해 체크박스 임시 비활성화
+    if (checkboxElement) {
+        checkboxElement.disabled = true;
+    }
+
+    // google.script.run을 통한 서버 통신
+    if (typeof google !== 'undefined' && google.script) {
+        google.script.run
+            .withSuccessHandler(function(response) {
+                console.log('업데이트 성공:', response);
+                if (checkboxElement) checkboxElement.disabled = false; // 체크박스 다시 활성화
+            })
+            .withFailureHandler(function(error) {
+                console.error('업데이트 실패:', error);
+                alert('출석 처리에 실패했습니다. 다시 시도해주세요.');
+                // 실패 시 체크박스 상태 롤백 (원래 상태로 되돌림)
+                if (checkboxElement) {
+                    checkboxElement.checked = !checked; 
+                    checkboxElement.disabled = false;
+                }
+            })
+            .updateAttendance(name, phone, status); // 백엔드 함수 호출
+    } else {
+        // 로컬 테스트용 (구글 환경이 아닐 때)
+        console.warn("구글 스크립트 환경이 아닙니다. 로컬에서 테스트 중입니다.");
+        setTimeout(() => {
+            if (checkboxElement) checkboxElement.disabled = false;
+        }, 500);
+    }
 }
 // 8. 에러 표시 함수 (누락되었던 부분 추가)
 function showError(msg) {
@@ -268,6 +298,7 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
 
 
 
