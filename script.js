@@ -176,8 +176,7 @@ const rolePriority = {
     "": 4 // 직책이 없는 경우
 };
 
-
-// 7. 조원 목록 그리기 (정렬 + 김밥 + 출석 UI 추가)
+// 7. 조원 목록 그리기 (정렬 + 김밥🍱 + 출석 UI 추가)
 function renderTeamMembers(members, teamName, role) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
@@ -191,7 +190,12 @@ function renderTeamMembers(members, teamName, role) {
     }
 
     container.style.display = 'block';
-    titleElement.textContent = `👥 ${teamName} 조원 명단 (${members.length}명)`;
+    
+    // 🍙 새로 추가된 부분: 김밥 신청자 수 계산
+    const kimbapCount = members.filter(m => m.lunch && m.lunch.toUpperCase() === 'O').length;
+    
+    // 👥 타이틀 수정: 총 인원과 김밥 갯수 함께 표시
+    titleElement.textContent = `👥 ${teamName} 조원 명단 (총 ${members.length}명 / 🍙 김밥 ${kimbapCount}개)`;
     
     // [정렬 로직] 관리자 > 튜터 > 서브튜터 > 조원 순, 이후 이름순
     const sortedMembers = [...members].sort((a, b) => {
@@ -210,7 +214,7 @@ function renderTeamMembers(members, teamName, role) {
             : "border-top: 1px solid #eee;";
 
         // 김밥 여부 표시
-        const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? '<span style="margin-left:4px;" title="김밥 대상자">🍱</span>' : '';
+        const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? '<span style="margin-left:4px;" title="김밥 대상자">🍙</span>' : '';
         // 출석 여부 (UI 체크 상태)
         const isChecked = (m.attendance && m.attendance.toUpperCase() === 'O') ? 'checked' : '';
 
@@ -339,3 +343,4 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
