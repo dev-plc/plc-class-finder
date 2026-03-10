@@ -204,8 +204,10 @@ function renderTeamMembers(members, teamName, role) {
         `;
     }).join('');
 }
+// 발급받은 구글 스크립트 웹앱 URL을 아래에 붙여넣으세요.
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyyk-BXGlQc14jgCP4rOmnrwEBnp7fb6f42r3-WxvizrkZDY-s3KQw6j4FzTulZ7WrAXw/exec";
 
-function toggleAttendanceUI(name, phone, checked, checkboxElement) {
+async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
     const status = checked ? 'O' : 'X';
     console.log(`[출석 변경 요청] ${name}(${phone}) -> ${status}`);
 
@@ -214,29 +216,43 @@ function toggleAttendanceUI(name, phone, checked, checkboxElement) {
         checkboxElement.disabled = true;
     }
 
-    // google.script.run을 통한 서버 통신
-    if (typeof google !== 'undefined' && google.script) {
-        google.script.run
-            .withSuccessHandler(function(response) {
-                console.log('업데이트 성공:', response);
-                if (checkboxElement) checkboxElement.disabled = false; // 체크박스 다시 활성화
+    try {
+        // fetch API를 사용해 구글 스크립트로 데이터 전송
+        // (주의: GAS CORS 에러를 피하기 위해 Content-Type을 text/plain으로 보냅니다)
+        const response = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8',
+            },
+            body: JSON.stringify({
+                name: name,
+                phone: phone,
+                status: status
             })
-            .withFailureHandler(function(error) {
-                console.error('업데이트 실패:', error);
-                alert('출석 처리에 실패했습니다. 다시 시도해주세요.');
-                // 실패 시 체크박스 상태 롤백 (원래 상태로 되돌림)
-                if (checkboxElement) {
-                    checkboxElement.checked = !checked; 
-                    checkboxElement.disabled = false;
-                }
-            })
-            .updateAttendance(name, phone, status); // 백엔드 함수 호출
-    } else {
-        // 로컬 테스트용 (구글 환경이 아닐 때)
-        console.warn("구글 스크립트 환경이 아닙니다. 로컬에서 테스트 중입니다.");
-        setTimeout(() => {
-            if (checkboxElement) checkboxElement.disabled = false;
-        }, 500);
+        });
+
+        // 결과 파싱
+        const result = await response.json();
+
+        if (result.success) {
+            console.log('업데이트 성공:', result.message);
+            if (checkboxElement) checkboxElement.disabled = false; // 체크박스 활성화
+        } else {
+            console.error('업데이트 실패:', result.message);
+            alert('출석 실패: ' + result.message);
+            // 실패 시 체크박스 상태 원래대로 롤백
+            if (checkboxElement) {
+                checkboxElement.checked = !checked; 
+                checkboxElement.disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('네트워크 오류:', error);
+        alert('서버와 통신하는 중 문제가 발생했습니다. (인터넷 연결 등을 확인하세요)');
+        if (checkboxElement) {
+            checkboxElement.checked = !checked;
+            checkboxElement.disabled = false;
+        }
     }
 }
 // 8. 에러 표시 함수 (누락되었던 부분 추가)
@@ -298,6 +314,7 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
+
 
 
 
