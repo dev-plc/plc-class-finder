@@ -271,6 +271,15 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
         if (result.success) {
             console.log('업데이트 성공:', result.message);
             if (checkboxElement) checkboxElement.disabled = false; // 체크박스 활성화
+            
+            // 💡 [여기가 추가된 핵심 코드!]
+            // 구글 시트 업데이트가 성공하면, 현재 웹페이지가 기억하고 있는 memberData의 값도 변경합니다.
+            // 이렇게 해야 새로고침(F5) 없이 다시 검색해도 출석 O/X 상태가 제대로 화면에 반영됩니다.
+            const memberIndex = memberData.findIndex(m => m.name === name && m.phone === phone);
+            if (memberIndex !== -1) {
+                memberData[memberIndex].attendance = status;
+            }
+
         } else {
             console.error('업데이트 실패:', result.message);
             alert('출석 실패: ' + result.message);
@@ -289,6 +298,7 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
         }
     }
 }
+
 // 8. 에러 표시 함수 (누락되었던 부분 추가)
 function showError(msg) {
     elements.errorText.innerHTML = msg;
