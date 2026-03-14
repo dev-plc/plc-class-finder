@@ -14,7 +14,7 @@ const locationMapImages = {
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyyk-BXGlQc14jgCP4rOmnrwEBnp7fb6f42r3-WxvizrkZDY-s3KQw6j4FzTulZ7WrAXw/exec";
 
 const locationMapImages = {
-    "웨슬리": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1uf8JK3Vt00aHLkBDO-0QHe7zSwb6hrlt",
+    "웨슬리": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1-lINYh9FSFffxWn-G66xCE4mI9wp49mH",
     "칼빈": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1TKKEIrej8kwfFINw4j1GQRbUUhCgV-DV",
     "자모영아실": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
 };
