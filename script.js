@@ -98,20 +98,19 @@ function parseCSV(csvText) {
 */
 // 4. 검색 로직 수정
 function searchMember() {
-    const name = elements.nameInput.value.trim().replace(/\s/g, ''); // 공백 제거
-    const phone = elements.phoneInput.value.trim().replace(/[^0-9]/g, ''); // 숫자만 추출
+    const name = elements.nameInput.value.trim().replace(/\s/g, '');
+    const phone = elements.phoneInput.value.trim().replace(/[^0-9]/g, '');
+    const searchTarget = name + phone; // 예: "임시1234"
 
     if (!name || !phone) {
         showError("이름과 번호 4자리를 입력해주세요.");
         return;
     }
 
-    // m.phone과 m.name을 확실하게 문자열로 변환 후 비교
-    const member = memberData.find(m => {
-        const sheetName = String(m.name || "").trim().replace(/\s/g, '');
-        const sheetPhone = String(m.phone || "").trim().replace(/[^0-9]/g, '');
-        return sheetName === name && sheetPhone === phone;
-    });
+    // 시트에서 가져온 id(전체문자열)와 입력한 searchTarget을 비교
+    const member = memberData.find(m => 
+        String(m.id).replace(/\s/g, '') === searchTarget
+    );
 
     if (member) {
         displayResult(member);
