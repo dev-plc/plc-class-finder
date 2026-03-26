@@ -1,16 +1,4 @@
 // 1. 설정 데이터
-//const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
-//이미지 https://postimages.org/ 업로드해서 링크받기
-/*
-const locationMapImages = {
-    "웨슬리": "https://lh3.googleusercontent.com/u/0/d/1dBML_CRlbFX-hLiYAT29MhtG6Hz0NlWb",
-    //"칼빈": "https://lh3.googleusercontent.com/u/0/d/19ji7bvxmiqKCcvavyAehAxx3N4e-yIR_",
-    "칼빈": "https://i.postimg.cc/hjTSJ8jD/1221-kalbin.jpg",
-    "자모영아실": "https://lh3.googleusercontent.com/u/0/d/13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
-};
-*/
-
-// 발급받은 구글 스크립트 웹앱 URL을 아래에 붙여넣으세요.
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
 
 const locationMapImages = {
@@ -45,7 +33,6 @@ const elements = {
 // 3. 데이터 로드 (실시간 구글 API 방식으로 변경)
 async function loadData() {
     try {
-        // 브라우저 캐싱 방지를 위해 URL 끝에 타임스탬프 추가
         const noCacheUrl = GAS_API_URL + "?t=" + new Date().getTime();
         
         const response = await fetch(noCacheUrl);
@@ -64,50 +51,18 @@ async function loadData() {
         alert("데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침 해주세요.");
     }
 }
-/*
-// 3. 데이터 로드 및 파싱 (보강된 버전)
-async function loadData() {
-    try {
-        const response = await fetch(GOOGLE_SHEET_CSV_URL);
-        if (!response.ok) throw new Error('데이터를 불러올 수 없습니다.');
-        const csvText = await response.text();
-        memberData = parseCSV(csvText);
-        console.log("✅ Data Loaded:", memberData.length, "members");
-    } catch (error) {
-        console.error("❌ Fetch Error:", error);
-        // 사용자에게 데이터 로드 실패를 알림 (선택 사항)
-        alert("데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침 해주세요.");
-    }
-}
 
-function parseCSV(csvText) {
-    const lines = csvText.split('\n').filter(line => line.trim() !== "");
-    if (lines.length < 2) return [];
-    
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-    
-    return lines.slice(1).map(line => {
-        const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-        const obj = {};
-        headers.forEach((header, i) => {
-            obj[header] = values[i] ? values[i].trim().replace(/"/g, '') : "";
-        });
-        return obj;
-    });
-}
-*/
 // 4. 검색 로직 수정
 function searchMember() {
     const name = elements.nameInput.value.trim().replace(/\s/g, '');
     const phone = elements.phoneInput.value.trim().replace(/[^0-9]/g, '');
-    const searchTarget = name + phone; // 예: "임시1234"
+    const searchTarget = name + phone;
 
     if (!name || !phone) {
         showError("이름과 번호 4자리를 입력해주세요.");
         return;
     }
 
-    // 시트에서 가져온 id(전체문자열)와 입력한 searchTarget을 비교
     const member = memberData.find(m => 
         String(m.id).replace(/\s/g, '') === searchTarget
     );
@@ -135,21 +90,25 @@ function displayResult(member) {
     const memberListContainer = document.getElementById('teamMemberListContainer');
     if (memberListContainer) memberListContainer.style.display = 'none';
 
-    // 각 정보 행(row)을 찾아서 표시하거나 숨김
-    // HTML 구조상 .info-row 가 존재해야 합니다.
     const nameRow = elements.resultName ? elements.resultName.closest('.info-row') : null;
     const teamRow = elements.resultTeam ? elements.resultTeam.closest('.info-row') : null;
     const locationRow = elements.resultLocation ? elements.resultLocation.closest('.info-row') : null;
-    const lunchRow = elements.resultLunch ? elements.resultLunch.closest('.info-row') : null; // 🍙 추가
+    const lunchRow = elements.resultLunch ? elements.resultLunch.closest('.info-row') : null;
 
     toggleRow(nameRow, member.name, elements.resultName);
     toggleRow(teamRow, member.team, elements.resultTeam);
     toggleRow(locationRow, member.location, elements.resultLocation);
-    // 🍙 김밥 여부 표시 추가 (O가 아니면 기본적으로 X로 표시)
+    
+    // 🍙 김밥 여부 표시: GAS에서 보내준 가장 가까운 날짜의 O/X 값 사용
     const lunchStatus = (member.lunch && String(member.lunch).trim().toUpperCase() === 'O') ? 'O' : 'X';
-    toggleRow(lunchRow, lunchStatus, elements.resultLunch);
+    let displayLunchText = lunchStatus;
+    
+    // 해당 주차의 김밥 날짜를 옆에 표시해주는 UI 디테일 (예: "O (4/13)")
+    if (lunchStatus === 'O' && member.kimbap_date && member.kimbap_date !== "미정") {
+        displayLunchText = `O (${member.kimbap_date})`;
+    }
+    toggleRow(lunchRow, displayLunchText, elements.resultLunch);
 
-    // 이미지 및 팀원 목록
     const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
     if (mapUrl) {
@@ -159,7 +118,6 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'none';
     }
 
-    // 튜터 권한 확인 (member.role 인자 추가 전달)
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
@@ -168,23 +126,24 @@ function displayResult(member) {
     
     if (isTutor && member.team && memberListContainer) {
         const teamMembers = memberData.filter(m => m.team === member.team);
-        renderTeamMembers(teamMembers, member.team, member.role);
+        renderTeamMembers(teamMembers, member.team, member.role, member.kimbap_date);
     }
 
     elements.resultContainer.style.display = 'block';
     elements.resultContainer.scrollIntoView({ behavior: 'smooth' });
 }
-// 6. 직책별 우선순위 설정 (숫자가 낮을수록 상단 노출)
+
+// 6. 직책별 우선순위 설정
 const rolePriority = {
     "관리자": 1,
     "튜터": 2,
     "서브튜터": 3,
     "조원": 4,
-    "": 4 // 직책이 없는 경우
+    "": 4 
 };
 
-// 7. 조원 목록 그리기 (정렬 + 김밥🍱 + 출석 UI 추가)
-function renderTeamMembers(members, teamName, role) {
+// 7. 조원 목록 그리기
+function renderTeamMembers(members, teamName, role, targetDate) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
     const container = document.getElementById('teamMemberListContainer'); 
@@ -198,13 +157,12 @@ function renderTeamMembers(members, teamName, role) {
 
     container.style.display = 'block';
     
-    // 🍙 새로 추가된 부분: 김밥 신청자 수 계산
     const kimbapCount = members.filter(m => m.lunch && m.lunch.toUpperCase() === 'O').length;
     
-    // 👥 타이틀 수정: 총 인원과 김밥 갯수 함께 표시
-    titleElement.textContent = `👥 ${teamName} 조원 명단 (총 ${members.length}명 / 🍙 김밥 ${kimbapCount}개)`;
+    // 👥 타이틀에 기준 날짜도 함께 표기
+    const dateStr = targetDate && targetDate !== "미정" ? ` (${targetDate} 기준)` : '';
+    titleElement.textContent = `👥 ${teamName} 조원 명단 (총 ${members.length}명 / 🍙 김밥 ${kimbapCount}개${dateStr})`;
     
-    // [정렬 로직] 관리자 > 튜터 > 서브튜터 > 조원 순, 이후 이름순
     const sortedMembers = [...members].sort((a, b) => {
         const priorityA = rolePriority[a.role] || 4;
         const priorityB = rolePriority[b.role] || 4;
@@ -220,9 +178,8 @@ function renderTeamMembers(members, teamName, role) {
             ? "border-top: 1px dashed #ddd;" 
             : "border-top: 1px solid #eee;";
 
-        // 김밥 여부 표시
-        const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? '<span style="margin-left:4px;" title="김밥 대상자">🍙</span>' : '';
-        // 출석 여부 (UI 체크 상태)
+        const tooltipDate = m.kimbap_date ? `(${m.kimbap_date})` : '';
+        const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? `<span style="margin-left:4px;" title="김밥 대상자 ${tooltipDate}">🍙</span>` : '';
         const isChecked = (m.attendance && m.attendance.toUpperCase() === 'O') ? 'checked' : '';
 
         return `
@@ -247,14 +204,11 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
     const status = checked ? 'O' : 'X';
     console.log(`[출석 변경 요청] ${name}(${phone}) -> ${status}`);
 
-    // 통신 중 중복 클릭 방지를 위해 체크박스 임시 비활성화
     if (checkboxElement) {
         checkboxElement.disabled = true;
     }
 
     try {
-        // fetch API를 사용해 구글 스크립트로 데이터 전송
-        // (주의: GAS CORS 에러를 피하기 위해 Content-Type을 text/plain으로 보냅니다)
         const response = await fetch(GAS_API_URL, {
             method: 'POST',
             headers: {
@@ -267,16 +221,12 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
             })
         });
 
-        // 결과 파싱
         const result = await response.json();
 
         if (result.success) {
             console.log('업데이트 성공:', result.message);
-            if (checkboxElement) checkboxElement.disabled = false; // 체크박스 활성화
+            if (checkboxElement) checkboxElement.disabled = false;
             
-            // 💡 [여기가 추가된 핵심 코드!]
-            // 구글 시트 업데이트가 성공하면, 현재 웹페이지가 기억하고 있는 memberData의 값도 변경합니다.
-            // 이렇게 해야 새로고침(F5) 없이 다시 검색해도 출석 O/X 상태가 제대로 화면에 반영됩니다.
             const memberIndex = memberData.findIndex(m => m.name === name && m.phone === phone);
             if (memberIndex !== -1) {
                 memberData[memberIndex].attendance = status;
@@ -285,7 +235,6 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
         } else {
             console.error('업데이트 실패:', result.message);
             alert('출석 실패: ' + result.message);
-            // 실패 시 체크박스 상태 원래대로 롤백
             if (checkboxElement) {
                 checkboxElement.checked = !checked; 
                 checkboxElement.disabled = false;
@@ -301,14 +250,14 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
     }
 }
 
-// 8. 에러 표시 함수 (누락되었던 부분 추가)
+// 8. 에러 표시 함수
 function showError(msg) {
     elements.errorText.innerHTML = msg;
     elements.errorMessage.style.display = 'flex';
     elements.resultContainer.style.display = 'none';
 }
 
-// 9. 이벤트 리스너 및 모달 제어 (기존과 동일)
+// 9. 이벤트 리스너 및 모달 제어
 function initEventListeners() {
     elements.searchBtn.addEventListener('click', searchMember);
     elements.closeBtn.addEventListener('click', () => { elements.resultContainer.style.display = 'none'; });
@@ -360,5 +309,3 @@ window.addEventListener('load', () => {
     initEventListeners();
     initModal();
 });
-
-
