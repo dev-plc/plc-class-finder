@@ -177,6 +177,7 @@ function displayResult(member) {
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
+        member.role.includes('바나바') || 
         member.role.includes('관리자')
     );
     
@@ -194,8 +195,9 @@ const rolePriority = {
     "관리자": 1,
     "튜터": 2,
     "서브튜터": 3,
-    "조원": 4,
-    "": 4 // 직책이 없는 경우
+    "바나바": 4,
+    "조원": 5,
+    "": 6 // 직책이 없는 경우
 };
 
 // 7. 조원 목록 그리기
