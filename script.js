@@ -159,7 +159,8 @@ function displayResult(member) {
     if (telegramRow && telegramLinkEl && telegramTextEl) {
         if (member.telegramLink && member.team) {
             telegramLinkEl.href = member.telegramLink;
-            telegramTextEl.textContent = `${member.team}조 방 입장하기`; 
+            telegramTextEl.textContent = `새가족교육안내방 입장하기`; 
+            //telegramTextEl.textContent = `${member.team}조 방 입장하기`; 
             telegramRow.style.display = 'flex'; // 보이게 처리
         } else {
             telegramRow.style.display = 'none'; // 링크가 없으면 숨김
