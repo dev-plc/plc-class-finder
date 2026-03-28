@@ -1,4 +1,16 @@
 // 1. 설정 데이터
+//const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
+//이미지 https://postimages.org/ 업로드해서 링크받기
+/*
+const locationMapImages = {
+    "웨슬리": "https://lh3.googleusercontent.com/u/0/d/1dBML_CRlbFX-hLiYAT29MhtG6Hz0NlWb",
+    //"칼빈": "https://lh3.googleusercontent.com/u/0/d/19ji7bvxmiqKCcvavyAehAxx3N4e-yIR_",
+    "칼빈": "https://i.postimg.cc/hjTSJ8jD/1221-kalbin.jpg",
+    "자모영아실": "https://lh3.googleusercontent.com/u/0/d/13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
+};
+*/
+
+// 발급받은 구글 스크립트 웹앱 URL을 아래에 붙여넣으세요.
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
 
 const locationMapImages = {
@@ -33,6 +45,7 @@ const elements = {
 // 3. 데이터 로드 (실시간 구글 API 방식으로 변경)
 async function loadData() {
     try {
+        // 브라우저 캐싱 방지를 위해 URL 끝에 타임스탬프 추가
         const noCacheUrl = GAS_API_URL + "?t=" + new Date().getTime();
         
         const response = await fetch(noCacheUrl);
@@ -56,13 +69,14 @@ async function loadData() {
 function searchMember() {
     const name = elements.nameInput.value.trim().replace(/\s/g, '');
     const phone = elements.phoneInput.value.trim().replace(/[^0-9]/g, '');
-    const searchTarget = name + phone;
+    const searchTarget = name + phone; // 예: "임시1234"
 
     if (!name || !phone) {
         showError("이름과 번호 4자리를 입력해주세요.");
         return;
     }
 
+    // 시트에서 가져온 id(전체문자열)와 입력한 searchTarget을 비교
     const member = memberData.find(m => 
         String(m.id).replace(/\s/g, '') === searchTarget
     );
@@ -90,25 +104,70 @@ function displayResult(member) {
     const memberListContainer = document.getElementById('teamMemberListContainer');
     if (memberListContainer) memberListContainer.style.display = 'none';
 
+    // 각 정보 행(row)을 찾아서 표시하거나 숨김
     const nameRow = elements.resultName ? elements.resultName.closest('.info-row') : null;
     const teamRow = elements.resultTeam ? elements.resultTeam.closest('.info-row') : null;
     const locationRow = elements.resultLocation ? elements.resultLocation.closest('.info-row') : null;
-    const lunchRow = elements.resultLunch ? elements.resultLunch.closest('.info-row') : null;
+    const lunchRow = elements.resultLunch ? elements.resultLunch.closest('.info-row') : null; 
 
     toggleRow(nameRow, member.name, elements.resultName);
     toggleRow(teamRow, member.team, elements.resultTeam);
     toggleRow(locationRow, member.location, elements.resultLocation);
     
-    // 🍙 김밥 여부 표시: GAS에서 보내준 가장 가까운 날짜의 O/X 값 사용
+    // 🍙 김밥 여부 표시 추가 (O가 아니면 기본적으로 X로 표시)
     const lunchStatus = (member.lunch && String(member.lunch).trim().toUpperCase() === 'O') ? 'O' : 'X';
-    let displayLunchText = lunchStatus;
-    
-    // 해당 주차의 김밥 날짜를 옆에 표시해주는 UI 디테일 (예: "O (4/13)")
-    if (lunchStatus === 'O' && member.kimbap_date && member.kimbap_date !== "미정") {
-        displayLunchText = `O (${member.kimbap_date})`;
-    }
-    toggleRow(lunchRow, displayLunchText, elements.resultLunch);
+    toggleRow(lunchRow, lunchStatus, elements.resultLunch);
 
+    // =========================================================
+    // ✨ 텔레그램 링크 동적 렌더링 (새가족링크 기반)
+    // =========================================================
+    let telegramRow = document.getElementById('telegramRow');
+    if (!telegramRow && teamRow) {
+        // 기존 팀(조) 행을 복제하여 텔레그램 행 생성
+        telegramRow = teamRow.cloneNode(true); 
+        telegramRow.id = 'telegramRow';
+        
+        if (telegramRow.children.length >= 2) {
+            // 1. 라벨 변경
+            const label = telegramRow.children[0];
+            if(label) label.textContent = '안내방';
+
+            // 2. 값(링크) 요소 변경 (✅ 버튼 디자인으로 스타일 전면 수정)
+            const valueContainer = telegramRow.children[1];
+            if(valueContainer) {
+                valueContainer.innerHTML = `
+                    <a id="resultTelegramLink" href="" target="_blank" 
+                       style="display: inline-flex; align-items: center; gap: 6px; 
+                              background-color: #2AABEE; color: white; 
+                              padding: 8px 16px; border-radius: 20px; 
+                              text-decoration: none; font-weight: bold; font-size: 0.9em; 
+                              box-shadow: 0 3px 6px rgba(0,0,0,0.15); 
+                              cursor: pointer; word-break: keep-all;">
+                        <span style="font-size: 1.1em;">✈️</span> 
+                        <span id="telegramLinkText"></span>
+                    </a>
+                `;
+                valueContainer.id = ''; // 복제된 id 제거
+            }
+        }
+        // 팀 행 바로 다음 위치에 삽입
+        teamRow.parentNode.insertBefore(telegramRow, teamRow.nextSibling);
+    }
+
+    const telegramLinkEl = document.getElementById('resultTelegramLink');
+    const telegramTextEl = document.getElementById('telegramLinkText');
+    if (telegramRow && telegramLinkEl && telegramTextEl) {
+        if (member.telegramLink && member.team) {
+            telegramLinkEl.href = member.telegramLink;
+            telegramTextEl.textContent = `${member.team}조 방 입장하기`; 
+            telegramRow.style.display = 'flex'; // 보이게 처리
+        } else {
+            telegramRow.style.display = 'none'; // 링크가 없으면 숨김
+        }
+    }
+    // =========================================================
+
+    // 이미지 및 팀원 목록
     const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
     if (mapUrl) {
@@ -118,6 +177,7 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'none';
     }
 
+    // 튜터 권한 확인
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
@@ -126,24 +186,24 @@ function displayResult(member) {
     
     if (isTutor && member.team && memberListContainer) {
         const teamMembers = memberData.filter(m => m.team === member.team);
-        renderTeamMembers(teamMembers, member.team, member.role, member.kimbap_date);
+        renderTeamMembers(teamMembers, member.team, member.role);
     }
 
     elements.resultContainer.style.display = 'block';
     elements.resultContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// 6. 직책별 우선순위 설정
+// 6. 직책별 우선순위 설정 (숫자가 낮을수록 상단 노출)
 const rolePriority = {
     "관리자": 1,
     "튜터": 2,
     "서브튜터": 3,
     "조원": 4,
-    "": 4 
+    "": 4 // 직책이 없는 경우
 };
 
 // 7. 조원 목록 그리기
-function renderTeamMembers(members, teamName, role, targetDate) {
+function renderTeamMembers(members, teamName, role) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
     const container = document.getElementById('teamMemberListContainer'); 
@@ -159,9 +219,7 @@ function renderTeamMembers(members, teamName, role, targetDate) {
     
     const kimbapCount = members.filter(m => m.lunch && m.lunch.toUpperCase() === 'O').length;
     
-    // 👥 타이틀에 기준 날짜도 함께 표기
-    const dateStr = targetDate && targetDate !== "미정" ? ` (${targetDate} 기준)` : '';
-    titleElement.textContent = `👥 ${teamName} 조원 명단 (총 ${members.length}명 / 🍙 김밥 ${kimbapCount}개${dateStr})`;
+    titleElement.textContent = `👥 ${teamName} 조원 명단 (총 ${members.length}명 / 🍙 김밥 ${kimbapCount}개)`;
     
     const sortedMembers = [...members].sort((a, b) => {
         const priorityA = rolePriority[a.role] || 4;
@@ -178,8 +236,7 @@ function renderTeamMembers(members, teamName, role, targetDate) {
             ? "border-top: 1px dashed #ddd;" 
             : "border-top: 1px solid #eee;";
 
-        const tooltipDate = m.kimbap_date ? `(${m.kimbap_date})` : '';
-        const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? `<span style="margin-left:4px;" title="김밥 대상자 ${tooltipDate}">🍙</span>` : '';
+        const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? '<span style="margin-left:4px;" title="김밥 대상자">🍙</span>' : '';
         const isChecked = (m.attendance && m.attendance.toUpperCase() === 'O') ? 'checked' : '';
 
         return `
@@ -225,7 +282,7 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
 
         if (result.success) {
             console.log('업데이트 성공:', result.message);
-            if (checkboxElement) checkboxElement.disabled = false;
+            if (checkboxElement) checkboxElement.disabled = false; 
             
             const memberIndex = memberData.findIndex(m => m.name === name && m.phone === phone);
             if (memberIndex !== -1) {
