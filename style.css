@@ -851,3 +851,33 @@ body.large-text .map-image {
     background: #444;
     color: #ccc;
 }
+
+
+/* ✈️ 텔레그램 안내방 버튼 (조회하기 버튼 디자인 적용) */
+.telegram-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, var(--midnight-blue) 0%, var(--navy) 100%);
+    color: var(--white);
+    padding: 10px 16px;
+    border-radius: 12px;
+    text-decoration: none !important;
+    font-weight: 700;
+    font-size: 14px;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    word-break: keep-all;
+}
+
+.telegram-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    color: var(--white);
+}
+
+.telegram-btn:active {
+    transform: translateY(0);
+}
