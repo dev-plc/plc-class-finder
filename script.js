@@ -12,13 +12,18 @@ const locationMapImages = {
 
 // 발급받은 구글 스크립트 웹앱 URL을 아래에 붙여넣으세요.
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
-
+/*
 const locationMapImages = {
     "웨슬리": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1arEQNNRYyHbXtNWsU1HtsdRCER86s7GI",
     "칼빈": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1uEdPmapbCINzD36wrRbgZefdHM4KuSnu",
     "자모영아실": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
 };
 let memberData = [];
+*/
+
+let locationMapImages = {}; // 하드코딩된 주소를 지우고 빈 객체로 변경, 구글시트와 연동
+let memberData = [];
+
 
 // 2. DOM 요소 선택
 const elements = {
