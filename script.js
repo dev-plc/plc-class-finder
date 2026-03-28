@@ -60,6 +60,9 @@ async function loadData() {
         
         if (result.success) {
             memberData = result.data;
+            if (result.locationMap) {
+                locationMapImages = result.locationMap;
+            }
             console.log("✅ Live Data Loaded:", memberData.length, "members");
         } else {
             throw new Error(result.message);
