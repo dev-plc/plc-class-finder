@@ -1,35 +1,19 @@
 // 1. 설정 데이터
-//const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTgWISi-dAcC5JBD22_g65W-ms7S1MdHZqI1LjjK8iIpZYs-rY4bu9NlfR9lY6R96fVku3iq5AUFo8A/pub?gid=0&single=true&output=csv';
-//이미지 https://postimages.org/ 업로드해서 링크받기
-/*
-const locationMapImages = {
-    "웨슬리": "https://lh3.googleusercontent.com/u/0/d/1dBML_CRlbFX-hLiYAT29MhtG6Hz0NlWb",
-    //"칼빈": "https://lh3.googleusercontent.com/u/0/d/19ji7bvxmiqKCcvavyAehAxx3N4e-yIR_",
-    "칼빈": "https://i.postimg.cc/hjTSJ8jD/1221-kalbin.jpg",
-    "자모영아실": "https://lh3.googleusercontent.com/u/0/d/13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
-};
-*/
-
-// 발급받은 구글 스크립트 웹앱 URL을 아래에 붙여넣으세요.
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
-/*
-const locationMapImages = {
-    "웨슬리": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1arEQNNRYyHbXtNWsU1HtsdRCER86s7GI",
-    "칼빈": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=1uEdPmapbCINzD36wrRbgZefdHM4KuSnu",
-    "자모영아실": "https://drive.google.com/thumbnail?authuser=0&sz=w1000&id=13EovQWAnk9bT6Jt6wo2KBc-Y2TdlldK2"
-};
-let memberData = [];
-*/
 
-let locationMapImages = {}; // 하드코딩된 주소를 지우고 빈 객체로 변경, 구글시트와 연동
-let memberData = [];
+// 💡 로컬 스토리지 캐시 키 정의
+const CACHE_KEY_DATA = "plc_member_data_v16";
+const CACHE_KEY_MAP = "plc_location_map_v16";
 
+let locationMapImages = {}; 
+let memberData = [];
 
 // 2. DOM 요소 선택
 const elements = {
     nameInput: document.getElementById('name'),
     phoneInput: document.getElementById('phone'),
     searchBtn: document.getElementById('searchBtn'),
+    searchBtnText: document.querySelector('#searchBtn .btn-text'),
     resultContainer: document.getElementById('resultContainer'),
     errorMessage: document.getElementById('errorMessage'),
     errorText: document.getElementById('errorText'),
@@ -47,44 +31,80 @@ const elements = {
     adminForm: document.getElementById('adminLoginForm')
 };
 
-// 3. 데이터 로드 (실시간 구글 API 방식으로 변경)
+// 3. 데이터 로드 (✨ 캐싱 및 UI 차단 기능 포함)
 async function loadData() {
     try {
-        // 브라우저 캐싱 방지를 위해 URL 끝에 타임스탬프 추가
+        // [1] 초기 버튼 상태: 서버 통신 대기
+        elements.searchBtn.disabled = true;
+        if (elements.searchBtnText) {
+            elements.searchBtnText.textContent = "로딩중...";
+        }
+
+        // [2] 로컬 캐시에서 데이터 먼저 꺼내오기
+        const cachedDataStr = localStorage.getItem(CACHE_KEY_DATA);
+        const cachedMapStr = localStorage.getItem(CACHE_KEY_MAP);
+
+        if (cachedDataStr) {
+            memberData = JSON.parse(cachedDataStr);
+            if (cachedMapStr) locationMapImages = JSON.parse(cachedMapStr);
+            
+            console.log("⚡ Cached Data Loaded: 즉시 활성화 됨");
+            
+            // 캐시 데이터가 있으면 사용자 대기 없이 버튼 즉시 활성화
+            elements.searchBtn.disabled = false;
+            if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
+        } else {
+            // 캐시가 없을 때만 로딩 문구 명시
+            if (elements.searchBtnText) elements.searchBtnText.textContent = "데이터 로딩중... (최초 1회)";
+        }
+
+        // [3] 백그라운드에서 최신 데이터 가져와서 동기화
         const noCacheUrl = GAS_API_URL + "?t=" + new Date().getTime();
         
-        const response = await fetch(noCacheUrl);
-        if (!response.ok) throw new Error('네트워크 응답이 정상이 아닙니다.');
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            memberData = result.data;
-            if (result.locationMap) {
-                locationMapImages = result.locationMap;
-            }
-            console.log("✅ Live Data Loaded:", memberData.length, "members");
-        } else {
-            throw new Error(result.message);
+        const fetchPromise = fetch(noCacheUrl)
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    memberData = result.data;
+                    if (result.locationMap) locationMapImages = result.locationMap;
+                    
+                    // 새 데이터를 캐시에 덮어쓰기
+                    localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
+                    localStorage.setItem(CACHE_KEY_MAP, JSON.stringify(locationMapImages));
+                    
+                    console.log("✅ Live Data Synced (백그라운드 최신화 완료)");
+                    
+                    // 만약 캐시가 없어서 비활성화 상태였다면 이제 활성화
+                    elements.searchBtn.disabled = false;
+                    if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
+                }
+            });
+
+        // 💡 만약 캐시가 없었다면 (최초 접속), fetch가 완료될 때까지 await로 대기
+        if (!cachedDataStr) {
+            await fetchPromise;
         }
+
     } catch (error) {
         console.error("❌ Fetch Error:", error);
-        alert("데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침 해주세요.");
+        if (memberData.length === 0) {
+            alert("데이터를 불러오는 중 오류가 발생했습니다. 인터넷 연결을 확인해주세요.");
+            if (elements.searchBtnText) elements.searchBtnText.textContent = "오류 발생";
+        }
     }
 }
 
-// 4. 검색 로직 수정
+// 4. 검색 로직
 function searchMember() {
     const name = elements.nameInput.value.trim().replace(/\s/g, '');
     const phone = elements.phoneInput.value.trim().replace(/[^0-9]/g, '');
-    const searchTarget = name + phone; // 예: "임시1234"
+    const searchTarget = name + phone;
 
     if (!name || !phone) {
         showError("이름과 번호 4자리를 입력해주세요.");
         return;
     }
 
-    // 시트에서 가져온 id(전체문자열)와 입력한 searchTarget을 비교
     const member = memberData.find(m => 
         String(m.id).replace(/\s/g, '') === searchTarget
     );
@@ -112,7 +132,6 @@ function displayResult(member) {
     const memberListContainer = document.getElementById('teamMemberListContainer');
     if (memberListContainer) memberListContainer.style.display = 'none';
 
-    // 각 정보 행(row)을 찾아서 표시하거나 숨김
     const nameRow = elements.resultName ? elements.resultName.closest('.info-row') : null;
     const teamRow = elements.resultTeam ? elements.resultTeam.closest('.info-row') : null;
     const locationRow = elements.resultLocation ? elements.resultLocation.closest('.info-row') : null;
@@ -122,25 +141,19 @@ function displayResult(member) {
     toggleRow(teamRow, member.team, elements.resultTeam);
     toggleRow(locationRow, member.location, elements.resultLocation);
     
-    // 🍙 김밥 여부 표시 추가 (O가 아니면 기본적으로 X로 표시)
     const lunchStatus = (member.lunch && String(member.lunch).trim().toUpperCase() === 'O') ? 'O' : 'X';
     toggleRow(lunchRow, lunchStatus, elements.resultLunch);
 
-    // =========================================================
-    // ✨ 텔레그램 링크 동적 렌더링 (새가족링크 기반)
-    // =========================================================
+    // 텔레그램 링크 동적 렌더링
     let telegramRow = document.getElementById('telegramRow');
     if (!telegramRow && teamRow) {
-        // 기존 팀(조) 행을 복제하여 텔레그램 행 생성
         telegramRow = teamRow.cloneNode(true); 
         telegramRow.id = 'telegramRow';
         
         if (telegramRow.children.length >= 2) {
-            // 1. 라벨 변경
             const label = telegramRow.children[0];
             if(label) label.textContent = '안내방';
 
-            // 2. 값(링크) 요소 변경 (✅ 버튼 디자인으로 스타일 전면 수정)
             const valueContainer = telegramRow.children[1];
             if(valueContainer) {
                 valueContainer.innerHTML = `
@@ -150,10 +163,9 @@ function displayResult(member) {
                         <span id="telegramLinkText"></span>
                     </a>
                 `;
-                valueContainer.id = ''; // 복제된 id 제거
+                valueContainer.id = ''; 
             }
         }
-        // 팀 행 바로 다음 위치에 삽입
         teamRow.parentNode.insertBefore(telegramRow, teamRow.nextSibling);
     }
 
@@ -163,15 +175,12 @@ function displayResult(member) {
         if (member.telegramLink && member.team) {
             telegramLinkEl.href = member.telegramLink;
             telegramTextEl.textContent = `새가족교육안내방 입장하기`; 
-            //telegramTextEl.textContent = `${member.team}조 방 입장하기`; 
-            telegramRow.style.display = 'flex'; // 보이게 처리
+            telegramRow.style.display = 'flex';
         } else {
-            telegramRow.style.display = 'none'; // 링크가 없으면 숨김
+            telegramRow.style.display = 'none';
         }
     }
-    // =========================================================
 
-    // 이미지 및 팀원 목록
     const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
     if (mapUrl) {
@@ -181,7 +190,6 @@ function displayResult(member) {
         elements.mapContainer.style.display = 'none';
     }
 
-    // 튜터 권한 확인
     const isTutor = member.role && (
         member.role.includes('튜터') || 
         member.role.includes('서브튜터') || 
@@ -198,14 +206,14 @@ function displayResult(member) {
     elements.resultContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// 6. 직책별 우선순위 설정 (숫자가 낮을수록 상단 노출)
+// 6. 직책별 우선순위 설정
 const rolePriority = {
     "관리자": 1,
     "튜터": 2,
     "서브튜터": 3,
     "바나바": 4,
     "조원": 5,
-    "": 6 // 직책이 없는 경우
+    "": 6 
 };
 
 // 7. 조원 목록 그리기
@@ -263,14 +271,25 @@ function renderTeamMembers(members, teamName, role) {
     }).join('');
 }
 
+// ✨ 낙관적 업데이트 적용: 대기 시간 0.01초
 async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
     const status = checked ? 'O' : 'X';
     console.log(`[출석 변경 요청] ${name}(${phone}) -> ${status}`);
 
-    if (checkboxElement) {
-        checkboxElement.disabled = true;
+    // [1] 서버 응답 기다리지 않고 데이터 및 캐시 즉시 업데이트 (낙관적 UI)
+    const memberIndex = memberData.findIndex(m => m.name === name && m.phone === phone);
+    let originalStatus = 'X'; 
+    
+    if (memberIndex !== -1) {
+        originalStatus = memberData[memberIndex].attendance || 'X';
+        memberData[memberIndex].attendance = status;
+        localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
     }
+    
+    // 비고: checkboxElement.disabled = true; 처리를 뺐습니다.
+    // 누르는 순간 화면상 체크박스는 자연스럽게 토글되므로 사용자 체감 딜레이가 없습니다.
 
+    // [2] 백그라운드 서버 전송
     try {
         const response = await fetch(GAS_API_URL, {
             method: 'POST',
@@ -287,29 +306,29 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
         const result = await response.json();
 
         if (result.success) {
-            console.log('업데이트 성공:', result.message);
-            if (checkboxElement) checkboxElement.disabled = false; 
-            
-            const memberIndex = memberData.findIndex(m => m.name === name && m.phone === phone);
-            if (memberIndex !== -1) {
-                memberData[memberIndex].attendance = status;
-            }
-
+            console.log('업데이트 최종 성공:', result.message);
+            // 이미 화면은 반영되어 있으므로 할 일이 없습니다.
         } else {
             console.error('업데이트 실패:', result.message);
-            alert('출석 실패: ' + result.message);
-            if (checkboxElement) {
-                checkboxElement.checked = !checked; 
-                checkboxElement.disabled = false;
-            }
+            alert('출석 처리에 실패하여 원래 상태로 되돌립니다: ' + result.message);
+            rollbackAttendance(name, phone, originalStatus, checkboxElement);
         }
     } catch (error) {
         console.error('네트워크 오류:', error);
-        alert('서버와 통신하는 중 문제가 발생했습니다. (인터넷 연결 등을 확인하세요)');
-        if (checkboxElement) {
-            checkboxElement.checked = !checked;
-            checkboxElement.disabled = false;
-        }
+        alert('서버 통신 중 문제가 발생하여 체크가 원래 상태로 되돌아갑니다.');
+        rollbackAttendance(name, phone, originalStatus, checkboxElement);
+    }
+}
+
+// 실패 시 롤백 함수
+function rollbackAttendance(name, phone, originalStatus, checkboxElement) {
+    const memberIndex = memberData.findIndex(m => m.name === name && m.phone === phone);
+    if (memberIndex !== -1) {
+        memberData[memberIndex].attendance = originalStatus;
+        localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
+    }
+    if (checkboxElement) {
+        checkboxElement.checked = (originalStatus === 'O');
     }
 }
 
@@ -341,7 +360,9 @@ function initEventListeners() {
             errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
         }
     });
-    elements.phoneInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchMember(); });
+    elements.phoneInput.addEventListener('keypress', (e) => { 
+        if (e.key === 'Enter' && !elements.searchBtn.disabled) searchMember(); 
+    });
 }
 
 function initModal() {
