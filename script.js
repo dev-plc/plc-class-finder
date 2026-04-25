@@ -2,9 +2,9 @@
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
 
 // 💡 로컬 스토리지 캐시 키 정의
-const CACHE_KEY_DATA = "plc_member_data_v16";
-const CACHE_KEY_MAP = "plc_location_map_v16";
-const CACHE_KEY_LINKS = "plc_team_links_v16";
+const CACHE_KEY_DATA = "plc_member_data_v17";
+const CACHE_KEY_MAP = "plc_location_map_v17";
+const CACHE_KEY_LINKS = "plc_team_links_v17";
 let teamLinks = {};
 let locationMapImages = {}; 
 let memberData = [];
