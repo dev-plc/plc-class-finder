@@ -4,7 +4,8 @@ const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplU
 // 💡 로컬 스토리지 캐시 키 정의
 const CACHE_KEY_DATA = "plc_member_data_v16";
 const CACHE_KEY_MAP = "plc_location_map_v16";
-
+const CACHE_KEY_LINKS = "plc_team_links_v16";
+let teamLinks = {};
 let locationMapImages = {}; 
 let memberData = [];
 
@@ -43,10 +44,12 @@ async function loadData() {
         // [2] 로컬 캐시에서 데이터 먼저 꺼내오기
         const cachedDataStr = localStorage.getItem(CACHE_KEY_DATA);
         const cachedMapStr = localStorage.getItem(CACHE_KEY_MAP);
+        const cachedLinksStr = localStorage.getItem(CACHE_KEY_LINKS);// 👈 추가
 
         if (cachedDataStr) {
             memberData = JSON.parse(cachedDataStr);
             if (cachedMapStr) locationMapImages = JSON.parse(cachedMapStr);
+            if (cachedLinksStr) teamLinks = JSON.parse(cachedLinksStr); // 👈 추가
             
             console.log("⚡ Cached Data Loaded: 즉시 활성화 됨");
             
@@ -67,10 +70,12 @@ async function loadData() {
                 if (result.success) {
                     memberData = result.data;
                     if (result.locationMap) locationMapImages = result.locationMap;
+                    if (result.teamLinks) teamLinks = result.teamLinks; // 👈 추가
                     
                     // 새 데이터를 캐시에 덮어쓰기
                     localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
                     localStorage.setItem(CACHE_KEY_MAP, JSON.stringify(locationMapImages));
+                    localStorage.setItem(CACHE_KEY_LINKS, JSON.stringify(teamLinks)); // 👈 추가
                     
                     console.log("✅ Live Data Synced (백그라운드 최신화 완료)");
                     
@@ -144,40 +149,53 @@ function displayResult(member) {
     const lunchStatus = (member.lunch && String(member.lunch).trim().toUpperCase() === 'O') ? 'O' : 'X';
     toggleRow(lunchRow, lunchStatus, elements.resultLunch);
 
-    // 텔레그램 링크 동적 렌더링
-    let telegramRow = document.getElementById('telegramRow');
-    if (!telegramRow && teamRow) {
-        telegramRow = teamRow.cloneNode(true); 
-        telegramRow.id = 'telegramRow';
-        
-        if (telegramRow.children.length >= 2) {
-            const label = telegramRow.children[0];
-            if(label) label.textContent = '안내방';
-
-            const valueContainer = telegramRow.children[1];
-            if(valueContainer) {
-                valueContainer.innerHTML = `
-                    <a id="resultTelegramLink" href="" target="_blank" 
-                       class="telegram-btn">
-                        <span style="font-size: 1.1em;">✈️</span> 
-                        <span id="telegramLinkText"></span>
-                    </a>
-                `;
-                valueContainer.id = ''; 
-            }
-        }
-        teamRow.parentNode.insertBefore(telegramRow, teamRow.nextSibling);
+// ✨ 링크 버튼 동적 렌더링 (새가족안내방 & 소속 조방)
+    let linksContainer = document.getElementById('chatLinksContainer');
+    
+    // 컨테이너가 없으면 생성 (info-row 하단에 위치)
+    if (!linksContainer) {
+        const lunchRowTarget = elements.resultLunch.closest('.info-row');
+        linksContainer = document.createElement('div');
+        linksContainer.id = 'chatLinksContainer';
+        linksContainer.style.display = 'flex';
+        linksContainer.style.flexDirection = 'column';
+        linksContainer.style.gap = '10px';
+        linksContainer.style.marginTop = '15px';
+        linksContainer.style.paddingTop = '15px';
+        linksContainer.style.borderTop = '1px dashed var(--milk-beige)';
+        lunchRowTarget.parentNode.insertBefore(linksContainer, lunchRowTarget.nextSibling);
     }
 
-    const telegramLinkEl = document.getElementById('resultTelegramLink');
-    const telegramTextEl = document.getElementById('telegramLinkText');
-    if (telegramRow && telegramLinkEl && telegramTextEl) {
-        if (member.telegramLink && member.team) {
-            telegramLinkEl.href = member.telegramLink;
-            telegramTextEl.textContent = `새가족교육안내방 입장하기`; 
-            telegramRow.style.display = 'flex';
-        } else {
-            telegramRow.style.display = 'none';
+    // 초기화
+    linksContainer.innerHTML = '';
+    linksContainer.style.display = 'none';
+
+    // 1. 새가족교육안내방 버튼 (기본 노출)
+    const mainRoomLink = teamLinks["새가족교육안내방"];
+    if (mainRoomLink) {
+        const mainBtn = document.createElement('a');
+        mainBtn.href = mainRoomLink;
+        mainBtn.target = '_blank';
+        mainBtn.className = 'telegram-btn';
+        mainBtn.innerHTML = `<span style="font-size: 1.1em;">✈️</span> 새가족교육안내방 입장하기`;
+        linksContainer.appendChild(mainBtn);
+        linksContainer.style.display = 'flex';
+    }
+
+    // 2. 소속 조방 버튼 (조 정보가 일치할 때만 생성 및 노출)
+    if (member.team) {
+        // "Team" 값이 스프레드시트에 존재하는지 확인
+        const teamRoomLink = teamLinks[member.team]; 
+        if (teamRoomLink) {
+            const teamBtn = document.createElement('a');
+            teamBtn.href = teamRoomLink;
+            teamBtn.target = '_blank';
+            teamBtn.className = 'telegram-btn';
+            // 기본 안내방과 구분을 주기 위한 스타일 조정 (선택 사항)
+            teamBtn.style.background = 'linear-gradient(135deg, var(--accent-blue) 0%, var(--midnight-blue) 100%)';
+            teamBtn.innerHTML = `<span style="font-size: 1.1em;">💬</span> ${member.team}방 입장하기`;
+            linksContainer.appendChild(teamBtn);
+            linksContainer.style.display = 'flex';
         }
     }
 
