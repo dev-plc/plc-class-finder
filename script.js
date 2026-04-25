@@ -1,7 +1,7 @@
 // 1. 설정 데이터
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
 
-// 💡 로컬 스토리지 캐시 키 정의
+// 💡 로컬 스토리지 캐시 키 정의 (캐시 초기화를 위해 v17로 변경)
 const CACHE_KEY_DATA = "plc_member_data_v17";
 const CACHE_KEY_MAP = "plc_location_map_v17";
 const CACHE_KEY_LINKS = "plc_team_links_v17";
@@ -38,27 +38,24 @@ async function loadData() {
         // [1] 초기 버튼 상태: 서버 통신 대기
         elements.searchBtn.disabled = true;
         if (elements.searchBtnText) {
-            elements.searchBtnText.textContent = "로딩중...";
+            elements.searchBtnText.textContent = "데이터 불러오는 중...";
         }
 
         // [2] 로컬 캐시에서 데이터 먼저 꺼내오기
         const cachedDataStr = localStorage.getItem(CACHE_KEY_DATA);
         const cachedMapStr = localStorage.getItem(CACHE_KEY_MAP);
-        const cachedLinksStr = localStorage.getItem(CACHE_KEY_LINKS);// 👈 추가
+        const cachedLinksStr = localStorage.getItem(CACHE_KEY_LINKS);
 
         if (cachedDataStr) {
             memberData = JSON.parse(cachedDataStr);
             if (cachedMapStr) locationMapImages = JSON.parse(cachedMapStr);
-            if (cachedLinksStr) teamLinks = JSON.parse(cachedLinksStr); // 👈 추가
+            if (cachedLinksStr) teamLinks = JSON.parse(cachedLinksStr);
             
             console.log("⚡ Cached Data Loaded: 즉시 활성화 됨");
             
             // 캐시 데이터가 있으면 사용자 대기 없이 버튼 즉시 활성화
             elements.searchBtn.disabled = false;
             if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
-        } else {
-            // 캐시가 없을 때만 로딩 문구 명시
-            if (elements.searchBtnText) elements.searchBtnText.textContent = "데이터 로딩중... (최초 1회)";
         }
 
         // [3] 백그라운드에서 최신 데이터 가져와서 동기화
@@ -70,12 +67,19 @@ async function loadData() {
                 if (result.success) {
                     memberData = result.data;
                     if (result.locationMap) locationMapImages = result.locationMap;
-                    if (result.teamLinks) teamLinks = result.teamLinks; // 👈 추가
+                    
+                    // 링크 데이터가 배열로 잘 왔는지 콘솔에 출력해봅니다 (오류 추적용)
+                    if (result.teamLinks) {
+                        teamLinks = result.teamLinks;
+                        console.log("✅ 수신된 링크 데이터:", teamLinks);
+                    } else {
+                        console.warn("⚠️ 서버에서 링크 데이터(teamLinks)를 받지 못했습니다.");
+                    }
                     
                     // 새 데이터를 캐시에 덮어쓰기
                     localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
                     localStorage.setItem(CACHE_KEY_MAP, JSON.stringify(locationMapImages));
-                    localStorage.setItem(CACHE_KEY_LINKS, JSON.stringify(teamLinks)); // 👈 추가
+                    localStorage.setItem(CACHE_KEY_LINKS, JSON.stringify(teamLinks));
                     
                     console.log("✅ Live Data Synced (백그라운드 최신화 완료)");
                     
@@ -85,8 +89,12 @@ async function loadData() {
                 }
             });
 
-        // 💡 만약 캐시가 없었다면 (최초 접속), fetch가 완료될 때까지 await로 대기
-        if (!cachedDataStr) {
+        // 💡 만약 링크 데이터가 비어있다면(첫 로드 시), fetch가 완료될 때까지 버튼 활성화 대기 (타이밍 문제 원천 차단)
+        if (Object.keys(teamLinks).length === 0) {
+            elements.searchBtn.disabled = true;
+            if (elements.searchBtnText) elements.searchBtnText.textContent = "링크 로딩중...";
+            await fetchPromise;
+        } else if (!cachedDataStr) {
             await fetchPromise;
         }
 
@@ -149,7 +157,7 @@ function displayResult(member) {
     const lunchStatus = (member.lunch && String(member.lunch).trim().toUpperCase() === 'O') ? 'O' : 'X';
     toggleRow(lunchRow, lunchStatus, elements.resultLunch);
 
-// ✨ 링크 버튼 동적 렌더링 (새가족안내방 & 소속 조방)
+    // ✨ 링크 버튼 동적 렌더링 (새가족안내방 & 소속 조방)
     let linksContainer = document.getElementById('chatLinksContainer');
     
     // 컨테이너가 없으면 생성 (info-row 하단에 위치)
@@ -163,7 +171,10 @@ function displayResult(member) {
         linksContainer.style.marginTop = '15px';
         linksContainer.style.paddingTop = '15px';
         linksContainer.style.borderTop = '1px dashed var(--milk-beige)';
-        lunchRowTarget.parentNode.insertBefore(linksContainer, lunchRowTarget.nextSibling);
+        
+        if(lunchRowTarget) {
+            lunchRowTarget.parentNode.insertBefore(linksContainer, lunchRowTarget.nextSibling);
+        }
     }
 
     // 초기화
@@ -171,7 +182,10 @@ function displayResult(member) {
     linksContainer.style.display = 'none';
 
     // 1. 새가족교육안내방 버튼 (기본 노출)
-    const mainRoomLink = teamLinks["새가족교육안내방"];
+    // 시트에 '새가족교육안내방 ' 처럼 실수로 띄어쓰기가 들어간 경우를 대비해 공백을 무시하고 찾습니다.
+    const mainRoomKey = Object.keys(teamLinks).find(key => key.replace(/\s/g, '') === "새가족교육안내방");
+    const mainRoomLink = mainRoomKey ? teamLinks[mainRoomKey] : null;
+
     if (mainRoomLink) {
         const mainBtn = document.createElement('a');
         mainBtn.href = mainRoomLink;
@@ -184,14 +198,20 @@ function displayResult(member) {
 
     // 2. 소속 조방 버튼 (조 정보가 일치할 때만 생성 및 노출)
     if (member.team) {
-        // "Team" 값이 스프레드시트에 존재하는지 확인
-        const teamRoomLink = teamLinks[member.team]; 
+        // '새A' 와 '새 A', 혹은 '새A조' 등 시트와 출석부 간의 띄어쓰기/'조' 글자 유무를 모두 무시하고 완벽히 매칭합니다.
+        const cleanMemberTeam = member.team.replace(/\s/g, '').replace(/조$/, '');
+        const teamKey = Object.keys(teamLinks).find(key => {
+            const cleanKey = key.replace(/\s/g, '').replace(/조$/, '');
+            return cleanKey === cleanMemberTeam;
+        });
+        
+        const teamRoomLink = teamKey ? teamLinks[teamKey] : null; 
+        
         if (teamRoomLink) {
             const teamBtn = document.createElement('a');
             teamBtn.href = teamRoomLink;
             teamBtn.target = '_blank';
             teamBtn.className = 'telegram-btn';
-            // 기본 안내방과 구분을 주기 위한 스타일 조정 (선택 사항)
             teamBtn.style.background = 'linear-gradient(135deg, var(--accent-blue) 0%, var(--midnight-blue) 100%)';
             teamBtn.innerHTML = `<span style="font-size: 1.1em;">💬</span> ${member.team}방 입장하기`;
             linksContainer.appendChild(teamBtn);
@@ -303,9 +323,6 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
         memberData[memberIndex].attendance = status;
         localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
     }
-    
-    // 비고: checkboxElement.disabled = true; 처리를 뺐습니다.
-    // 누르는 순간 화면상 체크박스는 자연스럽게 토글되므로 사용자 체감 딜레이가 없습니다.
 
     // [2] 백그라운드 서버 전송
     try {
@@ -323,10 +340,7 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
 
         const result = await response.json();
 
-        if (result.success) {
-            console.log('업데이트 최종 성공:', result.message);
-            // 이미 화면은 반영되어 있으므로 할 일이 없습니다.
-        } else {
+        if (!result.success) {
             console.error('업데이트 실패:', result.message);
             alert('출석 처리에 실패하여 원래 상태로 되돌립니다: ' + result.message);
             rollbackAttendance(name, phone, originalStatus, checkboxElement);
