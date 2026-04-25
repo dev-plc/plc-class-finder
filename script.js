@@ -133,6 +133,13 @@ function toggleRow(row, value, target) {
 }
 
 function displayResult(member) {
+    console.log("=== 디버깅 ===");
+    console.log("member.team:", member.team);
+    console.log("teamLinksMap keys:", Object.keys(teamLinksMap));
+    console.log("새가족 링크:", teamLinksMap['새가족교육안내방']);
+    console.log("내 조 링크:", teamLinksMap[member.team]);
+    console.log("teamRow exists?:", !!elements.resultTeam?.closest('.info-row'));
+    
     elements.errorMessage.style.display = 'none';
     
     const memberListContainer = document.getElementById('teamMemberListContainer');
