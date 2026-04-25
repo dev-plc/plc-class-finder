@@ -157,87 +157,77 @@ function displayResult(member) {
     const lunchStatus = (member.lunch && String(member.lunch).trim().toUpperCase() === 'O') ? 'O' : 'X';
     toggleRow(lunchRow, lunchStatus, elements.resultLunch);
 
-    // ✨ 1. 새가족교육안내방 고정 렌더링 (데이터에서 링크 가져오기)
-    let newFamilyRow = document.getElementById('newFamilyRow');
-    if (!newFamilyRow && teamRow) {
-        newFamilyRow = teamRow.cloneNode(true); 
-        newFamilyRow.id = 'newFamilyRow';
+// ✨ 1 & 2. 새가족교육안내방 + 조별 안내방 (DOM 직접 생성 방식)
+    
+    // 헬퍼 함수: 텔레그램 행 만들기/업데이트
+    function ensureTelegramRow(rowId, labelText, link, btnText) {
+        let row = document.getElementById(rowId);
         
-        if (newFamilyRow.children.length >= 2) {
-            const label = newFamilyRow.children[0];
-            if(label) label.textContent = '새가족교육안내방';
-
-            const valueContainer = newFamilyRow.children[1];
-            if(valueContainer) {
-                valueContainer.innerHTML = `
-                    <a id="newFamilyTelegramLink" href="" target="_blank" 
-                       class="telegram-btn">
-                        <span style="font-size: 1.1em;">✈️</span> 
-                        <span>새가족교육안내방 입장하기</span>
+        // 행이 없으면 새로 생성
+        if (!row && teamRow) {
+            row = document.createElement('div');
+            row.id = rowId;
+            row.className = teamRow.className; // teamRow와 동일한 클래스 사용
+            row.style.display = 'flex';
+            
+            // teamRow의 첫 번째 자식(라벨)과 동일한 클래스/태그를 따라감
+            const labelTag = teamRow.children[0] ? teamRow.children[0].tagName : 'span';
+            const valueTag = teamRow.children[1] ? teamRow.children[1].tagName : 'span';
+            const labelClass = teamRow.children[0] ? teamRow.children[0].className : '';
+            const valueClass = teamRow.children[1] ? teamRow.children[1].className : '';
+            
+            row.innerHTML = `
+                <${labelTag} class="${labelClass}">${labelText}</${labelTag}>
+                <${valueTag} class="${valueClass}">
+                    <a href="" target="_blank" class="telegram-btn"
+                       style="display: inline-flex; align-items: center; gap: 6px; 
+                              padding: 8px 14px; background: #0088cc; color: white; 
+                              border-radius: 6px; text-decoration: none; font-weight: bold;">
+                        <span>✈️</span>
+                        <span class="tg-text"></span>
                     </a>
-                `;
-                valueContainer.id = ''; 
-            }
+                </${valueTag}>
+            `;
+            
+            // 삽입 위치 결정
+            const insertAfter = (rowId === 'telegramRow') 
+                ? (document.getElementById('newFamilyRow') || teamRow)
+                : teamRow;
+            insertAfter.parentNode.insertBefore(row, insertAfter.nextSibling);
         }
-        // teamRow(소속 조) 바로 아래에 삽입
-        teamRow.parentNode.insertBefore(newFamilyRow, teamRow.nextSibling);
-    }
-
-    const newFamilyLinkEl = document.getElementById('newFamilyTelegramLink');
-    if (newFamilyRow && newFamilyLinkEl) {
-        // ✨ 수정: 출석부 명단(memberData)이 아닌, GAS가 보내준 링크 전용 맵(teamLinksMap)에서 직접 가져옴
-        const newFamilyLink = teamLinksMap['새가족교육안내방'];
-        if (newFamilyLink) {
-            newFamilyLinkEl.href = newFamilyLink;
-            newFamilyRow.style.display = 'flex';
-        } else {
-            // 시트에 새가족교육안내방 링크 정보가 없을 경우 숨김 처리
-            newFamilyRow.style.display = 'none';
-        }
-    }
-
-
-    // ✨ 2. 조별 안내방 동적 렌더링 (새가족교육안내방 아래에 표시)
-    let telegramRow = document.getElementById('telegramRow');
-    if (!telegramRow && teamRow) {
-        telegramRow = teamRow.cloneNode(true); 
-        telegramRow.id = 'telegramRow';
         
-        if (telegramRow.children.length >= 2) {
-            const label = telegramRow.children[0];
-            if(label) label.textContent = '조별 안내방';
-
-            const valueContainer = telegramRow.children[1];
-            if(valueContainer) {
-                valueContainer.innerHTML = `
-                    <a id="resultTelegramLink" href="" target="_blank" 
-                       class="telegram-btn">
-                        <span style="font-size: 1.1em;">✈️</span> 
-                        <span id="telegramLinkText"></span>
-                    </a>
-                `;
-                valueContainer.id = ''; 
-            }
-        }
-        // 새가족교육안내방(newFamilyRow) 아래에 삽입
-        const referenceRow = newFamilyRow ? newFamilyRow : teamRow;
-        referenceRow.parentNode.insertBefore(telegramRow, referenceRow.nextSibling);
-    }
-
-    const telegramLinkEl = document.getElementById('resultTelegramLink');
-    const telegramTextEl = document.getElementById('telegramLinkText');
-    if (telegramRow && telegramLinkEl && telegramTextEl) {
-        // ✨ 수정: 본인 조 이름과 일치하는 링크를 링크 전용 맵(teamLinksMap)에서 바로 가져옴
-        const myTeamLink = teamLinksMap[member.team];
-
-        if (myTeamLink && member.team && member.team !== '새가족교육안내방') {
-            telegramLinkEl.href = myTeamLink;
-            telegramTextEl.textContent = `${member.team} 안내방 입장하기`; 
-            telegramRow.style.display = 'flex';
+        if (!row) return;
+        
+        const linkEl = row.querySelector('a.telegram-btn');
+        const textEl = row.querySelector('.tg-text');
+        
+        if (link && linkEl && textEl) {
+            linkEl.href = link;
+            textEl.textContent = btnText;
+            row.style.display = 'flex';
         } else {
-            telegramRow.style.display = 'none';
+            row.style.display = 'none';
         }
     }
+    
+    // 새가족교육안내방 (모든 사용자에게 노출)
+    ensureTelegramRow(
+        'newFamilyRow',
+        '새가족교육안내방',
+        teamLinksMap['새가족교육안내방'],
+        '새가족교육안내방 입장하기'
+    );
+    
+    // 본인 소속 조 안내방 (단, '새가족교육안내방' 자체가 조명일 땐 중복이라 숨김)
+    const myTeamLink = (member.team && member.team !== '새가족교육안내방') 
+        ? teamLinksMap[member.team] 
+        : null;
+    ensureTelegramRow(
+        'telegramRow',
+        '조별 안내방',
+        myTeamLink,
+        member.team ? `${member.team} 안내방 입장하기` : ''
+    );
 
     const pureLocation = member.location ? member.location.trim() : "";
     const mapUrl = locationMapImages[pureLocation];
