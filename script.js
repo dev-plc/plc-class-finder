@@ -4,9 +4,11 @@ const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplU
 // 💡 로컬 스토리지 캐시 키 정의
 const CACHE_KEY_DATA = "plc_member_data_v17";
 const CACHE_KEY_MAP = "plc_location_map_v17";
+const CACHE_KEY_TEAM_LINKS = "plc_team_links_v17"; // ✨ 추가
 
 let locationMapImages = {}; 
 let memberData = [];
+let teamLinksMap = {}; // ✨ 추가
 
 // 2. DOM 요소 선택
 const elements = {
@@ -43,10 +45,12 @@ async function loadData() {
         // [2] 로컬 캐시에서 데이터 먼저 꺼내오기
         const cachedDataStr = localStorage.getItem(CACHE_KEY_DATA);
         const cachedMapStr = localStorage.getItem(CACHE_KEY_MAP);
+        const cachedTeamLinksStr = localStorage.getItem(CACHE_KEY_TEAM_LINKS); // ✨ 추가
 
         if (cachedDataStr) {
             memberData = JSON.parse(cachedDataStr);
             if (cachedMapStr) locationMapImages = JSON.parse(cachedMapStr);
+            if (cachedTeamLinksStr) teamLinksMap = JSON.parse(cachedTeamLinksStr); // ✨ 추가
             
             console.log("⚡ Cached Data Loaded: 즉시 활성화 됨");
             
@@ -67,10 +71,12 @@ async function loadData() {
                 if (result.success) {
                     memberData = result.data;
                     if (result.locationMap) locationMapImages = result.locationMap;
+                    if (result.teamLinks) teamLinksMap = result.teamLinks; // ✨ 추가: 서버에서 보내준 텔레그램 링크 맵 통째로 저장
                     
                     // 새 데이터를 캐시에 덮어쓰기
                     localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
                     localStorage.setItem(CACHE_KEY_MAP, JSON.stringify(locationMapImages));
+                    localStorage.setItem(CACHE_KEY_TEAM_LINKS, JSON.stringify(teamLinksMap)); // ✨ 추가
                     
                     console.log("✅ Live Data Synced (백그라운드 최신화 완료)");
                     
@@ -172,10 +178,10 @@ function displayResult(member) {
 
     const newFamilyLinkEl = document.getElementById('newFamilyTelegramLink');
     if (newFamilyRow && newFamilyLinkEl) {
-        // memberData에서 '새가족교육안내방' 이라는 이름을 가진 조의 링크를 찾음
-        const newFamilyData = memberData.find(m => m.team === '새가족교육안내방' && m.telegramLink);
-        if (newFamilyData && newFamilyData.telegramLink) {
-            newFamilyLinkEl.href = newFamilyData.telegramLink;
+        // ✨ 수정: 출석부 명단(memberData)이 아닌, GAS가 보내준 링크 전용 맵(teamLinksMap)에서 직접 가져옴
+        const newFamilyLink = teamLinksMap['새가족교육안내방'];
+        if (newFamilyLink) {
+            newFamilyLinkEl.href = newFamilyLink;
             newFamilyRow.style.display = 'flex';
         } else {
             // 시트에 새가족교육안내방 링크 정보가 없을 경우 숨김 처리
@@ -214,11 +220,11 @@ function displayResult(member) {
     const telegramLinkEl = document.getElementById('resultTelegramLink');
     const telegramTextEl = document.getElementById('telegramLinkText');
     if (telegramRow && telegramLinkEl && telegramTextEl) {
-        // ✨ 조건 수정: 본인 조 이름과 일치하는 데이터를 전체 데이터(시트)에서 탐색하여 링크를 가져옴
-        const myTeamData = memberData.find(m => m.team === member.team && m.telegramLink);
+        // ✨ 수정: 본인 조 이름과 일치하는 링크를 링크 전용 맵(teamLinksMap)에서 바로 가져옴
+        const myTeamLink = teamLinksMap[member.team];
 
-        if (myTeamData && myTeamData.telegramLink && member.team && member.team !== '새가족교육안내방') {
-            telegramLinkEl.href = myTeamData.telegramLink;
+        if (myTeamLink && member.team && member.team !== '새가족교육안내방') {
+            telegramLinkEl.href = myTeamLink;
             telegramTextEl.textContent = `${member.team} 안내방 입장하기`; 
             telegramRow.style.display = 'flex';
         } else {
