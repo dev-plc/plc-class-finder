@@ -33,6 +33,23 @@ const elements = {
     adminForm: document.getElementById('adminLoginForm')
 };
 
+// ✨ 서버에서 최신 데이터를 강제로 받아와 메모리/캐시를 갱신
+async function fetchLatestData() {
+    const noCacheUrl = GAS_API_URL + "?t=" + new Date().getTime();
+    const res = await fetch(noCacheUrl);
+    const result = await res.json();
+    if (!result.success) return false;
+
+    memberData = result.data;
+    if (result.locationMap) locationMapImages = result.locationMap;
+    if (result.teamLinks) teamLinksMap = result.teamLinks;
+
+    localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
+    localStorage.setItem(CACHE_KEY_MAP, JSON.stringify(locationMapImages));
+    localStorage.setItem(CACHE_KEY_TEAM_LINKS, JSON.stringify(teamLinksMap));
+    return true;
+}
+
 // 3. 데이터 로드 (✨ 캐싱 및 UI 차단 기능 포함)
 async function loadData() {
     try {
@@ -64,28 +81,16 @@ async function loadData() {
         }
 
         // [3] 백그라운드에서 최신 데이터 가져와서 동기화
-        const noCacheUrl = GAS_API_URL + "?t=" + new Date().getTime();
-        
-        const fetchPromise = fetch(noCacheUrl)
-            .then(res => res.json())
-            .then(result => {
-                if (result.success) {
-                    memberData = result.data;
-                    if (result.locationMap) locationMapImages = result.locationMap;
-                    if (result.teamLinks) teamLinksMap = result.teamLinks;
-                    
-                    localStorage.setItem(CACHE_KEY_DATA, JSON.stringify(memberData));
-                    localStorage.setItem(CACHE_KEY_MAP, JSON.stringify(locationMapImages));
-                    localStorage.setItem(CACHE_KEY_TEAM_LINKS, JSON.stringify(teamLinksMap));
-                    
-                    console.log("✅ Live Data Synced (백그라운드 최신화 완료)");
-                    console.log("✅ Live memberData 길이:", memberData.length);
-                    console.log("✅ Live teamLinksMap 키:", Object.keys(teamLinksMap));
-                    
-                    if (elements.searchBtn) elements.searchBtn.disabled = false;
-                    if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
-                }
-            });
+        const fetchPromise = fetchLatestData().then(ok => {
+            if (ok) {
+                console.log("✅ Live Data Synced (백그라운드 최신화 완료)");
+                console.log("✅ Live memberData 길이:", memberData.length);
+                console.log("✅ Live teamLinksMap 키:", Object.keys(teamLinksMap));
+
+                if (elements.searchBtn) elements.searchBtn.disabled = false;
+                if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
+            }
+        });
 
         if (!cachedDataStr) {
             await fetchPromise;
@@ -101,23 +106,36 @@ async function loadData() {
 }
 
 // 4. 검색 로직 (✨ try-catch 디버깅 추가)
-function searchMember() {
+async function searchMember() {
     try {
         console.log("🔍 [searchMember] 시작");
-        
+
         const name = elements.nameInput.value.trim().replace(/\s/g, '');
         const phone = elements.phoneInput.value.trim().replace(/[^0-9]/g, '');
         const searchTarget = name + phone;
-        
+
         console.log("🔍 검색 대상:", searchTarget);
-        console.log("🔍 memberData 길이:", memberData.length);
 
         if (!name || !phone) {
             showError("이름과 번호 4자리를 입력해주세요.");
             return;
         }
 
-        const member = memberData.find(m => 
+        // ✨ 조회할 때마다 서버에서 최신 데이터를 강제로 받아온다 (지난주 캐시 방지)
+        if (elements.searchBtn) elements.searchBtn.disabled = true;
+        if (elements.searchBtnText) elements.searchBtnText.textContent = "조회중...";
+        try {
+            await fetchLatestData();
+        } catch (fetchErr) {
+            console.warn("⚠️ 최신 데이터 불러오기 실패, 캐시 데이터로 검색합니다:", fetchErr);
+        } finally {
+            if (elements.searchBtn) elements.searchBtn.disabled = false;
+            if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
+        }
+
+        console.log("🔍 memberData 길이:", memberData.length);
+
+        const member = memberData.find(m =>
             String(m.id).replace(/\s/g, '') === searchTarget
         );
         
