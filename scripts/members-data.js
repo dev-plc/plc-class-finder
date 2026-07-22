@@ -13,17 +13,19 @@
 // ============================================================================
 import { matches as hangulMatches } from './hangul.js';
 
-export const MODULE_VERSION = 'members-data v23';
+export const MODULE_VERSION = 'members-data v24';
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
 
 // ============================================================================
 // 캐시 설정
 // ============================================================================
-const CACHE_VERSION = 17;
+const CACHE_VERSION = 18;
 const CK = {
   members:     `plc_members_v${CACHE_VERSION}`,
   locationMap: `plc_location_map_v${CACHE_VERSION}`,
   teamLinks:   `plc_team_links_v${CACHE_VERSION}`,
+  homework:    `plc_homework_v${CACHE_VERSION}`,
+  kimbap:      `plc_kimbap_v${CACHE_VERSION}`,
 };
 
 // ============================================================================
@@ -33,6 +35,8 @@ const state = {
   members: [],
   locationMap: {},
   teamLinks: {},
+  homework: {},      // { id: [{session, type, url, completion, submittedAt}, ...] }
+  kimbap: {},        // { id: { "교리1": {applied, date}, "교리2": {...}, ... } }
   loaded: false,
 };
 const subscribers = new Set();
@@ -51,10 +55,14 @@ function readCacheSync() {
     const m  = localStorage.getItem(CK.members);
     const lm = localStorage.getItem(CK.locationMap);
     const tl = localStorage.getItem(CK.teamLinks);
+    const hw = localStorage.getItem(CK.homework);
+    const kb = localStorage.getItem(CK.kimbap);
     if (!m) return false;
     state.members     = JSON.parse(m);
     state.locationMap = lm ? JSON.parse(lm) : {};
     state.teamLinks   = tl ? JSON.parse(tl) : {};
+    state.homework    = hw ? JSON.parse(hw) : {};
+    state.kimbap      = kb ? JSON.parse(kb) : {};
     state.loaded = true;
     return true;
   } catch (e) {
@@ -68,6 +76,8 @@ function writeCacheSync() {
     localStorage.setItem(CK.members,     JSON.stringify(state.members));
     localStorage.setItem(CK.locationMap, JSON.stringify(state.locationMap));
     localStorage.setItem(CK.teamLinks,   JSON.stringify(state.teamLinks));
+    localStorage.setItem(CK.homework,    JSON.stringify(state.homework));
+    localStorage.setItem(CK.kimbap,      JSON.stringify(state.kimbap));
   } catch (e) {
     console.warn('캐시 쓰기 실패, 무시:', e);
   }
@@ -85,6 +95,8 @@ async function fetchFromServer() {
     members:     Array.isArray(result.data) ? result.data : [],
     locationMap: result.locationMap || {},
     teamLinks:   result.teamLinks || {},
+    homework:    result.homework || {},
+    kimbap:      result.kimbap || {},
   };
 }
 
@@ -120,6 +132,8 @@ export async function refresh() {
   state.members     = fresh.members;
   state.locationMap = fresh.locationMap;
   state.teamLinks   = fresh.teamLinks;
+  state.homework    = fresh.homework;
+  state.kimbap      = fresh.kimbap;
   state.loaded = true;
   writeCacheSync();
   notify({ type: 'refresh' });
@@ -206,6 +220,22 @@ export function getTeamLink(teamName) {
  */
 export function getGeneralAnnouncementLink() {
   return state.teamLinks['새가족교육안내방'] || null;
+}
+
+/**
+ * 특정 인원의 김밥 신청 세션 맵.
+ * @returns {Object<string, {applied: 0|1, date: string}>}
+ */
+export function getKimbapDetail(memberId) {
+  return state.kimbap[memberId] || {};
+}
+
+/**
+ * 특정 인원의 과제 제출 목록.
+ * @returns {Array<{session, type, url, completion, submittedAt}>}
+ */
+export function getHomeworkList(memberId) {
+  return state.homework[memberId] || [];
 }
 
 /**

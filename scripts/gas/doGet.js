@@ -1,0 +1,271 @@
+// Google Apps Script — doGet 확장 버전
+// 기존 doGet 함수 전체를 이 코드로 교체.
+// doPost는 기존 그대로 유지.
+//
+// 신규 반환 필드:
+//   - kimbap:   { id: { "교리1": {applied, date}, "교리2": {...}, ... } }
+//   - homework: { id: [ {session, type, url, submittedAt}, ... ] }
+//
+// 김밥 시트 구조 (변경 시 상수 수정):
+//   Row N (index kbHeaderRow):  A-F=meta(1차,2차,수량,Team,ID,role), G+=세션명(교리1..)
+//   Row N+1:                    G+=날짜 (03/15, 03/21, ...)
+//   Row N+2 이후:                실제 인원 데이터
+//
+// 과제 시트 구조:
+//   Row 1: 헤더 (타임스탬프, 아이디, 연락처, 성별, 몇 강, 어떤 과제, 제출 URL)
+//   Row 2+: 폼 응답 (한 사람이 여러 행 가능)
+
+function doGet(e) {
+  var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
+  var currentVersion = 18; // 김밥 상세 + 과제 확장
+
+  try {
+    var ss = SpreadsheetApp.openById("12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM");
+    var tz = Session.getScriptTimeZone();
+    var today = new Date();
+    var todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // =========================================================
+    // 김밥 탭 — 세션별 신청 현황 + 오늘의 요약
+    // =========================================================
+    var kimbapMap = {};    // 기존 호환: { id: "O"|"X" } (가장 가까운 예정 세션)
+    var kimbapDetail = {}; // 신규: { id: { "교리1": {applied, date}, ... } }
+    var kimbapSheet = ss.getSheetByName("김밥");
+    if (kimbapSheet) {
+      var kbData = kimbapSheet.getDataRange().getValues();
+
+      // "ID" 라벨이 있는 행 = 세션명 행
+      var kbHeaderRow = -1;
+      for (var i = 0; i < Math.min(6, kbData.length); i++) {
+        var idPos = kbData[i]
+          .map(function(h){ return String(h).trim().toLowerCase(); })
+          .indexOf("id");
+        if (idPos !== -1) { kbHeaderRow = i; break; }
+      }
+
+      if (kbHeaderRow !== -1) {
+        var sessionRow = kbData[kbHeaderRow];
+        var dateRow    = kbData[kbHeaderRow + 1] || [];
+        var idCol = sessionRow
+          .map(function(h){ return String(h).trim().toLowerCase(); })
+          .indexOf("id");
+
+        // 세션 컬럼 목록: idCol 오른쪽에서, 세션명 있는 것만
+        var sessionCols = [];
+        for (var c = idCol + 1; c < sessionRow.length; c++) {
+          var sName = String(sessionRow[c] || "").trim();
+          if (!sName) continue;
+          if (sName.toLowerCase() === "role") continue;
+
+          var dv = dateRow[c];
+          var dateStr = "";
+          if (dv instanceof Date) {
+            dateStr = Utilities.formatDate(dv, tz, "M/d");
+          } else if (dv) {
+            dateStr = String(dv).trim();
+          }
+          sessionCols.push({ col: c, name: sName, date: dateStr });
+        }
+
+        // 오늘 이후 가장 가까운 세션 인덱스 (기존 호환용)
+        var targetIdx = -1;
+        var minDiff = Infinity;
+        for (var i = 0; i < sessionCols.length; i++) {
+          var dstr = sessionCols[i].date;
+          if (!dstr) continue;
+          var m1 = dstr.match(/(\d{4})[.\/\-]\s*(\d{1,2})[.\/\-]\s*(\d{1,2})/);
+          var m2 = dstr.match(/(\d{1,2})[\/\-\.](\d{1,2})/);
+          var d = null;
+          if (m1) {
+            d = new Date(parseInt(m1[1],10), parseInt(m1[2],10)-1, parseInt(m1[3],10));
+          } else if (m2) {
+            d = new Date(todayNorm.getFullYear(), parseInt(m2[1],10)-1, parseInt(m2[2],10));
+          }
+          if (!d) continue;
+          var diff = d.getTime() - todayNorm.getTime();
+          if (diff >= 0 && diff < minDiff) {
+            minDiff = diff;
+            targetIdx = i;
+          }
+        }
+
+        // 실제 인원 데이터 (헤더 다음 다음 행부터)
+        for (var r = kbHeaderRow + 2; r < kbData.length; r++) {
+          var row = kbData[r];
+          var id = String(row[idCol] || "").replace(/\s/g, '');
+          if (!id) continue;
+
+          var detail = {};
+          for (var i = 0; i < sessionCols.length; i++) {
+            var sc = sessionCols[i];
+            var v = row[sc.col];
+            var applied = (v === 1 || String(v).trim() === "1") ? 1 : 0;
+            detail[sc.name] = { applied: applied, date: sc.date };
+          }
+          kimbapDetail[id] = detail;
+
+          if (targetIdx !== -1) {
+            var tv = row[sessionCols[targetIdx].col];
+            kimbapMap[id] = (tv === 1 || String(tv).trim() === "1") ? "O" : "X";
+          } else {
+            kimbapMap[id] = "X";
+          }
+        }
+      }
+    }
+
+    // =========================================================
+    // 과제 탭 — 폼 응답 로그 (사람당 여러 행 가능)
+    // =========================================================
+    var homeworkMap = {}; // { id: [ {session, type, url, submittedAt}, ... ] }
+    var hwSheet = ss.getSheetByName("과제");
+    if (hwSheet) {
+      var hwData = hwSheet.getDataRange().getValues();
+      if (hwData.length > 1) {
+        var hwHeaders = hwData[0].map(function(h){ return String(h).trim(); });
+        var hwLower = hwHeaders.map(function(h){ return h.toLowerCase(); });
+
+        var idIdx = -1, sessionIdx = -1, typeIdx = -1, urlIdx = -1, tsIdx = -1, completionIdx = -1;
+        for (var k = 0; k < hwHeaders.length; k++) {
+          var lh = hwLower[k];
+          if (lh === "아이디" || lh === "id") idIdx = k;
+          else if (lh.indexOf("몇 강") !== -1 || lh === "강") sessionIdx = k;
+          else if (lh.indexOf("어떤 과제") !== -1 || lh === "과제유형") typeIdx = k;
+          else if (lh.indexOf("제출") !== -1 && urlIdx === -1) urlIdx = k;
+          else if (lh === "타임스탬프" || lh.indexOf("timestamp") !== -1) tsIdx = k;
+          else if (lh.indexOf("수료") !== -1) completionIdx = k;
+        }
+
+        if (idIdx !== -1) {
+          for (var i = 1; i < hwData.length; i++) {
+            var row = hwData[i];
+            var id = String(row[idIdx] || "").replace(/\s/g, '');
+            if (!id) continue;
+
+            var sub = {
+              session: sessionIdx !== -1 ? String(row[sessionIdx] || "").trim() : "",
+              type:    typeIdx    !== -1 ? String(row[typeIdx]    || "").trim() : "",
+              url:     urlIdx     !== -1 ? String(row[urlIdx]     || "").trim() : "",
+              completion: completionIdx !== -1 ? String(row[completionIdx] || "").trim() : "",
+              submittedAt: tsIdx !== -1
+                ? (row[tsIdx] instanceof Date
+                    ? Utilities.formatDate(row[tsIdx], tz, "yyyy-MM-dd HH:mm")
+                    : String(row[tsIdx] || ""))
+                : ""
+            };
+            if (!homeworkMap[id]) homeworkMap[id] = [];
+            homeworkMap[id].push(sub);
+          }
+        }
+      }
+    }
+
+    // =========================================================
+    // 새가족링크 탭 (기존 그대로)
+    // =========================================================
+    var telegramSheet = ss.getSheetByName("새가족링크");
+    var telegramMap = {};
+    var locationMap = {};
+    if (telegramSheet) {
+      var telValues = telegramSheet.getDataRange().getValues();
+      if (telValues.length > 0) {
+        var telHeaderIdx = -1, tTeamIdx = -1, tLinkIdx = -1, tLocIdx = -1, tMapIdx = -1;
+        for (var i = 0; i < Math.min(5, telValues.length); i++) {
+          var tempHeaders = telValues[i].map(function(h){ return String(h).trim().toLowerCase(); });
+          tTeamIdx = tempHeaders.indexOf("team");
+          tLinkIdx = tempHeaders.indexOf("link");
+          tLocIdx  = tempHeaders.indexOf("location");
+          tMapIdx  = tempHeaders.indexOf("map");
+          if (tTeamIdx !== -1 || tLinkIdx !== -1 || tLocIdx !== -1 || tMapIdx !== -1) {
+            telHeaderIdx = i; break;
+          }
+        }
+        if (telHeaderIdx !== -1) {
+          for (var r = telHeaderIdx + 1; r < telValues.length; r++) {
+            if (tTeamIdx !== -1 && tLinkIdx !== -1) {
+              var tName = String(telValues[r][tTeamIdx]).trim();
+              if (tName) telegramMap[tName] = String(telValues[r][tLinkIdx]).trim();
+            }
+            if (tLocIdx !== -1 && tMapIdx !== -1) {
+              var locName = String(telValues[r][tLocIdx]).trim();
+              if (locName) locationMap[locName] = String(telValues[r][tMapIdx]).trim();
+            }
+          }
+        }
+      }
+    }
+
+    // =========================================================
+    // 출석부(DB) 탭 (기존 그대로)
+    // =========================================================
+    var sheet = ss.getSheetByName("출석부(DB)");
+    if (!sheet) throw new Error("'출석부(DB)' 시트를 찾을 수 없습니다.");
+    var data = sheet.getDataRange().getValues();
+
+    var headerRowIdx = -1;
+    for (var i = 0; i < Math.min(5, data.length); i++) {
+      var tempStrs = data[i].map(function(h){ return String(h).trim().toLowerCase(); });
+      if (tempStrs.indexOf("id") !== -1) { headerRowIdx = i; break; }
+    }
+    if (headerRowIdx === -1) throw new Error("'ID' 열을 찾을 수 없습니다.");
+
+    var originalHeadersRaw = data[headerRowIdx];
+    var headers = originalHeadersRaw.map(function(h){
+      return (h instanceof Date ? Utilities.formatDate(h, tz, "M/d") : String(h)).trim().toLowerCase();
+    });
+    var idIdx = headers.indexOf("id");
+
+    var todayM_d    = Utilities.formatDate(today, tz, "M/d");
+    var todayMM_dd  = Utilities.formatDate(today, tz, "MM/dd");
+    var todayFull   = Utilities.formatDate(today, tz, "yyyy. M. d");
+    var todayIdx = -1;
+    for (var k = 0; k < originalHeadersRaw.length; k++) {
+      var hValue = originalHeadersRaw[k];
+      var hStr = hValue instanceof Date ? Utilities.formatDate(hValue, tz, "M/d") : String(hValue).trim();
+      if (hStr === todayM_d || hStr === todayMM_dd || hStr === todayFull) { todayIdx = k; break; }
+    }
+
+    var jsonData = [];
+    for (var i = headerRowIdx + 1; i < data.length; i++) {
+      var rawId = String(data[i][idIdx]).replace(/\s/g, '');
+      if (!rawId) continue;
+
+      var obj = {};
+      if (rawId.length > 4) {
+        obj["name"] = rawId.slice(0, -4);
+        obj["phone"] = rawId.slice(-4);
+      } else {
+        obj["name"] = rawId; obj["phone"] = "";
+      }
+      obj["id"] = rawId;
+
+      var attVal = (todayIdx !== -1) ? data[i][todayIdx] : "";
+      obj["attendance"] = attVal instanceof Date ? Utilities.formatDate(attVal, tz, "yyyy-MM-dd") : String(attVal).trim();
+
+      headers.forEach(function(h, idx){
+        if (h && h !== "id") {
+          var cellVal = data[i][idx];
+          obj[h] = cellVal instanceof Date ? Utilities.formatDate(cellVal, tz, "yyyy-MM-dd") : String(cellVal).trim();
+        }
+      });
+      obj["telegramLink"] = telegramMap[obj["team"]] || "";
+      obj["lunch"] = kimbapMap[obj["id"]] || "X";
+
+      jsonData.push(obj);
+    }
+
+    return output.setContent(JSON.stringify({
+      success: true,
+      version: currentVersion,
+      data: jsonData,
+      locationMap: locationMap,
+      teamLinks: telegramMap,
+      kimbap: kimbapDetail,   // 신규
+      homework: homeworkMap   // 신규
+    }));
+  } catch (e) {
+    return output.setContent(JSON.stringify({
+      success: false, version: 18, message: e.message
+    }));
+  }
+}
