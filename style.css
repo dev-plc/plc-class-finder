@@ -253,6 +253,22 @@ body.dark-mode .icon-btn:hover {
     transform: translateX(4px);
 }
 
+/* 저장된 검색 지우기 (다른 사람으로 조회) */
+.clear-remembered-btn {
+    display: block;
+    margin: 12px auto 0;
+    padding: 6px 12px;
+    background: transparent;
+    color: var(--text-light, #666);
+    border: none;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+}
+.clear-remembered-btn:hover {
+    color: var(--text-color, #333);
+}
+
 /* 결과 카드 */
 .result-container {
     animation: slideUp 0.4s ease-out;
