@@ -17,12 +17,50 @@
     --white: #FFFFFF;
     --error-red: #DC2626;
     --success-green: #059669;
-    
+
     /* 그림자 */
     --shadow-sm: 0 1px 3px rgba(27, 59, 111, 0.08);
     --shadow-md: 0 4px 12px rgba(27, 59, 111, 0.12);
     --shadow-lg: 0 10px 25px rgba(27, 59, 111, 0.15);
+
+    /* 폰트 크기 스케일 (UX #3 접근성) */
+    --font-scale: 1;
 }
+body.font-scale-large  { --font-scale: 1.2; }
+body.font-scale-xlarge { --font-scale: 1.45; }
+
+/* 검색 화면 핵심 요소 크기 스케일링 */
+body .search-box label       { font-size: calc(14px * var(--font-scale)); }
+body .search-box input       { font-size: calc(16px * var(--font-scale)); }
+body .search-btn             { font-size: calc(17px * var(--font-scale)); }
+body .result-title           { font-size: calc(22px * var(--font-scale)); }
+body .info-label             { font-size: calc(15px * var(--font-scale)); }
+body .info-value             { font-size: calc(17px * var(--font-scale)); }
+body #resultLunch, body #resultTeam, body #resultLocation, body #resultName {
+    font-size: calc(17px * var(--font-scale));
+}
+body .telegram-btn, body .tg-text { font-size: calc(15px * var(--font-scale)); }
+body .team-member-item span  { font-size: calc(15px * var(--font-scale)); }
+body .error-message          { font-size: calc(15px * var(--font-scale)); }
+
+/* 폰트 크기 토글 버튼 */
+.font-scale-toggle {
+    background: transparent;
+    border: 1px solid currentColor;
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    line-height: 1;
+}
+.font-scale-toggle .fs-a-small  { font-size: 12px; }
+.font-scale-toggle .fs-a-medium { font-size: 14px; }
+.font-scale-toggle .fs-a-large  { font-size: 16px; font-weight: bold; }
+.font-scale-toggle:hover { opacity: 0.8; }
 
 /* 다크 모드 색상 */
 body.dark-mode {
@@ -252,6 +290,39 @@ body.dark-mode .icon-btn:hover {
 .search-btn:hover .btn-icon {
     transform: translateX(4px);
 }
+
+/* 조 출석 요약 카드 (UX #4) */
+.team-summary-card {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0 14px;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0.02));
+    border: 1px solid rgba(37, 99, 235, 0.15);
+    border-radius: 10px;
+}
+.team-summary-card .stat {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 10px;
+    min-width: 60px;
+}
+.team-summary-card .stat-value {
+    font-size: calc(20px * var(--font-scale));
+    font-weight: 700;
+    line-height: 1;
+    color: #2563eb;
+}
+.team-summary-card .stat-label {
+    font-size: calc(12px * var(--font-scale));
+    color: #666;
+    margin-top: 4px;
+}
+.team-summary-card .stat.absent .stat-value { color: #dc2626; }
+.team-summary-card .stat.lunch .stat-value { color: #d97706; }
 
 /* 저장된 검색 지우기 (다른 사람으로 조회) */
 .clear-remembered-btn {

@@ -24,6 +24,9 @@
         <header class="header">
             <!-- 우측 상단 버튼들 -->
             <div class="header-buttons">
+                <button class="font-scale-toggle" id="fontScaleToggle" aria-label="글씨 크기 변경" title="글씨 크기 변경">
+                    <span class="fs-a-small">가</span><span class="fs-a-large">가</span>
+                </button>
                 <button class="icon-btn" id="adminBtn" aria-label="관리자 모드" title="관리자 모드">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -123,7 +126,8 @@
                     </div>
 
                     <div id="teamMemberListContainer" style="display: none; margin-top: 20px;">
-                        <h3 id="teamListTitle" style="font-size: 1.1rem; margin-bottom: 10px; color: #333;"></h3>
+                        <h3 id="teamListTitle" style="font-size: 1.1rem; margin-bottom: 6px; color: #333;"></h3>
+                        <div id="teamSummaryCard" class="team-summary-card"></div>
                         <div id="teamMemberList" class="team-member-list-grid">
                         </div>
                     </div>

@@ -3,6 +3,7 @@ import {
     ensureLoaded,
     getMembers,
 } from './scripts/members-data.js';
+import { matches as hangulMatches } from './scripts/hangul.js';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -89,7 +90,11 @@ function searchMember() {
         return;
     }
 
-    const results = getMembers().filter(m => m.name === name);
+    // 1) 완전 일치 우선. 2) 없으면 초성/부분 매칭 (자모 검색 UX #3)
+    let results = getMembers().filter(m => m.name === name);
+    if (results.length === 0) {
+        results = getMembers().filter(m => hangulMatches(m.name, name));
+    }
 
     if (results.length === 0) {
         showSearchError('일치하는 정보를 찾을 수 없습니다.');
@@ -203,8 +208,8 @@ function renderTeamsView(filterText = '') {
 
     const filteredTeams = filterText
         ? sortedTeams.filter(team =>
-            team.name.toLowerCase().includes(filterText.toLowerCase()) ||
-            team.location.toLowerCase().includes(filterText.toLowerCase())
+            hangulMatches(team.name, filterText) ||
+            hangulMatches(team.location, filterText)
           )
         : sortedTeams;
 
@@ -269,10 +274,10 @@ function renderMembersView(filterText = '') {
 
     const filteredMembers = filterText
         ? sortedMembers.filter(member =>
-            member.name.toLowerCase().includes(filterText.toLowerCase()) ||
-            (member.name + member.phone).toLowerCase().includes(filterText.toLowerCase()) ||
-            member.team.toLowerCase().includes(filterText.toLowerCase()) ||
-            member.location.toLowerCase().includes(filterText.toLowerCase())
+            hangulMatches(member.name, filterText) ||
+            hangulMatches(member.name + member.phone, filterText) ||
+            hangulMatches(member.team, filterText) ||
+            hangulMatches(member.location, filterText)
           )
         : sortedMembers;
 

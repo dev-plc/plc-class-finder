@@ -68,7 +68,38 @@ const elements = {
     adminClose: document.getElementById('adminLoginClose'),
     adminForm: document.getElementById('adminLoginForm'),
     clearRememberedBtn: document.getElementById('clearRememberedBtn'),
+    fontScaleToggle: document.getElementById('fontScaleToggle'),
 };
+
+// ============================================================================
+// 폰트 크기 (UX #3 접근성) — default → large → xlarge → default 순환
+// ============================================================================
+const FONT_SCALE_KEY = 'plc_font_scale_v1';
+const FONT_SCALES = ['default', 'large', 'xlarge'];
+const FONT_SCALE_CLASS = { large: 'font-scale-large', xlarge: 'font-scale-xlarge' };
+
+function applyFontScale(scale) {
+    document.body.classList.remove('font-scale-large', 'font-scale-xlarge');
+    if (FONT_SCALE_CLASS[scale]) document.body.classList.add(FONT_SCALE_CLASS[scale]);
+}
+
+function loadFontScale() {
+    try {
+        const saved = localStorage.getItem(FONT_SCALE_KEY);
+        if (FONT_SCALES.includes(saved)) return saved;
+    } catch (e) {}
+    return 'default';
+}
+
+function cycleFontScale() {
+    const current = loadFontScale();
+    const next = FONT_SCALES[(FONT_SCALES.indexOf(current) + 1) % FONT_SCALES.length];
+    try { localStorage.setItem(FONT_SCALE_KEY, next); } catch (e) {}
+    applyFontScale(next);
+}
+
+// 초기 적용 (렌더 전, 페이지 깜빡임 방지)
+applyFontScale(loadFontScale());
 
 // ============================================================================
 // 3. 초기 데이터 로드
@@ -283,6 +314,7 @@ function renderTeamMembers(members, teamName, role) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
     const container = document.getElementById('teamMemberListContainer');
+    const summaryEl = document.getElementById('teamSummaryCard');
 
     if (!listElement || !titleElement || !container) return;
 
@@ -293,8 +325,9 @@ function renderTeamMembers(members, teamName, role) {
 
     container.style.display = 'block';
 
-    const kimbapCount = members.filter(m => m.lunch && m.lunch.toUpperCase() === 'O').length;
-    titleElement.textContent = `👥 ${teamName} 조원 명단 (총 ${members.length}명 / 🍙 김밥 ${kimbapCount}개)`;
+    currentRenderedTeam = { name: teamName };
+    titleElement.textContent = `👥 ${teamName} 조원 명단`;
+    if (summaryEl) renderTeamSummary(summaryEl, members);
 
     const sortedMembers = [...members].sort((a, b) => {
         const priorityA = rolePriority[a.role] || 4;
@@ -331,13 +364,49 @@ function renderTeamMembers(members, teamName, role) {
 // ============================================================================
 // 7. 출석 토글 (Optimistic update는 데이터 계층이 담당)
 // ============================================================================
+let currentRenderedTeam = null; // 현재 표시 중인 조 (요약 카드 갱신용)
+
 async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
     const { success, error } = await updateAttendance(name, phone, checked);
     if (!success) {
         alert('출석 처리 실패: ' + (error?.message || '알 수 없는 오류'));
-        // 데이터 계층에서 롤백 완료. UI 체크박스만 원위치.
         if (checkboxElement) checkboxElement.checked = !checked;
+        return;
     }
+    // 요약 카드 즉시 갱신
+    if (currentRenderedTeam) {
+        const summaryEl = document.getElementById('teamSummaryCard');
+        if (summaryEl) {
+            const members = getTeamMembers(currentRenderedTeam.name);
+            renderTeamSummary(summaryEl, members);
+        }
+    }
+}
+
+// 요약 카드만 재렌더 (체크박스 리스트는 그대로 유지)
+function renderTeamSummary(summaryEl, members) {
+    const upper = (v) => String(v || '').trim().toUpperCase();
+    const presentCount = members.filter(m => ['O','◎'].includes(upper(m.attendance))).length;
+    const absentCount  = members.filter(m => upper(m.attendance) === 'X').length;
+    const kimbapCount  = members.filter(m => upper(m.lunch) === 'O').length;
+    summaryEl.innerHTML = `
+        <div class="stat">
+            <div class="stat-value">${members.length}</div>
+            <div class="stat-label">총원</div>
+        </div>
+        <div class="stat present">
+            <div class="stat-value">${presentCount}</div>
+            <div class="stat-label">✅ 출석</div>
+        </div>
+        <div class="stat absent">
+            <div class="stat-value">${absentCount}</div>
+            <div class="stat-label">❌ 결석</div>
+        </div>
+        <div class="stat lunch">
+            <div class="stat-value">${kimbapCount}</div>
+            <div class="stat-label">🍙 김밥</div>
+        </div>
+    `;
 }
 // 인라인 onclick에서 접근 가능하도록 window에 노출
 window.toggleAttendanceUI = toggleAttendanceUI;
@@ -398,6 +467,9 @@ function initEventListeners() {
         elements.resultContainer.style.display = 'none';
         elements.nameInput.focus();
     }, 'clearRememberedBtn');
+
+    // 폰트 크기 토글
+    safeAdd(elements.fontScaleToggle, 'click', cycleFontScale, 'fontScaleToggle');
 }
 
 // 저장된 마지막 검색이 있으면 자동 채움 + "다른 사람으로 조회" 버튼 노출
