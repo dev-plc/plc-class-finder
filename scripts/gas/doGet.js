@@ -5,9 +5,9 @@
 //   - 출석체크·조회는 '가장 최근 지난 강의' 컬럼 기준으로 동작
 //     예) 3/15와 3/22 세션이 있고 오늘이 3/18이면 → 3/15에 기록·조회
 //     예) 오늘이 3/22면 → 3/22에 기록·조회
-//     예) 오늘이 7/22이고 마지막 강의가 7/12(성경적대화4)면 → 7/12에 기록·조회
-//   - 김밥 탭 날짜 행을 유효 세션 필터로 사용 → 07/19·07/22 같은
-//     팬텀 컬럼이 시트에 남아있어도 무시됨
+//     예) 오늘이 7/22이고 시트의 마지막 컬럼이 7/12면 → 7/12에 기록·조회
+//   - 세션 목록의 유일 기준은 '출석부(DB)' 시트의 헤더 행
+//     (팬텀 컬럼을 남기지 않으려면 관리자가 시트에서 삭제)
 //   - 강의 없는 날 새 컬럼을 자동 생성하지 않음
 //
 // 신규 반환 필드 (v18~):
@@ -23,76 +23,11 @@
 //   Row 1: 헤더 (타임스탬프, 아이디, 연락처, 성별, 몇 강, 어떤 과제, 제출 URL, 수료여부)
 //   Row 2+: 폼 응답 (한 사람이 여러 행 가능)
 
-// 연도 무시한 날짜 키 ("M-D")
-function dateKey_(d) {
-  return d.getMonth() + '-' + d.getDate();
-}
-
-// 김밥 탭 날짜 행에서 유효한 강의 날짜 세트 로드 ({ "M-D": true, ... })
-// 김밥 탭 없거나 인식 실패 시 빈 객체 반환 → 필터 미적용.
-function loadValidSessionDates_(ss, todayNorm) {
-  var validDates = {};
-  var sh = ss.getSheetByName("김밥");
-  if (!sh) return validDates;
-  var kbData = sh.getDataRange().getValues();
-
-  var kbHeaderRow = -1;
-  for (var i = 0; i < Math.min(6, kbData.length); i++) {
-    var idPos = kbData[i]
-      .map(function(h){ return String(h).trim().toLowerCase(); })
-      .indexOf("id");
-    if (idPos !== -1) { kbHeaderRow = i; break; }
-  }
-  if (kbHeaderRow === -1) return validDates;
-
-  var idCol = kbData[kbHeaderRow]
-    .map(function(h){ return String(h).trim().toLowerCase(); })
-    .indexOf("id");
-
-  var isDateValue = function(v) {
-    if (v instanceof Date) return true;
-    var s = String(v || '').trim();
-    return /\d{1,2}[\/\.\-]\d{1,2}/.test(s);
-  };
-
-  // 날짜 스코어가 가장 높은 후보 행
-  var candidates = [kbHeaderRow - 1, kbHeaderRow, kbHeaderRow + 1];
-  var bestIdx = -1, bestScore = -1;
-  candidates.forEach(function(ri) {
-    if (ri < 0 || ri >= kbData.length) return;
-    var row = kbData[ri];
-    var score = 0;
-    for (var c = idCol + 1; c < row.length; c++) {
-      if (isDateValue(row[c])) score++;
-    }
-    if (score > bestScore) { bestScore = score; bestIdx = ri; }
-  });
-  if (bestIdx === -1) return validDates;
-
-  var dateRow = kbData[bestIdx];
-  for (var c = idCol + 1; c < dateRow.length; c++) {
-    var dv = dateRow[c];
-    var d = null;
-    if (dv instanceof Date) {
-      d = new Date(dv.getFullYear(), dv.getMonth(), dv.getDate());
-    } else if (dv) {
-      var s = String(dv).trim();
-      var m = s.match(/(\d{1,2})[\/\.\-](\d{1,2})/);
-      if (m) {
-        d = new Date(todayNorm.getFullYear(), parseInt(m[1],10)-1, parseInt(m[2],10));
-      }
-    }
-    if (d) validDates[dateKey_(d)] = true;
-  }
-  return validDates;
-}
-
 // 가장 최근 지난 (오늘 포함) 세션 컬럼 index. 없으면 -1.
-// validDatesSet가 있으면 그 안의 날짜만 후보로 사용 (팬텀 컬럼 제외).
-function findRecentPastSessionCol_(headers, todayNorm, validDatesSet) {
+// 유일 기준: '출석부(DB)' 시트의 헤더 행 (외부 필터 없음).
+function findRecentPastSessionCol_(headers, todayNorm) {
   var bestIdx = -1;
   var bestDate = null;
-  var hasFilter = validDatesSet && Object.keys(validDatesSet).length > 0;
   for (var k = 0; k < headers.length; k++) {
     var hValue = headers[k];
     var dateObj = null;
@@ -109,7 +44,6 @@ function findRecentPastSessionCol_(headers, todayNorm, validDatesSet) {
       }
     }
     if (!dateObj) continue;
-    if (hasFilter && !validDatesSet[dateKey_(dateObj)]) continue;
     if (dateObj.getTime() <= todayNorm.getTime()) {
       if (!bestDate || dateObj.getTime() > bestDate.getTime()) {
         bestDate = dateObj;
@@ -147,9 +81,8 @@ function doPost(e) {
     var today = new Date();
     var todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-    // 김밥 탭 유효 세션 날짜를 필터로 사용해 팬텀 컬럼(07/19, 07/22 등) 배제
-    var validDates = loadValidSessionDates_(ss, todayNorm);
-    var attendanceCol = findRecentPastSessionCol_(originalHeaders, todayNorm, validDates);
+    // 출석부(DB) 헤더 기준으로 가장 최근 지난 강의 컬럼 찾기
+    var attendanceCol = findRecentPastSessionCol_(originalHeaders, todayNorm);
     if (attendanceCol === -1) {
       return output.setContent(JSON.stringify({
         success: false, version: currentVersion,
@@ -429,9 +362,8 @@ function doGet(e) {
     });
     var idIdx = headers.indexOf("id");
 
-    // '가장 최근 지난 강의' 컬럼 (팬텀 컬럼 제외)
-    var validDatesForAttendance = loadValidSessionDates_(ss, todayNorm);
-    var todayIdx = findRecentPastSessionCol_(originalHeadersRaw, todayNorm, validDatesForAttendance);
+    // '가장 최근 지난 강의' 컬럼 (출석부(DB) 헤더 기준)
+    var todayIdx = findRecentPastSessionCol_(originalHeadersRaw, todayNorm);
 
     var jsonData = [];
     for (var i = headerRowIdx + 1; i < data.length; i++) {
