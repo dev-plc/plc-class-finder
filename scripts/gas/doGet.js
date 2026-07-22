@@ -405,7 +405,7 @@ function doGet(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 18, message: e.message
+      success: false, version: 20, message: e.message
     }));
   }
 }
