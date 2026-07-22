@@ -15,7 +15,7 @@ import {
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v26 (교제 태그 제거 + 김밥 칩 + 과제 간격 축소)';
+const SCRIPT_VERSION = 'script.js v27 (과제 마지막 행 여백 조정)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
