@@ -1,23 +1,118 @@
-// Google Apps Script — doGet 확장 버전
-// 기존 doGet 함수 전체를 이 코드로 교체.
-// doPost는 기존 그대로 유지.
+// Google Apps Script — doGet + doPost 확장 버전
+// 기존 doGet · doPost 함수 전체를 이 코드로 교체.
 //
-// 신규 반환 필드:
+// 핵심 변경 (v19):
+//   - 출석체크·조회는 '가장 최근 지난 강의' 컬럼 기준으로 동작
+//     예) 3/15와 3/22 세션이 있고 오늘이 3/18이면 → 3/15에 기록·조회
+//     예) 오늘이 3/22면 → 3/22에 기록·조회
+//   - 이 규칙 덕에 강의 없는 날 새 컬럼을 자동 생성하지 않음
+//
+// 신규 반환 필드 (v18~):
 //   - kimbap:   { id: { "교리1": {applied, date}, "교리2": {...}, ... } }
-//   - homework: { id: [ {session, type, url, submittedAt}, ... ] }
+//   - homework: { id: [ {session, type, url, completion, submittedAt}, ... ] }
 //
-// 김밥 시트 구조 (변경 시 상수 수정):
+// 김밥 시트 구조:
 //   Row N (index kbHeaderRow):  A-F=meta(1차,2차,수량,Team,ID,role), G+=세션명(교리1..)
 //   Row N+1:                    G+=날짜 (03/15, 03/21, ...)
 //   Row N+2 이후:                실제 인원 데이터
 //
 // 과제 시트 구조:
-//   Row 1: 헤더 (타임스탬프, 아이디, 연락처, 성별, 몇 강, 어떤 과제, 제출 URL)
+//   Row 1: 헤더 (타임스탬프, 아이디, 연락처, 성별, 몇 강, 어떤 과제, 제출 URL, 수료여부)
 //   Row 2+: 폼 응답 (한 사람이 여러 행 가능)
+
+// 가장 최근 지난 (오늘 포함) 세션 컬럼 index. 없으면 -1.
+function findRecentPastSessionCol_(headers, todayNorm) {
+  var bestIdx = -1;
+  var bestDate = null;
+  for (var k = 0; k < headers.length; k++) {
+    var hValue = headers[k];
+    var dateObj = null;
+    if (hValue instanceof Date) {
+      dateObj = new Date(hValue.getFullYear(), hValue.getMonth(), hValue.getDate());
+    } else {
+      var s = String(hValue || '').trim();
+      var m1 = s.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
+      var m2 = s.match(/^(\d{1,2})[\/\.\-](\d{1,2})$/);
+      if (m1) {
+        dateObj = new Date(parseInt(m1[1],10), parseInt(m1[2],10)-1, parseInt(m1[3],10));
+      } else if (m2) {
+        dateObj = new Date(todayNorm.getFullYear(), parseInt(m2[1],10)-1, parseInt(m2[2],10));
+      }
+    }
+    if (!dateObj) continue;
+    if (dateObj.getTime() <= todayNorm.getTime()) {
+      if (!bestDate || dateObj.getTime() > bestDate.getTime()) {
+        bestDate = dateObj;
+        bestIdx = k;
+      }
+    }
+  }
+  return bestIdx;
+}
+
+function doPost(e) {
+  var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
+  var currentVersion = 19;
+
+  try {
+    var postData = JSON.parse(e.postData.contents);
+    var name = String(postData.name || "").replace(/\s/g, '');
+    var phone = String(postData.phone || "").replace(/[^0-9]/g, '');
+    var targetId = name + phone;
+    var status = postData.status;
+
+    var ss = SpreadsheetApp.openById("12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM");
+    var sheet = ss.getSheetByName("출석부(DB)");
+    if (!sheet) throw new Error("'출석부(DB)' 시트를 찾을 수 없습니다.");
+
+    var idCell = sheet.getRange(1, 1, 5, 26).createTextFinder("id").matchCase(false).matchEntireCell(true).findNext();
+    if (!idCell) throw new Error("'id' 열을 찾을 수 없습니다.");
+
+    var headerRow = idCell.getRow();
+    var idCol = idCell.getColumn();
+    var lastCol = Math.max(sheet.getLastColumn(), 1);
+    var originalHeaders = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+
+    var tz = Session.getScriptTimeZone();
+    var today = new Date();
+    var todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // 가장 최근 지난 강의 컬럼 찾기 (기존: 오늘 매칭 or 새 컬럼 생성)
+    var attendanceCol = findRecentPastSessionCol_(originalHeaders, todayNorm);
+    if (attendanceCol === -1) {
+      // 아직 첫 세션 시작 전이면 요청 거부 (새 컬럼 자동생성 안 함)
+      return output.setContent(JSON.stringify({
+        success: false, version: currentVersion,
+        message: "출석 대상 강의를 찾지 못했습니다."
+      }));
+    }
+    attendanceCol = attendanceCol + 1; // 1-based
+
+    var lastRow = sheet.getLastRow();
+    var isUpdated = false;
+    if (lastRow > headerRow) {
+      var idRange = sheet.getRange(headerRow + 1, idCol, lastRow - headerRow, 1);
+      var foundCell = idRange.createTextFinder(targetId).matchEntireCell(true).findNext();
+      if (foundCell) {
+        sheet.getRange(foundCell.getRow(), attendanceCol).setValue(status);
+        isUpdated = true;
+      }
+    }
+
+    return output.setContent(JSON.stringify({
+      success: isUpdated, version: currentVersion,
+      message: isUpdated ? "출석 완료" : "ID 불일치"
+    }));
+  } catch (e) {
+    return output.setContent(JSON.stringify({
+      success: false, version: 19, message: e.message
+    }));
+  }
+}
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 18; // 김밥 상세 + 과제 확장
+  var currentVersion = 19; // 최근 지난 강의 기준 + 김밥/과제
 
   try {
     var ss = SpreadsheetApp.openById("12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM");
@@ -264,15 +359,8 @@ function doGet(e) {
     });
     var idIdx = headers.indexOf("id");
 
-    var todayM_d    = Utilities.formatDate(today, tz, "M/d");
-    var todayMM_dd  = Utilities.formatDate(today, tz, "MM/dd");
-    var todayFull   = Utilities.formatDate(today, tz, "yyyy. M. d");
-    var todayIdx = -1;
-    for (var k = 0; k < originalHeadersRaw.length; k++) {
-      var hValue = originalHeadersRaw[k];
-      var hStr = hValue instanceof Date ? Utilities.formatDate(hValue, tz, "M/d") : String(hValue).trim();
-      if (hStr === todayM_d || hStr === todayMM_dd || hStr === todayFull) { todayIdx = k; break; }
-    }
+    // '가장 최근 지난 강의' 컬럼을 현재 세션으로 사용 (헬퍼 재사용)
+    var todayIdx = findRecentPastSessionCol_(originalHeadersRaw, todayNorm);
 
     var jsonData = [];
     for (var i = headerRowIdx + 1; i < data.length; i++) {
