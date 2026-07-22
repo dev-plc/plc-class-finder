@@ -43,8 +43,11 @@ const memberFilter = document.getElementById('memberFilter');
 // ============================================================================
 async function loadData() {
     try {
-        await ensureLoaded();
-        console.log('✅ 데이터 로드 완료:', getMembers().length, '명');
+        // 캐시 있으면 즉시 렌더 (백그라운드 갱신은 자동)
+        await ensureLoaded({
+            onBackgroundRefreshError: (err) => console.warn('배경 갱신 실패:', err),
+        });
+        console.log('✅ 데이터 로드:', getMembers().length, '명');
         renderTeamsView();
         renderMembersView();
     } catch (error) {

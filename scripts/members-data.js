@@ -86,10 +86,11 @@ async function fetchFromServer() {
 }
 
 async function postAttendance(name, phone, status) {
+  // GAS Apps Script는 { name, phone, status } 형식만 인식
   const res = await fetch(GAS_API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action: 'updateAttendance', name, phone, attendance: status }),
+    body: JSON.stringify({ name, phone, status }),
   });
   const result = await res.json();
   if (!result.success) throw new Error(result.message || '출석 업데이트 실패');
@@ -123,23 +124,28 @@ export async function refresh() {
 }
 
 /**
- * 캐시 우선 로드 → 백그라운드로 refresh.
+ * 캐시 우선 로드. 캐시 히트면 즉시 반환하고 백그라운드로 refresh.
+ * 캐시 미스면 서버 응답을 기다림.
+ *
  * @param {object} opts
  * @param {boolean} opts.forceRefresh — 캐시 무시하고 서버 우선
- * @returns {Promise<{cacheHit: boolean, refreshed: boolean}>}
+ * @param {(err: Error) => void} opts.onBackgroundRefreshError — 백그라운드 갱신 실패 콜백
+ * @returns {Promise<{cacheHit: boolean, backgroundRefreshing: boolean}>}
  */
-export async function ensureLoaded({ forceRefresh = false } = {}) {
+export async function ensureLoaded({ forceRefresh = false, onBackgroundRefreshError } = {}) {
   const cacheHit = !forceRefresh && loadCache();
-  if (cacheHit) notify({ type: 'cache-hit' });
-  let refreshed = false;
-  try {
-    await refresh();
-    refreshed = true;
-  } catch (e) {
-    if (!cacheHit) throw e;
-    console.warn('refresh 실패, 캐시만 사용:', e);
+  if (cacheHit) {
+    notify({ type: 'cache-hit' });
+    // 백그라운드 refresh (await 안 함)
+    refresh().catch(err => {
+      console.warn('백그라운드 refresh 실패:', err);
+      if (onBackgroundRefreshError) onBackgroundRefreshError(err);
+    });
+    return { cacheHit: true, backgroundRefreshing: true };
   }
-  return { cacheHit, refreshed };
+  // 캐시 없음 — 서버 응답 대기
+  await refresh();
+  return { cacheHit: false, backgroundRefreshing: false };
 }
 
 /**

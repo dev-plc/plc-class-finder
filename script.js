@@ -72,11 +72,11 @@ const elements = {
 };
 
 // ============================================================================
-// 폰트 크기 (UX #3 접근성) — default → large → xlarge → default 순환
+// 폰트 크기 (UX #3 접근성) — default ↔ large 토글
 // ============================================================================
 const FONT_SCALE_KEY = 'plc_font_scale_v1';
-const FONT_SCALES = ['default', 'large', 'xlarge'];
-const FONT_SCALE_CLASS = { large: 'font-scale-large', xlarge: 'font-scale-xlarge' };
+const FONT_SCALES = ['default', 'large'];
+const FONT_SCALE_CLASS = { large: 'font-scale-large' };
 
 function applyFontScale(scale) {
     document.body.classList.remove('font-scale-large', 'font-scale-xlarge');
@@ -109,18 +109,13 @@ async function loadData() {
         if (elements.searchBtn) elements.searchBtn.disabled = true;
         if (elements.searchBtnText) elements.searchBtnText.textContent = "로딩중...";
 
-        const { cacheHit, refreshed } = await ensureLoaded();
+        // 캐시 있으면 즉시 활성화 (백그라운드 refresh 자동 시작)
+        const { cacheHit } = await ensureLoaded();
 
-        if (cacheHit) {
-            console.log("⚡ Cached Data Loaded: 즉시 활성화");
-            if (elements.searchBtn) elements.searchBtn.disabled = false;
-            if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
-        }
-        if (refreshed) {
-            console.log("✅ Live Data Synced");
-            if (elements.searchBtn) elements.searchBtn.disabled = false;
-            if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
-        }
+        if (elements.searchBtn) elements.searchBtn.disabled = false;
+        if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
+
+        console.log(cacheHit ? "⚡ 캐시 즉시 활성화 (백그라운드 갱신 중)" : "✅ 서버 첫 로드 완료");
     } catch (error) {
         console.error("❌ Fetch Error:", error);
         if (getMembers().length === 0) {
@@ -143,26 +138,37 @@ async function searchMember() {
             return;
         }
 
-        // 조회할 때마다 최신 데이터 강제 로드 (지난주 캐시 방지)
-        if (elements.searchBtn) elements.searchBtn.disabled = true;
-        if (elements.searchBtnText) elements.searchBtnText.textContent = "조회중...";
-        try {
-            await refresh();
-        } catch (fetchErr) {
-            console.warn("⚠️ 최신 데이터 불러오기 실패, 캐시로 검색:", fetchErr);
-        } finally {
-            if (elements.searchBtn) elements.searchBtn.disabled = false;
-            if (elements.searchBtnText) elements.searchBtnText.textContent = "조회하기";
-        }
-
+        // 캐시에서 즉시 검색 (백그라운드로 데이터 갱신은 loadData가 담당)
         const member = findMember(name, phone);
 
         if (member) {
             saveLastSearch(name, phone);
             if (elements.clearRememberedBtn) elements.clearRememberedBtn.style.display = 'block';
             displayResult(member);
+
+            // 대상 인원의 최신 정보 확보를 위해 백그라운드로 refresh
+            // 완료 후 결과가 바뀌었다면 재렌더
+            refresh().then(() => {
+                const updated = findMember(name, phone);
+                if (updated && JSON.stringify(updated) !== JSON.stringify(member)) {
+                    displayResult(updated);
+                }
+            }).catch(err => console.warn('백그라운드 refresh 실패:', err));
         } else {
-            showError("일치하는 정보를 찾을 수 없습니다.<br>입력 내용을 확인해주세요.");
+            // 캐시에 없으면 서버 재조회 후 재검색
+            try {
+                await refresh();
+            } catch (fetchErr) {
+                console.warn("⚠️ refresh 실패:", fetchErr);
+            }
+            const retried = findMember(name, phone);
+            if (retried) {
+                saveLastSearch(name, phone);
+                if (elements.clearRememberedBtn) elements.clearRememberedBtn.style.display = 'block';
+                displayResult(retried);
+            } else {
+                showError("일치하는 정보를 찾을 수 없습니다.<br>입력 내용을 확인해주세요.");
+            }
         }
     } catch (err) {
         console.error("❌ [searchMember] 에러:", err);
