@@ -13,7 +13,7 @@ import {
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v22 (2단계 폰트·초성·빈값=결석·백그라운드갱신)';
+const SCRIPT_VERSION = 'script.js v23 (상세 현황 카드: 출석·김밥·과제·수료)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -279,6 +279,9 @@ function displayResult(member) {
             member.team ? `${member.team} 안내방 입장하기` : ''
         );
 
+        // 상세 현황 (출석·김밥·과제·수료)
+        renderStatusDetail(member);
+
         const pureLocation = member.location ? String(member.location).trim() : "";
         const mapUrl = getLocationImage(pureLocation);
         if (mapUrl) {
@@ -305,6 +308,116 @@ function displayResult(member) {
     } catch (err) {
         console.error("❌ [displayResult] 에러:", err);
         alert("결과 표시 중 에러 발생: " + err.message);
+    }
+}
+
+// ============================================================================
+// 상세 현황 렌더링 (출석·김밥·과제·수료)
+// ============================================================================
+const SESSION_KEY_RE = /^\d{2}\/\d{2}$/;
+
+function extractSessions(member) {
+    // member 객체에서 MM/DD 형식 키만 추출해 시간순 정렬
+    return Object.keys(member)
+        .filter(k => SESSION_KEY_RE.test(k))
+        .sort((a, b) => {
+            const [am, ad] = a.split('/').map(Number);
+            const [bm, bd] = b.split('/').map(Number);
+            return am === bm ? ad - bd : am - bm;
+        });
+}
+
+function classifyStatus(raw) {
+    const s = String(raw ?? '').trim().toUpperCase();
+    if (s === 'O') return { cls: 'present', label: 'O', title: '출석' };
+    if (s === '◎') return { cls: 'online',  label: '◎', title: '온라인/대체' };
+    if (s === 'X') return { cls: 'absent',  label: 'X', title: '결석' };
+    if (s === '-') return { cls: 'none',    label: '−', title: '수업 없음' };
+    return { cls: 'empty', label: '·', title: '미기록' };
+}
+
+function renderStatusDetail(member) {
+    const container = document.getElementById('statusDetailContainer');
+    if (!container) return;
+    container.style.display = 'block';
+
+    // ────── 출석 그리드 & 요약 ──────
+    const sessions = extractSessions(member);
+    const grid = document.getElementById('attendanceGrid');
+    const summary = document.getElementById('attendanceSummary');
+    const counts = { present: 0, online: 0, absent: 0, none: 0, empty: 0 };
+
+    if (grid) {
+        grid.innerHTML = sessions.map(k => {
+            const s = classifyStatus(member[k]);
+            counts[s.cls] = (counts[s.cls] || 0) + 1;
+            return `
+                <div class="attendance-cell ${s.cls}" title="${k} · ${s.title}">
+                    <span class="cell-date">${k}</span>
+                    <span class="cell-status">${s.label}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    if (summary) {
+        const total = sessions.length;
+        const attended = counts.present + counts.online;
+        const missed = counts.absent + counts.empty;
+        const absenceFromData = member['결석횟수'] != null && String(member['결석횟수']).trim() !== ''
+            ? Number(member['결석횟수'])
+            : missed;
+        summary.innerHTML = `
+            총 <strong>${total}</strong>강 ·
+            <strong style="color:#059669">출석 ${attended}</strong> ·
+            <strong style="color:#dc2626">결석 ${absenceFromData}</strong>
+            ${counts.online ? ` · <strong style="color:#6d28d9">대체 ${counts.online}</strong>` : ''}
+            ${counts.none ? ` · 수업 없음 ${counts.none}` : ''}
+        `;
+    }
+
+    // ────── 김밥 신청 ──────
+    const lunchEl = document.getElementById('lunchStatus');
+    if (lunchEl) {
+        const upper = (v) => String(v ?? '').trim().toUpperCase();
+        const l1 = upper(member['김밥1차']);
+        const l2 = upper(member['김밥2차']);
+        const badge = (label, val) => {
+            if (val === 'O') return `<span class="lunch-badge yes">${label} 🍙 신청</span>`;
+            if (val === 'X') return `<span class="lunch-badge no">${label} 미신청</span>`;
+            return `<span class="lunch-badge no">${label} —</span>`;
+        };
+        lunchEl.innerHTML = badge('1차', l1) + badge('2차', l2);
+    }
+
+    // ────── 과제·특이사항 ──────
+    const noteEl = document.getElementById('noteStatus');
+    if (noteEl) {
+        const note = String(member['.note'] ?? '').trim();
+        if (!note) {
+            noteEl.className = 'note-status empty';
+            noteEl.textContent = '(등록된 메모 없음)';
+        } else {
+            const warn = /제출필요|과제|소감문/.test(note);
+            noteEl.className = warn ? 'note-status warn' : 'note-status';
+            noteEl.textContent = note;
+        }
+    }
+
+    // ────── 수료 상태 ──────
+    const compEl = document.getElementById('completionStatus');
+    if (compEl) {
+        const raw = String(member['수료'] ?? '').trim();
+        if (raw === 'O') {
+            compEl.className = 'completion-status done';
+            compEl.textContent = '🎓 수료 완료';
+        } else if (raw === '△') {
+            compEl.className = 'completion-status partial';
+            compEl.textContent = '△ 부분 수료';
+        } else {
+            compEl.className = 'completion-status none';
+            compEl.textContent = '미수료';
+        }
     }
 }
 
@@ -429,6 +542,8 @@ function showError(msg) {
     elements.errorText.innerHTML = msg;
     elements.errorMessage.style.display = 'flex';
     elements.resultContainer.style.display = 'none';
+    const sd = document.getElementById('statusDetailContainer');
+    if (sd) sd.style.display = 'none';
 }
 
 // ============================================================================

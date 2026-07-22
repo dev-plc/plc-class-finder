@@ -13,7 +13,7 @@
 // ============================================================================
 import { matches as hangulMatches } from './hangul.js';
 
-export const MODULE_VERSION = 'members-data v22';
+export const MODULE_VERSION = 'members-data v23';
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
 
 // ============================================================================
