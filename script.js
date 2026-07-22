@@ -15,7 +15,7 @@ import {
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v25 (김밥 세션명 fix + 과제 정렬·간격 조정)';
+const SCRIPT_VERSION = 'script.js v26 (교제 태그 제거 + 김밥 칩 + 과제 간격 축소)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -456,7 +456,6 @@ function renderStatusDetail(member) {
             }
 
             const isTeacher = sessionName === '교제';
-            const teacherMark = isTeacher ? '<span class="cell-tag">교제</span>' : '';
 
             return `
                 <div class="attendance-cell ${s.cls} ${isTeacher ? 'kyoje' : ''}" title="${mmdd}${sessionName ? ' · ' + sessionName : ''} · ${s.title}">
@@ -464,7 +463,6 @@ function renderStatusDetail(member) {
                     ${sessionName ? `<span class="cell-session">${sessionName}</span>` : ''}
                     <span class="cell-status">${s.label}</span>
                     ${badges.length ? `<span class="cell-badges">${badges.join('')}</span>` : ''}
-                    ${teacherMark}
                 </div>
             `;
         }).join('');
@@ -497,26 +495,28 @@ function renderStatusDetail(member) {
         `;
     }
 
-    // ────── 김밥 요약 (매칭 안 된 세션이 있을 경우 대비) ──────
+    // ────── 김밥 요약 (칩 형태) ──────
     const lunchEl = document.getElementById('lunchStatus');
     if (lunchEl) {
         const detailKeys = Object.keys(kimbapDetail);
         if (detailKeys.length > 0) {
-            const applied = detailKeys.filter(k => kimbapDetail[k].applied === 1);
+            const applied = detailKeys
+                .filter(k => kimbapDetail[k].applied === 1)
+                .sort((a, b) => sessionOrdinal(prettySessionName(a)) - sessionOrdinal(prettySessionName(b)));
             if (applied.length === 0) {
                 lunchEl.innerHTML = '<span class="lunch-badge no">신청 내역 없음</span>';
             } else {
+                const chips = applied.map(k => {
+                    const name = prettySessionName(k);
+                    const date = kimbapDetail[k].date;
+                    const showDate = date && date !== name;
+                    return `<span class="kimbap-chip">${name}${showDate ? `<em>${date}</em>` : ''}</span>`;
+                }).join('');
                 lunchEl.innerHTML = `
-                    <span class="lunch-badge yes">🍙 총 ${applied.length}회 신청</span>
-                    <div style="font-size:calc(13px * var(--font-scale)); color:var(--text-light,#6B7280); margin-top:6px;">
-                        ${applied.map(k => {
-                            const name = prettySessionName(k);
-                            const date = kimbapDetail[k].date;
-                            // name과 date가 같은 M/d 형식이면 중복 표시 안 함
-                            const showDate = date && date !== name;
-                            return `${name}${showDate ? ` (${date})` : ''}`;
-                        }).join(', ')}
+                    <div class="lunch-summary-header">
+                        <span class="lunch-badge yes">🍙 총 ${applied.length}회 신청</span>
                     </div>
+                    <div class="kimbap-chip-list">${chips}</div>
                 `;
             }
         } else {
