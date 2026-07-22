@@ -15,7 +15,7 @@ import {
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v24 (통합 그리드: 출석+김밥+과제)';
+const SCRIPT_VERSION = 'script.js v25 (김밥 세션명 fix + 과제 정렬·간격 조정)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -344,21 +344,57 @@ function mmddToDate(mmdd, refYear = new Date().getFullYear()) {
     return new Date(refYear, parseInt(m[1], 10) - 1, parseInt(m[2], 10));
 }
 
+// Date-string (예: "Sun Mar 15 2026...") → M/d 축약. 정상 세션명이면 그대로 반환.
+function prettySessionName(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    // 이미 정상 세션명이면 그대로
+    if (/^(교리|대화|성경적대화|나눔|교제|교재)/.test(s)) return s;
+    // 긴 Date 문자열 → M/d
+    if (s.length > 15) {
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return `${d.getMonth() + 1}/${d.getDate()}`;
+    }
+    return s;
+}
+
 // 김밥 detail 배열에서 attendanceDate에 가장 가까운 세션 (±5일 이내)
 function matchKimbapForDate(kimbapDetail, attendanceMMDD) {
     const target = mmddToDate(attendanceMMDD);
     if (!target || !kimbapDetail) return null;
     let best = null, minDiff = Infinity;
-    for (const [name, info] of Object.entries(kimbapDetail)) {
-        const kd = mmddToDate(info.date);
+    for (const [rawName, info] of Object.entries(kimbapDetail)) {
+        // info.date에서 파싱 우선, 없으면 name 자체를 Date로 파싱 (fallback)
+        let kd = mmddToDate(info.date);
+        if (!kd) {
+            const asDate = new Date(rawName);
+            if (!isNaN(asDate.getTime()) && rawName.length > 15) kd = asDate;
+        }
         if (!kd) continue;
         const diff = Math.abs(kd.getTime() - target.getTime());
         if (diff <= 5 * 86400000 && diff < minDiff) {
             minDiff = diff;
-            best = { name, applied: info.applied, date: info.date };
+            best = {
+                name: prettySessionName(rawName),
+                applied: info.applied,
+                date: info.date || `${kd.getMonth() + 1}/${kd.getDate()}`,
+            };
         }
     }
     return best;
+}
+
+// "N강 ...", "교리N", "대화N", "성경적대화N" → 세션 순번 (정렬용)
+function sessionOrdinal(raw) {
+    const s = String(raw || '').trim();
+    // 성경적대화 계열은 후반부 (100+N)
+    let m = s.match(/^(성경적대화|대화)\s*(\d+)/);
+    if (m) return 100 + parseInt(m[2], 10);
+    m = s.match(/^교리\s*(\d+)/) || s.match(/^(\d+)\s*강/);
+    if (m) return parseInt(m[1] || m[2], 10);
+    if (/^교재/.test(s) || /^교제/.test(s)) return 90;
+    if (/^나눔/.test(s)) return 95;
+    return 999;
 }
 
 // 과제 session 필드에서 정규화 키 추출.
@@ -473,12 +509,17 @@ function renderStatusDetail(member) {
                 lunchEl.innerHTML = `
                     <span class="lunch-badge yes">🍙 총 ${applied.length}회 신청</span>
                     <div style="font-size:calc(13px * var(--font-scale)); color:var(--text-light,#6B7280); margin-top:6px;">
-                        ${applied.map(k => `${k}${kimbapDetail[k].date ? ` (${kimbapDetail[k].date})` : ''}`).join(', ')}
+                        ${applied.map(k => {
+                            const name = prettySessionName(k);
+                            const date = kimbapDetail[k].date;
+                            // name과 date가 같은 M/d 형식이면 중복 표시 안 함
+                            const showDate = date && date !== name;
+                            return `${name}${showDate ? ` (${date})` : ''}`;
+                        }).join(', ')}
                     </div>
                 `;
             }
         } else {
-            // Fallback: 메인 시트의 요약 필드
             const upper = (v) => String(v ?? '').trim().toUpperCase();
             const l1 = upper(member['김밥1차']);
             const l2 = upper(member['김밥2차']);
@@ -489,18 +530,21 @@ function renderStatusDetail(member) {
         }
     }
 
-    // ────── 과제 제출 목록 ──────
+    // ────── 과제 제출 목록 (오름차순, 특이사항 노출 X) ──────
     const noteEl = document.getElementById('noteStatus');
     if (noteEl) {
         if (homeworkList.length > 0) {
-            // 세션별 그룹핑
             const bySession = {};
             for (const hw of homeworkList) {
                 const key = hw.session || '(미기재)';
                 if (!bySession[key]) bySession[key] = [];
                 bySession[key].push(hw);
             }
-            const rows = Object.entries(bySession).map(([sess, subs]) => {
+            // 오름차순 정렬 (교리1 → 교리12 → 교재/나눔 → 대화1 → 대화4)
+            const sortedEntries = Object.entries(bySession)
+                .sort(([a], [b]) => sessionOrdinal(a) - sessionOrdinal(b));
+
+            const rows = sortedEntries.map(([sess, subs]) => {
                 const types = [...new Set(subs.map(s => s.type).filter(Boolean))];
                 const links = subs.filter(s => s.url).map(s =>
                     `<a href="${s.url}" target="_blank" rel="noopener" class="hw-link">🔗</a>`).join(' ');
@@ -514,28 +558,14 @@ function renderStatusDetail(member) {
             });
             noteEl.className = 'note-status homework-list';
             noteEl.innerHTML = `
-                <div style="font-weight:700; margin-bottom:8px;">총 ${homeworkList.length}건 제출</div>
+                <div style="font-weight:700; margin-bottom:6px;">총 ${homeworkList.length}건 제출</div>
                 ${rows.join('')}
             `;
-
-            // .note 필드도 있으면 부속 메모로 표시
-            const note = String(member['.note'] ?? '').trim();
-            if (note) {
-                noteEl.innerHTML += `
-                    <div class="hw-extra-note">📌 특이사항: ${note}</div>
-                `;
-            }
+            // 특이사항(.note)은 관리자용이므로 일반 뷰에서 노출하지 않음
         } else {
-            // 과제 데이터 없으면 .note 만
-            const note = String(member['.note'] ?? '').trim();
-            if (!note) {
-                noteEl.className = 'note-status empty';
-                noteEl.textContent = '(제출 내역 없음)';
-            } else {
-                const warn = /제출필요|과제|소감문/.test(note);
-                noteEl.className = warn ? 'note-status warn' : 'note-status';
-                noteEl.textContent = note;
-            }
+            noteEl.className = 'note-status empty';
+            noteEl.textContent = '(제출 내역 없음)';
+            // .note 필드는 관리자용이라 사용자에게 노출하지 않음
         }
     }
 

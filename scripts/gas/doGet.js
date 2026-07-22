@@ -44,16 +44,57 @@ function doGet(e) {
       }
 
       if (kbHeaderRow !== -1) {
-        var sessionRow = kbData[kbHeaderRow];
-        var dateRow    = kbData[kbHeaderRow + 1] || [];
-        var idCol = sessionRow
+        var idCol = kbData[kbHeaderRow]
           .map(function(h){ return String(h).trim().toLowerCase(); })
           .indexOf("id");
 
-        // 세션 컬럼 목록: idCol 오른쪽에서, 세션명 있는 것만
+        // "ID" 라벨이 있는 행이 세션명 행인지 날짜 행인지 판별 필요.
+        // 3개 후보 행 (idRow-1, idRow, idRow+1) 중 세션명·날짜 패턴 스코어 최대인 행 선택.
+        var isSessionValue = function(v) {
+          var s = String(v || '').trim();
+          return /^교리\s*\d+/.test(s) || /^대화\s*\d+/.test(s)
+              || /^성경적대화\s*\d+/.test(s) || /^교제/.test(s)
+              || /^교재/.test(s) || /^나눔/.test(s);
+        };
+        var isDateValue = function(v) {
+          if (v instanceof Date) return true;
+          var s = String(v || '').trim();
+          return /^\d{1,2}[\/\.\-]\d{1,2}/.test(s);
+        };
+
+        var candidates = [kbHeaderRow - 1, kbHeaderRow, kbHeaderRow + 1];
+        var bestSessionIdx = kbHeaderRow, bestSessionScore = -1;
+        var bestDateIdx    = kbHeaderRow + 1, bestDateScore = -1;
+        candidates.forEach(function(ri) {
+          if (ri < 0 || ri >= kbData.length) return;
+          var row = kbData[ri];
+          var sScore = 0, dScore = 0;
+          for (var c = idCol + 1; c < row.length; c++) {
+            if (isSessionValue(row[c])) sScore++;
+            if (isDateValue(row[c])) dScore++;
+          }
+          if (sScore > bestSessionScore) { bestSessionScore = sScore; bestSessionIdx = ri; }
+          if (dScore > bestDateScore) { bestDateScore = dScore; bestDateIdx = ri; }
+        });
+        // 세션 행과 날짜 행이 겹치면 안 됨 — 겹치면 다른 후보 선택
+        if (bestSessionIdx === bestDateIdx) {
+          if (bestSessionIdx > 0) bestSessionIdx--; else bestSessionIdx++;
+        }
+
+        var sessionRow = kbData[bestSessionIdx];
+        var dateRow    = kbData[bestDateIdx] || [];
+
+        // 세션 컬럼 목록 (세션명이 있는 컬럼만)
         var sessionCols = [];
         for (var c = idCol + 1; c < sessionRow.length; c++) {
-          var sName = String(sessionRow[c] || "").trim();
+          var sRaw = sessionRow[c];
+          var sName = "";
+          if (sRaw instanceof Date) {
+            // Date를 라벨로 쓰지 않음 — 정규화 실패 신호
+            sName = Utilities.formatDate(sRaw, tz, "M/d");
+          } else {
+            sName = String(sRaw || "").trim();
+          }
           if (!sName) continue;
           if (sName.toLowerCase() === "role") continue;
 
@@ -62,12 +103,19 @@ function doGet(e) {
           if (dv instanceof Date) {
             dateStr = Utilities.formatDate(dv, tz, "M/d");
           } else if (dv) {
-            dateStr = String(dv).trim();
+            var s = String(dv).trim();
+            // Date를 toString한 문자열이라면 파싱해서 M/d로
+            var asDate = new Date(s);
+            if (!isNaN(asDate.getTime()) && s.length > 15) {
+              dateStr = Utilities.formatDate(asDate, tz, "M/d");
+            } else {
+              dateStr = s;
+            }
           }
           sessionCols.push({ col: c, name: sName, date: dateStr });
         }
 
-        // 오늘 이후 가장 가까운 세션 인덱스 (기존 호환용)
+        // 오늘 이후 가장 가까운 세션 인덱스 (기존 호환)
         var targetIdx = -1;
         var minDiff = Infinity;
         for (var i = 0; i < sessionCols.length; i++) {
@@ -89,8 +137,9 @@ function doGet(e) {
           }
         }
 
-        // 실제 인원 데이터 (헤더 다음 다음 행부터)
-        for (var r = kbHeaderRow + 2; r < kbData.length; r++) {
+        // 데이터 행은 세 행(session, date, id) 중 가장 큰 index 다음부터
+        var dataStartRow = Math.max(kbHeaderRow, bestSessionIdx, bestDateIdx) + 1;
+        for (var r = dataStartRow; r < kbData.length; r++) {
           var row = kbData[r];
           var id = String(row[idCol] || "").replace(/\s/g, '');
           if (!id) continue;
