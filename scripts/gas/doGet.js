@@ -1,11 +1,14 @@
 // Google Apps Script — doGet + doPost 확장 버전
 // 기존 doGet · doPost 함수 전체를 이 코드로 교체.
 //
-// 핵심 변경 (v19):
+// 핵심 변경 (v20):
 //   - 출석체크·조회는 '가장 최근 지난 강의' 컬럼 기준으로 동작
 //     예) 3/15와 3/22 세션이 있고 오늘이 3/18이면 → 3/15에 기록·조회
 //     예) 오늘이 3/22면 → 3/22에 기록·조회
-//   - 이 규칙 덕에 강의 없는 날 새 컬럼을 자동 생성하지 않음
+//     예) 오늘이 7/22이고 마지막 강의가 7/12(성경적대화4)면 → 7/12에 기록·조회
+//   - 김밥 탭 날짜 행을 유효 세션 필터로 사용 → 07/19·07/22 같은
+//     팬텀 컬럼이 시트에 남아있어도 무시됨
+//   - 강의 없는 날 새 컬럼을 자동 생성하지 않음
 //
 // 신규 반환 필드 (v18~):
 //   - kimbap:   { id: { "교리1": {applied, date}, "교리2": {...}, ... } }
@@ -20,10 +23,76 @@
 //   Row 1: 헤더 (타임스탬프, 아이디, 연락처, 성별, 몇 강, 어떤 과제, 제출 URL, 수료여부)
 //   Row 2+: 폼 응답 (한 사람이 여러 행 가능)
 
+// 연도 무시한 날짜 키 ("M-D")
+function dateKey_(d) {
+  return d.getMonth() + '-' + d.getDate();
+}
+
+// 김밥 탭 날짜 행에서 유효한 강의 날짜 세트 로드 ({ "M-D": true, ... })
+// 김밥 탭 없거나 인식 실패 시 빈 객체 반환 → 필터 미적용.
+function loadValidSessionDates_(ss, todayNorm) {
+  var validDates = {};
+  var sh = ss.getSheetByName("김밥");
+  if (!sh) return validDates;
+  var kbData = sh.getDataRange().getValues();
+
+  var kbHeaderRow = -1;
+  for (var i = 0; i < Math.min(6, kbData.length); i++) {
+    var idPos = kbData[i]
+      .map(function(h){ return String(h).trim().toLowerCase(); })
+      .indexOf("id");
+    if (idPos !== -1) { kbHeaderRow = i; break; }
+  }
+  if (kbHeaderRow === -1) return validDates;
+
+  var idCol = kbData[kbHeaderRow]
+    .map(function(h){ return String(h).trim().toLowerCase(); })
+    .indexOf("id");
+
+  var isDateValue = function(v) {
+    if (v instanceof Date) return true;
+    var s = String(v || '').trim();
+    return /\d{1,2}[\/\.\-]\d{1,2}/.test(s);
+  };
+
+  // 날짜 스코어가 가장 높은 후보 행
+  var candidates = [kbHeaderRow - 1, kbHeaderRow, kbHeaderRow + 1];
+  var bestIdx = -1, bestScore = -1;
+  candidates.forEach(function(ri) {
+    if (ri < 0 || ri >= kbData.length) return;
+    var row = kbData[ri];
+    var score = 0;
+    for (var c = idCol + 1; c < row.length; c++) {
+      if (isDateValue(row[c])) score++;
+    }
+    if (score > bestScore) { bestScore = score; bestIdx = ri; }
+  });
+  if (bestIdx === -1) return validDates;
+
+  var dateRow = kbData[bestIdx];
+  for (var c = idCol + 1; c < dateRow.length; c++) {
+    var dv = dateRow[c];
+    var d = null;
+    if (dv instanceof Date) {
+      d = new Date(dv.getFullYear(), dv.getMonth(), dv.getDate());
+    } else if (dv) {
+      var s = String(dv).trim();
+      var m = s.match(/(\d{1,2})[\/\.\-](\d{1,2})/);
+      if (m) {
+        d = new Date(todayNorm.getFullYear(), parseInt(m[1],10)-1, parseInt(m[2],10));
+      }
+    }
+    if (d) validDates[dateKey_(d)] = true;
+  }
+  return validDates;
+}
+
 // 가장 최근 지난 (오늘 포함) 세션 컬럼 index. 없으면 -1.
-function findRecentPastSessionCol_(headers, todayNorm) {
+// validDatesSet가 있으면 그 안의 날짜만 후보로 사용 (팬텀 컬럼 제외).
+function findRecentPastSessionCol_(headers, todayNorm, validDatesSet) {
   var bestIdx = -1;
   var bestDate = null;
+  var hasFilter = validDatesSet && Object.keys(validDatesSet).length > 0;
   for (var k = 0; k < headers.length; k++) {
     var hValue = headers[k];
     var dateObj = null;
@@ -32,7 +101,7 @@ function findRecentPastSessionCol_(headers, todayNorm) {
     } else {
       var s = String(hValue || '').trim();
       var m1 = s.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
-      var m2 = s.match(/^(\d{1,2})[\/\.\-](\d{1,2})$/);
+      var m2 = s.match(/(\d{1,2})[\/\.\-](\d{1,2})/);
       if (m1) {
         dateObj = new Date(parseInt(m1[1],10), parseInt(m1[2],10)-1, parseInt(m1[3],10));
       } else if (m2) {
@@ -40,6 +109,7 @@ function findRecentPastSessionCol_(headers, todayNorm) {
       }
     }
     if (!dateObj) continue;
+    if (hasFilter && !validDatesSet[dateKey_(dateObj)]) continue;
     if (dateObj.getTime() <= todayNorm.getTime()) {
       if (!bestDate || dateObj.getTime() > bestDate.getTime()) {
         bestDate = dateObj;
@@ -52,7 +122,7 @@ function findRecentPastSessionCol_(headers, todayNorm) {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 19;
+  var currentVersion = 20;
 
   try {
     var postData = JSON.parse(e.postData.contents);
@@ -77,10 +147,10 @@ function doPost(e) {
     var today = new Date();
     var todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-    // 가장 최근 지난 강의 컬럼 찾기 (기존: 오늘 매칭 or 새 컬럼 생성)
-    var attendanceCol = findRecentPastSessionCol_(originalHeaders, todayNorm);
+    // 김밥 탭 유효 세션 날짜를 필터로 사용해 팬텀 컬럼(07/19, 07/22 등) 배제
+    var validDates = loadValidSessionDates_(ss, todayNorm);
+    var attendanceCol = findRecentPastSessionCol_(originalHeaders, todayNorm, validDates);
     if (attendanceCol === -1) {
-      // 아직 첫 세션 시작 전이면 요청 거부 (새 컬럼 자동생성 안 함)
       return output.setContent(JSON.stringify({
         success: false, version: currentVersion,
         message: "출석 대상 강의를 찾지 못했습니다."
@@ -105,14 +175,14 @@ function doPost(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 19, message: e.message
+      success: false, version: 20, message: e.message
     }));
   }
 }
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 19; // 최근 지난 강의 기준 + 김밥/과제
+  var currentVersion = 20; // 최근 지난 강의 기준 + 김밥/과제
 
   try {
     var ss = SpreadsheetApp.openById("12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM");
@@ -359,8 +429,9 @@ function doGet(e) {
     });
     var idIdx = headers.indexOf("id");
 
-    // '가장 최근 지난 강의' 컬럼을 현재 세션으로 사용 (헬퍼 재사용)
-    var todayIdx = findRecentPastSessionCol_(originalHeadersRaw, todayNorm);
+    // '가장 최근 지난 강의' 컬럼 (팬텀 컬럼 제외)
+    var validDatesForAttendance = loadValidSessionDates_(ss, todayNorm);
+    var todayIdx = findRecentPastSessionCol_(originalHeadersRaw, todayNorm, validDatesForAttendance);
 
     var jsonData = [];
     for (var i = headerRowIdx + 1; i < data.length; i++) {
