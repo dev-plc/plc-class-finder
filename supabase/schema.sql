@@ -91,12 +91,21 @@ create index attendance_session_idx on attendance(session_date);
 -- 3. GRANTs (auto-expose OFF 대응)
 -- ===================================================================
 
+-- 공개 읽기 (RLS 정책이 실제 접근 제어)
 grant select on public.cohorts       to anon, authenticated;
 grant select on public.sessions      to anon, authenticated;
 grant select on public.members       to anon, authenticated;
 grant select on public.attendance    to anon, authenticated;
 grant select on public.team_links    to anon, authenticated;
 grant select on public.location_maps to anon, authenticated;
+
+-- 관리자용 (RLS 우회, 이관·동기화 스크립트가 사용)
+grant all on public.cohorts       to service_role;
+grant all on public.sessions      to service_role;
+grant all on public.members       to service_role;
+grant all on public.attendance    to service_role;
+grant all on public.team_links    to service_role;
+grant all on public.location_maps to service_role;
 
 -- ===================================================================
 -- 4. Row Level Security
