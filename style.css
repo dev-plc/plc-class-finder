@@ -333,35 +333,114 @@ body.dark-mode .icon-btn:hover {
     font-size: calc(13px * var(--font-scale));
     color: var(--text-light, #6B7280);
     margin-bottom: 8px;
+    line-height: 1.5;
 }
 .attendance-summary strong { color: var(--text-dark, #2C3E50); }
+.grid-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dotted #e5e7eb;
+    font-size: calc(11px * var(--font-scale));
+    color: var(--text-light, #6B7280);
+}
+.grid-legend b { color: var(--text-dark, #2C3E50); font-weight: 700; }
 .attendance-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
     gap: 4px;
 }
 .attendance-cell {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 6px 4px;
+    padding: 6px 4px 8px;
     border-radius: 6px;
-    line-height: 1;
+    line-height: 1.1;
 }
 .attendance-cell .cell-date {
     font-size: calc(10px * var(--font-scale));
-    opacity: 0.65;
+    opacity: 0.7;
+}
+.attendance-cell .cell-session {
+    font-size: calc(9px * var(--font-scale));
+    opacity: 0.6;
+    margin-top: 2px;
+    text-align: center;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .attendance-cell .cell-status {
     font-weight: 700;
     margin-top: 3px;
-    font-size: calc(14px * var(--font-scale));
+    font-size: calc(15px * var(--font-scale));
+}
+.attendance-cell .cell-badges {
+    display: flex;
+    gap: 2px;
+    margin-top: 3px;
+    font-size: calc(11px * var(--font-scale));
+    line-height: 1;
+}
+.attendance-cell .cell-tag {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    font-size: calc(8px * var(--font-scale));
+    background: rgba(0,0,0,0.06);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #6b7280;
 }
 .attendance-cell.present { background: #d1fae5; color: #059669; }
 .attendance-cell.online  { background: #ddd6fe; color: #6d28d9; }
 .attendance-cell.absent  { background: #fee2e2; color: #dc2626; }
 .attendance-cell.none    { background: #f3f4f6; color: #9ca3af; }
 .attendance-cell.empty   { background: #f9fafb; color: #d1d5db; }
+.attendance-cell.kyoje   { outline: 1px dashed #9ca3af; }
+.attendance-cell .badge-kimbap,
+.attendance-cell .badge-homework {
+    display: inline-block;
+    padding: 1px 3px;
+    background: rgba(255,255,255,0.7);
+    border-radius: 3px;
+    cursor: default;
+}
+.attendance-cell .badge-homework[data-hw-url] { cursor: pointer; }
+
+/* 과제 리스트 (noteStatus 확장) */
+.note-status.homework-list {
+    background: #f9fafb;
+    border-left: 3px solid #2563eb;
+    padding: 12px;
+    font-size: calc(13px * var(--font-scale));
+    color: var(--text-dark, #2C3E50);
+    display: block;
+}
+.hw-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px dotted #e5e7eb;
+    align-items: center;
+}
+.hw-row:last-of-type { border-bottom: none; }
+.hw-session { font-weight: 500; }
+.hw-types { color: #6b7280; font-size: calc(12px * var(--font-scale)); }
+.hw-links a { text-decoration: none; }
+.hw-extra-note {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+    color: #d97706;
+    font-size: calc(12px * var(--font-scale));
+}
 
 .lunch-status {
     display: flex;

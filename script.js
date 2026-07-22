@@ -8,12 +8,14 @@ import {
     getLocationImage,
     getTeamLink,
     getGeneralAnnouncementLink,
+    getKimbapDetail,
+    getHomeworkList,
     updateAttendance,
     getCacheInfo,
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v23 (상세 현황 카드: 출석·김밥·과제·수료)';
+const SCRIPT_VERSION = 'script.js v24 (통합 그리드: 출석+김밥+과제)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -312,12 +314,11 @@ function displayResult(member) {
 }
 
 // ============================================================================
-// 상세 현황 렌더링 (출석·김밥·과제·수료)
+// 상세 현황 렌더링 (출석 · 김밥 · 과제 통합 그리드)
 // ============================================================================
 const SESSION_KEY_RE = /^\d{2}\/\d{2}$/;
 
 function extractSessions(member) {
-    // member 객체에서 MM/DD 형식 키만 추출해 시간순 정렬
     return Object.keys(member)
         .filter(k => SESSION_KEY_RE.test(k))
         .sort((a, b) => {
@@ -336,71 +337,205 @@ function classifyStatus(raw) {
     return { cls: 'empty', label: '·', title: '미기록' };
 }
 
+// MM/DD → Date (연도는 대략 판단, 매치용)
+function mmddToDate(mmdd, refYear = new Date().getFullYear()) {
+    const m = String(mmdd || '').match(/(\d{1,2})[\/\.\-](\d{1,2})/);
+    if (!m) return null;
+    return new Date(refYear, parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+}
+
+// 김밥 detail 배열에서 attendanceDate에 가장 가까운 세션 (±5일 이내)
+function matchKimbapForDate(kimbapDetail, attendanceMMDD) {
+    const target = mmddToDate(attendanceMMDD);
+    if (!target || !kimbapDetail) return null;
+    let best = null, minDiff = Infinity;
+    for (const [name, info] of Object.entries(kimbapDetail)) {
+        const kd = mmddToDate(info.date);
+        if (!kd) continue;
+        const diff = Math.abs(kd.getTime() - target.getTime());
+        if (diff <= 5 * 86400000 && diff < minDiff) {
+            minDiff = diff;
+            best = { name, applied: info.applied, date: info.date };
+        }
+    }
+    return best;
+}
+
+// 과제 session 필드에서 정규화 키 추출.
+// "1강 XXX" → "교리1", "교리1" → "교리1"
+// "대화1 XXX", "성경적대화1" → "대화1"
+// "교제" → "교제", "나눔" → "나눔"
+function normalizeSessionKey(s) {
+    const raw = String(s || '').trim();
+    let m = raw.match(/^성경적대화\s*(\d+)/) || raw.match(/^대화\s*(\d+)/);
+    if (m) return '대화' + m[1];
+    m = raw.match(/^교리\s*(\d+)/) || raw.match(/^(\d+)\s*강/);
+    if (m) return '교리' + m[1];
+    if (/^교제/.test(raw) || /^교재/.test(raw)) return '교제';
+    if (/^나눔/.test(raw)) return '나눔';
+    return raw;
+}
+
+// 특정 세션명에 매칭되는 과제 제출 목록
+function homeworkForSession(homeworkList, sessionName) {
+    if (!homeworkList?.length || !sessionName) return [];
+    const target = normalizeSessionKey(sessionName);
+    return homeworkList.filter(hw => normalizeSessionKey(hw.session) === target);
+}
+
 function renderStatusDetail(member) {
     const container = document.getElementById('statusDetailContainer');
     if (!container) return;
     container.style.display = 'block';
 
-    // ────── 출석 그리드 & 요약 ──────
+    const memberId = member.id || (String(member.name || '') + String(member.phone || ''));
+    const kimbapDetail = getKimbapDetail(memberId);
+    const homeworkList = getHomeworkList(memberId);
+
     const sessions = extractSessions(member);
     const grid = document.getElementById('attendanceGrid');
     const summary = document.getElementById('attendanceSummary');
     const counts = { present: 0, online: 0, absent: 0, none: 0, empty: 0 };
+    let kimbapAppliedCount = 0;
+    let homeworkSubmittedCount = 0;
 
+    // 통합 그리드 렌더
     if (grid) {
-        grid.innerHTML = sessions.map(k => {
-            const s = classifyStatus(member[k]);
+        grid.innerHTML = sessions.map(mmdd => {
+            const s = classifyStatus(member[mmdd]);
             counts[s.cls] = (counts[s.cls] || 0) + 1;
+
+            const kb = matchKimbapForDate(kimbapDetail, mmdd);
+            const sessionName = kb?.name || '';
+            const hw = sessionName ? homeworkForSession(homeworkList, sessionName) : [];
+            if (kb?.applied === 1) kimbapAppliedCount++;
+            if (hw.length) homeworkSubmittedCount++;
+
+            const badges = [];
+            if (kb?.applied === 1) badges.push('<span class="badge-kimbap" title="김밥 신청">🍙</span>');
+            if (hw.length) {
+                const links = hw.filter(h => h.url).map(h => h.url);
+                const linkAttr = links.length ? `data-hw-url="${links[0]}"` : '';
+                badges.push(`<span class="badge-homework" title="과제 제출: ${hw.map(h => h.type).join(', ')}" ${linkAttr}>📝</span>`);
+            }
+
+            const isTeacher = sessionName === '교제';
+            const teacherMark = isTeacher ? '<span class="cell-tag">교제</span>' : '';
+
             return `
-                <div class="attendance-cell ${s.cls}" title="${k} · ${s.title}">
-                    <span class="cell-date">${k}</span>
+                <div class="attendance-cell ${s.cls} ${isTeacher ? 'kyoje' : ''}" title="${mmdd}${sessionName ? ' · ' + sessionName : ''} · ${s.title}">
+                    <span class="cell-date">${mmdd}</span>
+                    ${sessionName ? `<span class="cell-session">${sessionName}</span>` : ''}
                     <span class="cell-status">${s.label}</span>
+                    ${badges.length ? `<span class="cell-badges">${badges.join('')}</span>` : ''}
+                    ${teacherMark}
                 </div>
             `;
         }).join('');
+
+        // 과제 뱃지 클릭 시 링크 열기
+        grid.querySelectorAll('[data-hw-url]').forEach(el => {
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const url = el.getAttribute('data-hw-url');
+                if (url) window.open(url, '_blank', 'noopener');
+            });
+        });
     }
 
+    // 요약
     if (summary) {
         const total = sessions.length;
         const attended = counts.present + counts.online;
-        const missed = counts.absent + counts.empty;
         const absenceFromData = member['결석횟수'] != null && String(member['결석횟수']).trim() !== ''
             ? Number(member['결석횟수'])
-            : missed;
+            : (counts.absent + counts.empty);
         summary.innerHTML = `
             총 <strong>${total}</strong>강 ·
             <strong style="color:#059669">출석 ${attended}</strong> ·
             <strong style="color:#dc2626">결석 ${absenceFromData}</strong>
             ${counts.online ? ` · <strong style="color:#6d28d9">대체 ${counts.online}</strong>` : ''}
-            ${counts.none ? ` · 수업 없음 ${counts.none}` : ''}
+            ${kimbapAppliedCount ? ` · <strong style="color:#d97706">🍙 ${kimbapAppliedCount}회 신청</strong>` : ''}
+            ${homeworkSubmittedCount ? ` · <strong style="color:#2563eb">📝 ${homeworkSubmittedCount}건 제출</strong>` : ''}
         `;
     }
 
-    // ────── 김밥 신청 ──────
+    // ────── 김밥 요약 (매칭 안 된 세션이 있을 경우 대비) ──────
     const lunchEl = document.getElementById('lunchStatus');
     if (lunchEl) {
-        const upper = (v) => String(v ?? '').trim().toUpperCase();
-        const l1 = upper(member['김밥1차']);
-        const l2 = upper(member['김밥2차']);
-        const badge = (label, val) => {
-            if (val === 'O') return `<span class="lunch-badge yes">${label} 🍙 신청</span>`;
-            if (val === 'X') return `<span class="lunch-badge no">${label} 미신청</span>`;
-            return `<span class="lunch-badge no">${label} —</span>`;
-        };
-        lunchEl.innerHTML = badge('1차', l1) + badge('2차', l2);
+        const detailKeys = Object.keys(kimbapDetail);
+        if (detailKeys.length > 0) {
+            const applied = detailKeys.filter(k => kimbapDetail[k].applied === 1);
+            if (applied.length === 0) {
+                lunchEl.innerHTML = '<span class="lunch-badge no">신청 내역 없음</span>';
+            } else {
+                lunchEl.innerHTML = `
+                    <span class="lunch-badge yes">🍙 총 ${applied.length}회 신청</span>
+                    <div style="font-size:calc(13px * var(--font-scale)); color:var(--text-light,#6B7280); margin-top:6px;">
+                        ${applied.map(k => `${k}${kimbapDetail[k].date ? ` (${kimbapDetail[k].date})` : ''}`).join(', ')}
+                    </div>
+                `;
+            }
+        } else {
+            // Fallback: 메인 시트의 요약 필드
+            const upper = (v) => String(v ?? '').trim().toUpperCase();
+            const l1 = upper(member['김밥1차']);
+            const l2 = upper(member['김밥2차']);
+            const badge = (label, val) =>
+                val === 'O' ? `<span class="lunch-badge yes">${label} 🍙 신청</span>`
+                            : `<span class="lunch-badge no">${label} —</span>`;
+            lunchEl.innerHTML = badge('1차', l1) + badge('2차', l2);
+        }
     }
 
-    // ────── 과제·특이사항 ──────
+    // ────── 과제 제출 목록 ──────
     const noteEl = document.getElementById('noteStatus');
     if (noteEl) {
-        const note = String(member['.note'] ?? '').trim();
-        if (!note) {
-            noteEl.className = 'note-status empty';
-            noteEl.textContent = '(등록된 메모 없음)';
+        if (homeworkList.length > 0) {
+            // 세션별 그룹핑
+            const bySession = {};
+            for (const hw of homeworkList) {
+                const key = hw.session || '(미기재)';
+                if (!bySession[key]) bySession[key] = [];
+                bySession[key].push(hw);
+            }
+            const rows = Object.entries(bySession).map(([sess, subs]) => {
+                const types = [...new Set(subs.map(s => s.type).filter(Boolean))];
+                const links = subs.filter(s => s.url).map(s =>
+                    `<a href="${s.url}" target="_blank" rel="noopener" class="hw-link">🔗</a>`).join(' ');
+                return `
+                    <div class="hw-row">
+                        <span class="hw-session">${sess}</span>
+                        <span class="hw-types">${types.join(', ') || '(유형 미기재)'}</span>
+                        <span class="hw-links">${links}</span>
+                    </div>
+                `;
+            });
+            noteEl.className = 'note-status homework-list';
+            noteEl.innerHTML = `
+                <div style="font-weight:700; margin-bottom:8px;">총 ${homeworkList.length}건 제출</div>
+                ${rows.join('')}
+            `;
+
+            // .note 필드도 있으면 부속 메모로 표시
+            const note = String(member['.note'] ?? '').trim();
+            if (note) {
+                noteEl.innerHTML += `
+                    <div class="hw-extra-note">📌 특이사항: ${note}</div>
+                `;
+            }
         } else {
-            const warn = /제출필요|과제|소감문/.test(note);
-            noteEl.className = warn ? 'note-status warn' : 'note-status';
-            noteEl.textContent = note;
+            // 과제 데이터 없으면 .note 만
+            const note = String(member['.note'] ?? '').trim();
+            if (!note) {
+                noteEl.className = 'note-status empty';
+                noteEl.textContent = '(제출 내역 없음)';
+            } else {
+                const warn = /제출필요|과제|소감문/.test(note);
+                noteEl.className = warn ? 'note-status warn' : 'note-status';
+                noteEl.textContent = note;
+            }
         }
     }
 
