@@ -1,0 +1,16 @@
+{
+  "name": "plc-class-finder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "교회 교리교육 조 배치 조회 웹앱",
+  "scripts": {
+    "test-connection": "node scripts/test-connection.mjs",
+    "migrate": "node scripts/migrate-to-supabase.mjs",
+    "migrate:dry": "node scripts/migrate-to-supabase.mjs --dry-run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5"
+  }
+}
