@@ -10,7 +10,11 @@ import {
     getGeneralAnnouncementLink,
     updateAttendance,
     getCacheInfo,
+    MODULE_VERSION,
 } from './scripts/members-data.js';
+
+const SCRIPT_VERSION = 'script.js v22 (2단계 폰트·초성·빈값=결석·백그라운드갱신)';
+console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
 // 1. 내 정보 기억 (localStorage) — UX #2
@@ -392,8 +396,9 @@ async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
 // 요약 카드만 재렌더 (체크박스 리스트는 그대로 유지)
 function renderTeamSummary(summaryEl, members) {
     const upper = (v) => String(v || '').trim().toUpperCase();
+    // 출석(O·◎) 이외는 모두 결석 취급 (빈 값 포함)
     const presentCount = members.filter(m => ['O','◎'].includes(upper(m.attendance))).length;
-    const absentCount  = members.filter(m => upper(m.attendance) === 'X').length;
+    const absentCount  = members.length - presentCount;
     const kimbapCount  = members.filter(m => upper(m.lunch) === 'O').length;
     summaryEl.innerHTML = `
         <div class="stat">
