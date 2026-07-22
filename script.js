@@ -15,7 +15,7 @@ import {
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v27 (과제 마지막 행 여백 조정)';
+const SCRIPT_VERSION = 'script.js v28 (유령 세션 제거·강의만 카운트·교제/나눔 제외)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -387,7 +387,6 @@ function matchKimbapForDate(kimbapDetail, attendanceMMDD) {
 // "N강 ...", "교리N", "대화N", "성경적대화N" → 세션 순번 (정렬용)
 function sessionOrdinal(raw) {
     const s = String(raw || '').trim();
-    // 성경적대화 계열은 후반부 (100+N)
     let m = s.match(/^(성경적대화|대화)\s*(\d+)/);
     if (m) return 100 + parseInt(m[2], 10);
     m = s.match(/^교리\s*(\d+)/) || s.match(/^(\d+)\s*강/);
@@ -395,6 +394,13 @@ function sessionOrdinal(raw) {
     if (/^교재/.test(s) || /^교제/.test(s)) return 90;
     if (/^나눔/.test(s)) return 95;
     return 999;
+}
+
+// 세션명이 정규 강의(교리·성경적대화)인지 판별
+// 교제, 나눔은 표시하되 총 강수·수료 카운트에서 제외
+function isClassSession(sessionName) {
+    if (!sessionName) return false;
+    return /^교리\s*\d+/.test(sessionName) || /^성경적대화\s*\d+/.test(sessionName);
 }
 
 // 과제 session 필드에서 정규화 키 추출.
@@ -428,37 +434,56 @@ function renderStatusDetail(member) {
     const kimbapDetail = getKimbapDetail(memberId);
     const homeworkList = getHomeworkList(memberId);
 
-    const sessions = extractSessions(member);
+    const rawSessions = extractSessions(member);
+    const hasKimbap = Object.keys(kimbapDetail).length > 0;
+
+    // 김밥 탭에 매칭되는 세션만 유지 (07/19, 07/22 같은 유령 컬럼 제거)
+    // 김밥 데이터 없으면 원본 그대로 (fallback)
+    const enriched = [];
+    for (const mmdd of rawSessions) {
+        const kb = matchKimbapForDate(kimbapDetail, mmdd);
+        if (hasKimbap && !kb) continue;
+        enriched.push({
+            mmdd,
+            sessionName: kb?.name || '',
+            kimbapApplied: kb?.applied === 1,
+            isClass: kb ? isClassSession(kb.name) : true,
+        });
+    }
+
     const grid = document.getElementById('attendanceGrid');
     const summary = document.getElementById('attendanceSummary');
-    const counts = { present: 0, online: 0, absent: 0, none: 0, empty: 0 };
-    let kimbapAppliedCount = 0;
-    let homeworkSubmittedCount = 0;
+    let classAttended = 0, classAbsent = 0, classOnline = 0;
+    let kimbapAppliedCount = 0, homeworkSubmittedCount = 0;
 
     // 통합 그리드 렌더
     if (grid) {
-        grid.innerHTML = sessions.map(mmdd => {
+        grid.innerHTML = enriched.map(({ mmdd, sessionName, kimbapApplied, isClass }) => {
             const s = classifyStatus(member[mmdd]);
-            counts[s.cls] = (counts[s.cls] || 0) + 1;
 
-            const kb = matchKimbapForDate(kimbapDetail, mmdd);
-            const sessionName = kb?.name || '';
+            // 교리/성경적대화만 카운트
+            if (isClass) {
+                if (s.cls === 'present') classAttended++;
+                else if (s.cls === 'online') { classAttended++; classOnline++; }
+                else if (s.cls === 'absent' || s.cls === 'empty') classAbsent++;
+            }
+
             const hw = sessionName ? homeworkForSession(homeworkList, sessionName) : [];
-            if (kb?.applied === 1) kimbapAppliedCount++;
+            if (kimbapApplied) kimbapAppliedCount++;
             if (hw.length) homeworkSubmittedCount++;
 
             const badges = [];
-            if (kb?.applied === 1) badges.push('<span class="badge-kimbap" title="김밥 신청">🍙</span>');
+            if (kimbapApplied) badges.push('<span class="badge-kimbap" title="김밥 신청">🍙</span>');
             if (hw.length) {
                 const links = hw.filter(h => h.url).map(h => h.url);
                 const linkAttr = links.length ? `data-hw-url="${links[0]}"` : '';
                 badges.push(`<span class="badge-homework" title="과제 제출: ${hw.map(h => h.type).join(', ')}" ${linkAttr}>📝</span>`);
             }
 
-            const isTeacher = sessionName === '교제';
+            const isTeacher = sessionName === '교제' || sessionName === '나눔';
 
             return `
-                <div class="attendance-cell ${s.cls} ${isTeacher ? 'kyoje' : ''}" title="${mmdd}${sessionName ? ' · ' + sessionName : ''} · ${s.title}">
+                <div class="attendance-cell ${s.cls} ${isTeacher ? 'kyoje' : ''}" title="${mmdd}${sessionName ? ' · ' + sessionName : ''} · ${s.title}${!isClass ? ' (강의 외)' : ''}">
                     <span class="cell-date">${mmdd}</span>
                     ${sessionName ? `<span class="cell-session">${sessionName}</span>` : ''}
                     <span class="cell-status">${s.label}</span>
@@ -467,7 +492,6 @@ function renderStatusDetail(member) {
             `;
         }).join('');
 
-        // 과제 뱃지 클릭 시 링크 열기
         grid.querySelectorAll('[data-hw-url]').forEach(el => {
             el.style.cursor = 'pointer';
             el.addEventListener('click', (e) => {
@@ -478,18 +502,17 @@ function renderStatusDetail(member) {
         });
     }
 
-    // 요약
+    // 요약 - 교리/성경적대화만 카운트
     if (summary) {
-        const total = sessions.length;
-        const attended = counts.present + counts.online;
+        const classTotal = enriched.filter(e => e.isClass).length;
         const absenceFromData = member['결석횟수'] != null && String(member['결석횟수']).trim() !== ''
             ? Number(member['결석횟수'])
-            : (counts.absent + counts.empty);
+            : classAbsent;
         summary.innerHTML = `
-            총 <strong>${total}</strong>강 ·
-            <strong style="color:#059669">출석 ${attended}</strong> ·
+            총 <strong>${classTotal}</strong>강 ·
+            <strong style="color:#059669">출석 ${classAttended}</strong> ·
             <strong style="color:#dc2626">결석 ${absenceFromData}</strong>
-            ${counts.online ? ` · <strong style="color:#6d28d9">대체 ${counts.online}</strong>` : ''}
+            ${classOnline ? ` · <strong style="color:#6d28d9">대체 ${classOnline}</strong>` : ''}
             ${kimbapAppliedCount ? ` · <strong style="color:#d97706">🍙 ${kimbapAppliedCount}회 신청</strong>` : ''}
             ${homeworkSubmittedCount ? ` · <strong style="color:#2563eb">📝 ${homeworkSubmittedCount}건 제출</strong>` : ''}
         `;
