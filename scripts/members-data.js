@@ -11,6 +11,9 @@
 // ============================================================================
 // 백엔드 엔드포인트
 // ============================================================================
+import { matches as hangulMatches } from './hangul.js';
+
+export const MODULE_VERSION = 'members-data v22';
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
 
 // ============================================================================
@@ -157,12 +160,21 @@ export function getMembers() {
 
 /**
  * (name, phone) 조합으로 단일 인원 조회.
- * 기존 script.js와 동일 매칭 로직: (name+phone) 결합 문자열 exact match.
+ * 1) 정확 매칭 우선. 2) 이름이 초성만이거나 부분이면 자모 매칭 fallback.
+ *    (전화번호 뒷 4자리는 정확 일치 필수)
  */
 export function findMember(name, phone) {
-  const target = (name || '').trim().replace(/\s/g, '') + (phone || '').trim().replace(/[^0-9]/g, '');
-  if (!target) return null;
-  return state.members.find(m => (m.id === target || (m.name + m.phone) === target)) || null;
+  const cleanName = (name || '').trim().replace(/\s/g, '');
+  const cleanPhone = (phone || '').trim().replace(/[^0-9]/g, '');
+  if (!cleanName || !cleanPhone) return null;
+
+  // 1) 정확 매칭 (기존 로직)
+  const target = cleanName + cleanPhone;
+  const exact = state.members.find(m => m.id === target || (m.name + m.phone) === target);
+  if (exact) return exact;
+
+  // 2) 초성·부분 매칭 fallback
+  return state.members.find(m => m.phone === cleanPhone && hangulMatches(m.name, cleanName)) || null;
 }
 
 /**
