@@ -290,6 +290,120 @@ body.dark-mode .icon-btn:hover {
     transform: translateX(4px);
 }
 
+/* 상세 현황 (출석·김밥·과제·수료) */
+.status-detail {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--warm-beige, #EDE6D6);
+}
+.cohort-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.cohort-tab {
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid #2563eb;
+    color: #2563eb;
+    border-radius: 20px;
+    font-size: calc(13px * var(--font-scale));
+    cursor: pointer;
+}
+.cohort-tab.active {
+    background: #2563eb;
+    color: white;
+}
+.cohort-hint {
+    font-size: calc(11px * var(--font-scale));
+    color: var(--text-light, #6B7280);
+}
+.status-section {
+    margin-bottom: 18px;
+}
+.status-section-title {
+    font-size: calc(15px * var(--font-scale));
+    margin-bottom: 8px;
+    color: var(--text-dark, #2C3E50);
+    font-weight: 700;
+}
+.attendance-summary {
+    font-size: calc(13px * var(--font-scale));
+    color: var(--text-light, #6B7280);
+    margin-bottom: 8px;
+}
+.attendance-summary strong { color: var(--text-dark, #2C3E50); }
+.attendance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    gap: 4px;
+}
+.attendance-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 4px;
+    border-radius: 6px;
+    line-height: 1;
+}
+.attendance-cell .cell-date {
+    font-size: calc(10px * var(--font-scale));
+    opacity: 0.65;
+}
+.attendance-cell .cell-status {
+    font-weight: 700;
+    margin-top: 3px;
+    font-size: calc(14px * var(--font-scale));
+}
+.attendance-cell.present { background: #d1fae5; color: #059669; }
+.attendance-cell.online  { background: #ddd6fe; color: #6d28d9; }
+.attendance-cell.absent  { background: #fee2e2; color: #dc2626; }
+.attendance-cell.none    { background: #f3f4f6; color: #9ca3af; }
+.attendance-cell.empty   { background: #f9fafb; color: #d1d5db; }
+
+.lunch-status {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.lunch-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: calc(14px * var(--font-scale));
+    font-weight: 500;
+}
+.lunch-badge.yes { background: #fef3c7; color: #d97706; }
+.lunch-badge.no  { background: #f3f4f6; color: #9ca3af; }
+
+.note-status {
+    padding: 12px;
+    background: #f9fafb;
+    border-left: 3px solid #d1d5db;
+    border-radius: 4px;
+    font-size: calc(13px * var(--font-scale));
+    color: var(--text-dark, #2C3E50);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.note-status.empty { color: #9ca3af; font-style: italic; }
+.note-status.warn { border-left-color: #d97706; background: #fef3c7; }
+
+.completion-status {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: calc(15px * var(--font-scale));
+    font-weight: 700;
+}
+.completion-status.done    { background: #d1fae5; color: #059669; }
+.completion-status.partial { background: #fef3c7; color: #d97706; }
+.completion-status.none    { background: #f3f4f6; color: #9ca3af; }
+
 /* 조 출석 요약 카드 (UX #4) */
 .team-summary-card {
     display: flex;
