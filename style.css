@@ -417,30 +417,29 @@ body.dark-mode .icon-btn:hover {
 .note-status.homework-list {
     background: #f9fafb;
     border-left: 3px solid #2563eb;
-    padding: 12px;
+    padding: 8px 10px;
     font-size: calc(13px * var(--font-scale));
     color: var(--text-dark, #2C3E50);
     display: block;
+    line-height: 1.35;
 }
 .hw-row {
     display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 8px;
-    padding: 4px 0;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+    padding: 2px 0;
     border-bottom: 1px dotted #e5e7eb;
     align-items: center;
 }
 .hw-row:last-of-type { border-bottom: none; }
-.hw-session { font-weight: 500; }
-.hw-types { color: #6b7280; font-size: calc(12px * var(--font-scale)); }
-.hw-links a { text-decoration: none; }
-.hw-extra-note {
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid #e5e7eb;
-    color: #d97706;
-    font-size: calc(12px * var(--font-scale));
+.hw-session {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
+.hw-types { color: #6b7280; font-size: calc(11px * var(--font-scale)); }
+.hw-links a { text-decoration: none; margin-left: 2px; }
 
 .lunch-status {
     display: flex;
