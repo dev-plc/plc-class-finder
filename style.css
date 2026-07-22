@@ -26,8 +26,7 @@
     /* 폰트 크기 스케일 (UX #3 접근성) */
     --font-scale: 1;
 }
-body.font-scale-large  { --font-scale: 1.2; }
-body.font-scale-xlarge { --font-scale: 1.45; }
+body.font-scale-large  { --font-scale: 1.4; }
 
 /* 검색 화면 핵심 요소 크기 스케일링 */
 body .search-box label       { font-size: calc(14px * var(--font-scale)); }
