@@ -422,6 +422,8 @@ body.dark-mode .icon-btn:hover {
     color: var(--text-dark, #2C3E50);
     display: block;
     line-height: 1.1;
+    white-space: normal;         /* .note-status의 pre-wrap 오버라이드 */
+    word-break: normal;
 }
 .hw-row {
     display: grid;
