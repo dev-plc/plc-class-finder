@@ -13,6 +13,38 @@ import {
 } from './scripts/members-data.js';
 
 // ============================================================================
+// 1. 내 정보 기억 (localStorage) — UX #2
+// ============================================================================
+const LAST_SEARCH_KEY = 'plc_last_search_v1';
+const LAST_SEARCH_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90일
+
+function saveLastSearch(name, phone) {
+    try {
+        localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify({
+            name, phone, ts: Date.now(),
+        }));
+    } catch (e) { /* 무시 */ }
+}
+
+function loadLastSearch() {
+    try {
+        const raw = localStorage.getItem(LAST_SEARCH_KEY);
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj?.name || !obj?.phone) return null;
+        if (obj.ts && Date.now() - obj.ts > LAST_SEARCH_MAX_AGE_MS) {
+            localStorage.removeItem(LAST_SEARCH_KEY);
+            return null;
+        }
+        return obj;
+    } catch (e) { return null; }
+}
+
+function clearLastSearch() {
+    try { localStorage.removeItem(LAST_SEARCH_KEY); } catch (e) {}
+}
+
+// ============================================================================
 // 2. DOM 요소 선택
 // ============================================================================
 const elements = {
@@ -34,7 +66,8 @@ const elements = {
     adminBtn: document.getElementById('adminBtn'),
     adminModal: document.getElementById('adminLoginModal'),
     adminClose: document.getElementById('adminLoginClose'),
-    adminForm: document.getElementById('adminLoginForm')
+    adminForm: document.getElementById('adminLoginForm'),
+    clearRememberedBtn: document.getElementById('clearRememberedBtn'),
 };
 
 // ============================================================================
@@ -94,6 +127,8 @@ async function searchMember() {
         const member = findMember(name, phone);
 
         if (member) {
+            saveLastSearch(name, phone);
+            if (elements.clearRememberedBtn) elements.clearRememberedBtn.style.display = 'block';
             displayResult(member);
         } else {
             showError("일치하는 정보를 찾을 수 없습니다.<br>입력 내용을 확인해주세요.");
@@ -353,7 +388,41 @@ function initEventListeners() {
     safeAdd(elements.phoneInput, 'keypress', (e) => {
         if (e.key === 'Enter' && !elements.searchBtn.disabled) searchMember();
     }, 'phoneInput');
+
+    // "다른 사람으로 조회" — 저장된 검색 지우기
+    safeAdd(elements.clearRememberedBtn, 'click', () => {
+        clearLastSearch();
+        elements.nameInput.value = '';
+        elements.phoneInput.value = '';
+        elements.clearRememberedBtn.style.display = 'none';
+        elements.resultContainer.style.display = 'none';
+        elements.nameInput.focus();
+    }, 'clearRememberedBtn');
 }
+
+// 저장된 마지막 검색이 있으면 자동 채움 + "다른 사람으로 조회" 버튼 노출
+function applyLastSearch() {
+    const last = loadLastSearch();
+    if (!last) return;
+    if (elements.nameInput)  elements.nameInput.value  = last.name;
+    if (elements.phoneInput) elements.phoneInput.value = last.phone;
+    if (elements.clearRememberedBtn) elements.clearRememberedBtn.style.display = 'block';
+}
+
+// Service Worker 등록 (PWA)
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    // file:// 프로토콜에서는 SW 등록 불가
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        return;
+    }
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+            console.warn('SW 등록 실패:', err);
+        });
+    });
+}
+registerServiceWorker();
 
 function initModal() {
     const imageModal = document.getElementById('imageModal');
@@ -392,4 +461,5 @@ window.addEventListener('load', () => {
 
     try { initEventListeners(); } catch (err) { console.error("initEventListeners 에러:", err); }
     try { initModal(); } catch (err) { console.error("initModal 에러:", err); }
+    try { applyLastSearch(); } catch (err) { console.error("applyLastSearch 에러:", err); }
 });

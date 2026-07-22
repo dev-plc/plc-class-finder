@@ -2,8 +2,20 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>PLC 새가족교육 조배치 검색</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="교리교육 조회">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -73,6 +85,11 @@
             <!-- 💡 버튼 기본 상태를 비활성화로 설정하여 에러 원천 차단 -->
             <button class="search-btn" id="searchBtn" disabled>
                 <span class="btn-text">로딩중...</span>
+            </button>
+
+            <!-- 저장된 검색 지우기 (자동 채움 시에만 노출) -->
+            <button type="button" id="clearRememberedBtn" class="clear-remembered-btn" style="display:none;">
+                다른 사람으로 조회 →
             </button>
         </div>
 
