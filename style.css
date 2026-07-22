@@ -417,33 +417,44 @@ body.dark-mode .icon-btn:hover {
 .note-status.homework-list {
     background: #f9fafb;
     border-left: 3px solid #2563eb;
-    padding: 6px 10px 2px;
+    padding: 4px 10px;
     font-size: calc(12px * var(--font-scale));
     color: var(--text-dark, #2C3E50);
     display: block;
-    line-height: 1.15;
+    line-height: 1.1;
 }
 .hw-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 6px;
-    padding: 3px 0;
+    padding: 2px 0;
     align-items: center;
     min-height: 0;
     border-bottom: 1px dotted #e5e7eb;
 }
 .hw-row:last-of-type {
     border-bottom: none;
-    padding-bottom: 2px;
 }
 .hw-session {
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.2;
 }
-.hw-types { color: #6b7280; font-size: calc(11px * var(--font-scale)); }
-.hw-links a { text-decoration: none; margin-left: 2px; font-size: calc(13px * var(--font-scale)); line-height: 1; }
+.hw-types { color: #6b7280; font-size: calc(11px * var(--font-scale)); line-height: 1.2; }
+.hw-links {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+.hw-links a {
+    text-decoration: none;
+    margin-left: 2px;
+    font-size: calc(13px * var(--font-scale));
+    line-height: 1;
+    display: inline-block;
+}
 
 .lunch-status {
     display: flex;
