@@ -5,12 +5,12 @@
 //
 // 캐시 무효화: CACHE_VERSION 숫자 bump
 
-const CACHE_VERSION = 'plc-v11';
+const CACHE_VERSION = 'plc-v12';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './admin.html',
-  './style.css?v=28',
+  './style.css?v=29',
   './admin.css?v=1',
   './script.js?v=28',
   './admin.js?v=4',
