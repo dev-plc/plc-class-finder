@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 
-    <link rel="stylesheet" href="style.css?v=29">
+    <link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
     <div class="container">
@@ -166,7 +166,10 @@
                     </div>
 
                     <div id="teamMemberListContainer" style="display: none; margin-top: 20px;">
-                        <h3 id="teamListTitle" style="font-size: 1.1rem; margin-bottom: 6px; color: #333;"></h3>
+                        <div class="team-list-header">
+                            <h3 id="teamListTitle" style="font-size: 1.1rem; color: #333;"></h3>
+                            <button type="button" id="openMatrixBtn" class="matrix-open-btn">📊 전체 출석표</button>
+                        </div>
                         <div id="teamSummaryCard" class="team-summary-card"></div>
                         <div id="teamMemberList" class="team-member-list-grid">
                         </div>
@@ -185,6 +188,21 @@
         <div class="error-message" id="errorMessage" style="display: none;">
             <span class="error-icon">⚠</span>
             <span class="error-text" id="errorText"></span>
+        </div>
+
+        <!-- 조 전체 출석표 모달 -->
+        <div class="matrix-modal" id="matrixModal" aria-hidden="true">
+            <div class="matrix-modal-inner" role="dialog" aria-modal="true" aria-labelledby="matrixTitle">
+                <div class="matrix-modal-header">
+                    <h3 id="matrixTitle">조 전체 현황</h3>
+                    <button type="button" id="matrixCloseBtn" class="matrix-close-btn" aria-label="닫기">✕</button>
+                </div>
+                <div class="matrix-legend">
+                    <span><b>O</b> 출석</span><span><b>◎</b> 대체</span><span><b>X</b> 결석</span>
+                    <span><b>−</b> 수업없음</span><span>🍙 김밥</span><span>📝 과제</span>
+                </div>
+                <div class="matrix-scroll" id="matrixScroll"></div>
+            </div>
         </div>
 
         <!-- 푸터 -->
@@ -240,6 +258,6 @@
         </div>
     </div>
 
-<script type="module" src="script.js?v=28"></script>
+<script type="module" src="script.js?v=30"></script>
 </body>
 </html>

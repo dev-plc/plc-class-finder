@@ -5,14 +5,14 @@
 //
 // 캐시 무효화: CACHE_VERSION 숫자 bump
 
-const CACHE_VERSION = 'plc-v12';
+const CACHE_VERSION = 'plc-v13';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './admin.html',
-  './style.css?v=29',
+  './style.css?v=30',
   './admin.css?v=1',
-  './script.js?v=28',
+  './script.js?v=30',
   './admin.js?v=4',
   './scripts/members-data.js',
   './scripts/hangul.js',
@@ -22,6 +22,13 @@ const PRECACHE_URLS = [
   './icons/apple-touch-icon.png',
   './icons/icon.svg',
 ];
+
+// 앱이 보낸 SKIP_WAITING 메시지를 받으면 즉시 활성화
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

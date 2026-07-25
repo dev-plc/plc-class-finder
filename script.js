@@ -15,7 +15,7 @@ import {
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v28 (유령 세션 제거·강의만 카운트·교제/나눔 제외)';
+const SCRIPT_VERSION = 'script.js v30 (조 매트릭스·더보기·SW 자동업데이트)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -403,6 +403,48 @@ function isClassSession(sessionName) {
     return /^교리\s*\d+/.test(sessionName) || /^성경적대화\s*\d+/.test(sessionName);
 }
 
+// ============================================================================
+// "더보기" 리스트 헬퍼 — 최근 항목 우선, 나머지는 접어둠
+// ============================================================================
+const EXPAND_KEEP_N = 5;
+
+function makeExpandable(container, items, renderItemFn, keepN = EXPAND_KEEP_N, unit = '건') {
+    if (!container) return;
+    if (items.length <= keepN) {
+        container.innerHTML = items.map(renderItemFn).join('');
+        return;
+    }
+    const shown = items.slice(0, keepN).map(renderItemFn).join('');
+    const rest = items.slice(keepN).map(renderItemFn).join('');
+    const restCount = items.length - keepN;
+
+    container.innerHTML = `
+        ${shown}
+        <div class="expandable-rest" hidden>${rest}</div>
+        <button class="expand-toggle" type="button">+ 이전 ${restCount}${unit} 더 보기 ▼</button>
+    `;
+
+    const btn = container.querySelector('.expand-toggle');
+    const restEl = container.querySelector('.expandable-rest');
+    btn.addEventListener('click', () => {
+        const willExpand = restEl.hasAttribute('hidden');
+        if (willExpand) {
+            restEl.removeAttribute('hidden');
+            btn.textContent = '접기 ▲';
+        } else {
+            restEl.setAttribute('hidden', '');
+            btn.textContent = `+ 이전 ${restCount}${unit} 더 보기 ▼`;
+        }
+    });
+}
+
+// MM/DD 문자열 → 정렬용 숫자 (월*100+일). 없으면 -1.
+function mmddSortValue(dateStr) {
+    const m = String(dateStr || '').match(/(\d{1,2})[\/\.\-](\d{1,2})/);
+    if (!m) return -1;
+    return parseInt(m[1], 10) * 100 + parseInt(m[2], 10);
+}
+
 // 과제 session 필드에서 정규화 키 추출.
 // "1강 XXX" → "교리1", "교리1" → "교리1"
 // "대화1 XXX", "성경적대화1" → "대화1"
@@ -518,29 +560,42 @@ function renderStatusDetail(member) {
         `;
     }
 
-    // ────── 김밥 요약 (칩 형태) ──────
+    // ────── 김밥 요약 (칩 형태, 최근순 + 더보기) ──────
     const lunchEl = document.getElementById('lunchStatus');
     if (lunchEl) {
         const detailKeys = Object.keys(kimbapDetail);
         if (detailKeys.length > 0) {
+            // 최근(오늘에 가까운) 순으로 내림차순
             const applied = detailKeys
                 .filter(k => kimbapDetail[k].applied === 1)
-                .sort((a, b) => sessionOrdinal(prettySessionName(a)) - sessionOrdinal(prettySessionName(b)));
+                .sort((a, b) => {
+                    const da = mmddSortValue(kimbapDetail[a].date);
+                    const db = mmddSortValue(kimbapDetail[b].date);
+                    if (da !== db) return db - da;
+                    return sessionOrdinal(prettySessionName(b)) - sessionOrdinal(prettySessionName(a));
+                });
+
             if (applied.length === 0) {
                 lunchEl.innerHTML = '<span class="lunch-badge no">신청 내역 없음</span>';
             } else {
-                const chips = applied.map(k => {
-                    const name = prettySessionName(k);
-                    const date = kimbapDetail[k].date;
-                    const showDate = date && date !== name;
-                    return `<span class="kimbap-chip">${name}${showDate ? `<em>${date}</em>` : ''}</span>`;
-                }).join('');
                 lunchEl.innerHTML = `
                     <div class="lunch-summary-header">
                         <span class="lunch-badge yes">🍙 총 ${applied.length}회 신청</span>
                     </div>
-                    <div class="kimbap-chip-list">${chips}</div>
+                    <div class="kimbap-chip-list" id="kimbapChipList"></div>
                 `;
+                makeExpandable(
+                    document.getElementById('kimbapChipList'),
+                    applied,
+                    (k) => {
+                        const name = prettySessionName(k);
+                        const date = kimbapDetail[k].date;
+                        const showDate = date && date !== name;
+                        return `<span class="kimbap-chip">${name}${showDate ? `<em>${date}</em>` : ''}</span>`;
+                    },
+                    EXPAND_KEEP_N,
+                    '회'
+                );
             }
         } else {
             const upper = (v) => String(v ?? '').trim().toUpperCase();
@@ -553,7 +608,7 @@ function renderStatusDetail(member) {
         }
     }
 
-    // ────── 과제 제출 목록 (오름차순, 특이사항 노출 X) ──────
+    // ────── 과제 제출 목록 (최근순 + 더보기, 특이사항 노출 X) ──────
     const noteEl = document.getElementById('noteStatus');
     if (noteEl) {
         if (homeworkList.length > 0) {
@@ -563,32 +618,53 @@ function renderStatusDetail(member) {
                 if (!bySession[key]) bySession[key] = [];
                 bySession[key].push(hw);
             }
-            // 오름차순 정렬 (교리1 → 교리12 → 교재/나눔 → 대화1 → 대화4)
-            const sortedEntries = Object.entries(bySession)
-                .sort(([a], [b]) => sessionOrdinal(a) - sessionOrdinal(b));
 
-            const rows = sortedEntries.map(([sess, subs]) => {
-                const types = [...new Set(subs.map(s => s.type).filter(Boolean))];
-                const links = subs.filter(s => s.url).map(s =>
-                    `<a href="${s.url}" target="_blank" rel="noopener" class="hw-link">🔗</a>`).join(' ');
-                return `
-                    <div class="hw-row">
-                        <span class="hw-session">${sess}</span>
-                        <span class="hw-types">${types.join(', ') || '(유형 미기재)'}</span>
-                        <span class="hw-links">${links}</span>
-                    </div>
-                `;
+            // 세션명 → 김밥 세션 날짜 매핑 (정렬용)
+            const sessionDateOf = (sessName) => {
+                const target = normalizeSessionKey(sessName);
+                for (const [rawName, info] of Object.entries(kimbapDetail)) {
+                    if (normalizeSessionKey(prettySessionName(rawName)) === target) {
+                        return mmddSortValue(info.date);
+                    }
+                }
+                return -1;
+            };
+
+            // 최근(오늘에 가까운) 순으로 내림차순
+            const sortedEntries = Object.entries(bySession).sort(([a], [b]) => {
+                const da = sessionDateOf(a);
+                const db = sessionDateOf(b);
+                if (da !== db) return db - da;
+                return sessionOrdinal(b) - sessionOrdinal(a);
             });
+
             noteEl.className = 'note-status homework-list';
             noteEl.innerHTML = `
                 <div style="font-weight:700; margin-bottom:6px;">총 ${homeworkList.length}건 제출</div>
-                ${rows.join('')}
+                <div id="homeworkRows"></div>
             `;
+            makeExpandable(
+                document.getElementById('homeworkRows'),
+                sortedEntries,
+                ([sess, subs]) => {
+                    const types = [...new Set(subs.map(s => s.type).filter(Boolean))];
+                    const links = subs.filter(s => s.url).map(s =>
+                        `<a href="${s.url}" target="_blank" rel="noopener" class="hw-link">🔗</a>`).join(' ');
+                    return `
+                        <div class="hw-row">
+                            <span class="hw-session">${sess}</span>
+                            <span class="hw-types">${types.join(', ') || '(유형 미기재)'}</span>
+                            <span class="hw-links">${links}</span>
+                        </div>
+                    `;
+                },
+                EXPAND_KEEP_N,
+                '개 강'
+            );
             // 특이사항(.note)은 관리자용이므로 일반 뷰에서 노출하지 않음
         } else {
             noteEl.className = 'note-status empty';
             noteEl.textContent = '(제출 내역 없음)';
-            // .note 필드는 관리자용이라 사용자에게 노출하지 않음
         }
     }
 
@@ -670,6 +746,133 @@ function renderTeamMembers(members, teamName, role) {
             </div>
         `;
     }).join('');
+}
+
+// ============================================================================
+// 조 전체 출석표 (매트릭스 모달)
+// ============================================================================
+
+// 조 전체에서 공통으로 쓸 세션 목록 산출.
+// 각 조원의 MM/DD 키 합집합 → 김밥 세션명 매칭 → 날짜순 정렬.
+function buildSessionColumns(members) {
+    const mmddSet = new Set();
+    for (const m of members) {
+        for (const k of Object.keys(m)) {
+            if (SESSION_KEY_RE.test(k)) mmddSet.add(k);
+        }
+    }
+    // 아무 조원의 kimbapDetail로 세션명 매칭 (조원 전체가 같은 커리큘럼)
+    const sampleDetail = members.reduce((acc, m) => {
+        if (Object.keys(acc).length) return acc;
+        const id = m.id || (String(m.name || '') + String(m.phone || ''));
+        return getKimbapDetail(id);
+    }, {});
+    const hasKimbap = Object.keys(sampleDetail).length > 0;
+
+    const cols = [];
+    for (const mmdd of mmddSet) {
+        const kb = matchKimbapForDate(sampleDetail, mmdd);
+        if (hasKimbap && !kb) continue;   // 팬텀 컬럼 제외
+        cols.push({
+            mmdd,
+            name: kb?.name || '',
+            isClass: kb ? isClassSession(kb.name) : true,
+        });
+    }
+    cols.sort((a, b) => {
+        const [am, ad] = a.mmdd.split('/').map(Number);
+        const [bm, bd] = b.mmdd.split('/').map(Number);
+        return am === bm ? ad - bd : am - bm;
+    });
+    return cols;
+}
+
+function renderTeamMatrix(teamName, members) {
+    const scrollEl = document.getElementById('matrixScroll');
+    const titleEl = document.getElementById('matrixTitle');
+    if (!scrollEl) return;
+
+    if (titleEl) titleEl.textContent = `👥 ${teamName} 전체 현황 (${members.length}명)`;
+
+    const cols = buildSessionColumns(members);
+    const sorted = [...members].sort((a, b) => {
+        const pa = rolePriority[a.role] || 4;
+        const pb = rolePriority[b.role] || 4;
+        if (pa !== pb) return pa - pb;
+        return a.name.localeCompare(b.name, 'ko');
+    });
+
+    const headRow = cols.map(c => `
+        <th class="${c.isClass ? '' : 'non-class'}">
+            <span class="mx-session">${c.name || '-'}</span>
+            <span class="mx-date">${c.mmdd}</span>
+        </th>
+    `).join('');
+
+    const bodyRows = sorted.map(m => {
+        const id = m.id || (String(m.name || '') + String(m.phone || ''));
+        const kimbapDetail = getKimbapDetail(id);
+        const homeworkList = getHomeworkList(id);
+
+        const cells = cols.map(c => {
+            const s = classifyStatus(m[c.mmdd]);
+            const kb = matchKimbapForDate(kimbapDetail, c.mmdd);
+            const hw = c.name ? homeworkForSession(homeworkList, c.name) : [];
+            const badges = [];
+            if (kb?.applied === 1) badges.push('🍙');
+            if (hw.length) badges.push('📝');
+            return `
+                <td class="mx-cell ${s.cls} ${c.isClass ? '' : 'non-class'}"
+                    title="${m.name} · ${c.mmdd}${c.name ? ' ' + c.name : ''} · ${s.title}">
+                    <span class="mx-status">${s.label}</span>
+                    ${badges.length ? `<span class="mx-badges">${badges.join('')}</span>` : ''}
+                </td>
+            `;
+        }).join('');
+
+        return `
+            <tr>
+                <th class="mx-name-cell" scope="row">
+                    <span class="mx-name">${m.name}</span>
+                    <span class="mx-role">${m.role || '조원'}</span>
+                </th>
+                ${cells}
+            </tr>
+        `;
+    }).join('');
+
+    scrollEl.innerHTML = `
+        <table class="matrix-table">
+            <thead>
+                <tr>
+                    <th class="mx-name-cell mx-corner">조원</th>
+                    ${headRow}
+                </tr>
+            </thead>
+            <tbody>${bodyRows}</tbody>
+        </table>
+    `;
+}
+
+function openMatrixModal() {
+    if (!currentRenderedTeam) return;
+    const members = getTeamMembers(currentRenderedTeam.name);
+    renderTeamMatrix(currentRenderedTeam.name, members);
+    const modal = document.getElementById('matrixModal');
+    if (modal) {
+        modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeMatrixModal() {
+    const modal = document.getElementById('matrixModal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = 'auto';
+    }
 }
 
 // ============================================================================
@@ -784,6 +987,17 @@ function initEventListeners() {
 
     // 폰트 크기 토글
     safeAdd(elements.fontScaleToggle, 'click', cycleFontScale, 'fontScaleToggle');
+
+    // 조 전체 출석표 모달
+    safeAdd(document.getElementById('openMatrixBtn'), 'click', openMatrixModal, 'openMatrixBtn');
+    safeAdd(document.getElementById('matrixCloseBtn'), 'click', closeMatrixModal, 'matrixCloseBtn');
+    const matrixModal = document.getElementById('matrixModal');
+    safeAdd(matrixModal, 'click', (e) => {
+        if (e.target === matrixModal) closeMatrixModal();
+    }, 'matrixModal');
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && matrixModal?.classList.contains('active')) closeMatrixModal();
+    });
 }
 
 // 저장된 마지막 검색이 있으면 자동 채움 + "다른 사람으로 조회" 버튼 노출
@@ -795,17 +1009,70 @@ function applyLastSearch() {
     if (elements.clearRememberedBtn) elements.clearRememberedBtn.style.display = 'block';
 }
 
-// Service Worker 등록 (PWA)
+// ============================================================================
+// Service Worker — 새 버전 자동 적용 (안내 토스트 후 리로드)
+// ============================================================================
+function showUpdateToast(message) {
+    let toast = document.getElementById('swUpdateToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'swUpdateToast';
+        toast.className = 'sw-update-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add('visible');
+}
+
+function applyUpdate(worker) {
+    showUpdateToast('🎉 새 버전을 적용하는 중이에요…');
+    // 잠깐 보여준 뒤 적용 (controllerchange → 자동 리로드)
+    setTimeout(() => worker.postMessage({ type: 'SKIP_WAITING' }), 600);
+}
+
 function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
-    // file:// 프로토콜에서는 SW 등록 불가
     if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
         return;
     }
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(err => {
+
+    window.addEventListener('load', async () => {
+        try {
+            const registration = await navigator.serviceWorker.register('sw.js');
+
+            // 이미 대기 중인 새 버전이 있으면 바로 적용
+            if (registration.waiting && navigator.serviceWorker.controller) {
+                applyUpdate(registration.waiting);
+            }
+
+            // 새 버전이 설치되는 즉시 적용
+            registration.addEventListener('updatefound', () => {
+                const newSW = registration.installing;
+                if (!newSW) return;
+                newSW.addEventListener('statechange', () => {
+                    // controller가 있어야 '업데이트'(첫 설치가 아님)
+                    if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                        applyUpdate(newSW);
+                    }
+                });
+            });
+
+            // 주기적·포커스 시 업데이트 확인 (브라우저 HTTP 캐시 우회)
+            setInterval(() => registration.update(), 30 * 60 * 1000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') registration.update();
+            });
+
+            // 새 SW가 페이지를 넘겨받으면 리로드
+            let reloading = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (reloading) return;
+                reloading = true;
+                window.location.reload();
+            });
+        } catch (err) {
             console.warn('SW 등록 실패:', err);
-        });
+        }
     });
 }
 registerServiceWorker();
