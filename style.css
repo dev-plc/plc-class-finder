@@ -61,6 +61,14 @@ body .error-message          { font-size: calc(15px * var(--font-scale)); }
 .font-scale-toggle .fs-a-large  { font-size: 16px; font-weight: bold; }
 .font-scale-toggle:hover { opacity: 0.8; }
 
+/* 헤더 좌측 상단 (글씨 크기 토글) — 우측 버튼과 분리해 로고와 겹치지 않게 */
+.header-left-btn {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+}
+
 /* 다크 모드 색상 */
 body.dark-mode {
     --milk-beige: #1A1F3A;

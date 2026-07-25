@@ -16,17 +16,19 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 
-    <link rel="stylesheet" href="style.css?v=28">
+    <link rel="stylesheet" href="style.css?v=29">
 </head>
 <body>
     <div class="container">
         <!-- 헤더 -->
         <header class="header">
+            <!-- 좌측 상단: 글씨 크기 토글 (헤더 로고와 겹치지 않도록 분리) -->
+            <button class="font-scale-toggle header-left-btn" id="fontScaleToggle" aria-label="글씨 크기 변경" title="글씨 크기 변경">
+                <span class="fs-a-small">가</span><span class="fs-a-large">가</span>
+            </button>
+
             <!-- 우측 상단 버튼들 -->
             <div class="header-buttons">
-                <button class="font-scale-toggle" id="fontScaleToggle" aria-label="글씨 크기 변경" title="글씨 크기 변경">
-                    <span class="fs-a-small">가</span><span class="fs-a-large">가</span>
-                </button>
                 <button class="icon-btn" id="adminBtn" aria-label="관리자 모드" title="관리자 모드">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
