@@ -10,12 +10,12 @@ import {
     getGeneralAnnouncementLink,
     getKimbapDetail,
     getHomeworkList,
-    updateAttendance,
+    updateAttendanceBatch,
     getCacheInfo,
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v30 (조 매트릭스·더보기·SW 자동업데이트)';
+const SCRIPT_VERSION = 'script.js v31 (출석 일괄 저장)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -728,14 +728,15 @@ function renderTeamMembers(members, teamName, role) {
             ? "border-top: 1px dashed #ddd;"
             : "border-top: 1px solid #eee;";
         const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? '<span style="margin-left:4px;" title="김밥 대상자">🍙</span>' : '';
-        const isChecked = (m.attendance && m.attendance.toUpperCase() === 'O') ? 'checked' : '';
+        const attendanceRaw = String(m.attendance || '').trim().toUpperCase();
+        const isChecked = (attendanceRaw === 'O' || attendanceRaw === '◎') ? 'checked' : '';
 
         return `
-            <div class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle}">
+            <label class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle} cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" ${isChecked}
-                        style="width: 18px; height: 18px; cursor: pointer;"
-                        onclick="toggleAttendanceUI('${m.name}', '${m.phone}', this.checked, this)">
+                    <input type="checkbox" ${isChecked} class="attendance-check"
+                        data-name="${m.name}" data-phone="${m.phone}" data-initial="${isChecked ? '1' : '0'}"
+                        style="width: 18px; height: 18px; cursor: pointer;">
                     <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
                         ${m.name}(${m.phone}) ${lunchIcon}
                     </span>
@@ -743,9 +744,87 @@ function renderTeamMembers(members, teamName, role) {
                 <span style="font-size: 11px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">
                     ${m.role || '조원'}
                 </span>
-            </div>
+            </label>
         `;
     }).join('');
+
+    setupAttendanceSaveBar();
+}
+
+// ============================================================================
+// 출석 일괄 저장 (체크 후 버튼으로 반영)
+// ============================================================================
+function getAttendanceChecks() {
+    return Array.from(document.querySelectorAll('#teamMemberList .attendance-check'));
+}
+
+function countAttendanceChanges() {
+    return getAttendanceChecks().filter(cb => (cb.checked ? '1' : '0') !== cb.dataset.initial).length;
+}
+
+function refreshSaveBar() {
+    const bar = document.getElementById('attendanceSaveBar');
+    const btn = document.getElementById('saveAttendanceBtn');
+    const info = document.getElementById('attendanceSaveInfo');
+    if (!bar || !btn || !info) return;
+
+    const checks = getAttendanceChecks();
+    const checkedCount = checks.filter(cb => cb.checked).length;
+    const changes = countAttendanceChanges();
+
+    info.textContent = `출석 ${checkedCount} · 결석 ${checks.length - checkedCount}`
+        + (changes ? ` · 변경 ${changes}건` : '');
+    btn.disabled = changes === 0;
+    btn.textContent = changes === 0 ? '변경 사항 없음' : `출석 반영 (${changes}건)`;
+    bar.classList.toggle('has-changes', changes > 0);
+}
+
+function setupAttendanceSaveBar() {
+    const bar = document.getElementById('attendanceSaveBar');
+    if (!bar) return;
+    bar.style.display = 'flex';
+
+    getAttendanceChecks().forEach(cb => {
+        cb.addEventListener('change', refreshSaveBar);
+    });
+    refreshSaveBar();
+}
+
+async function saveAttendanceBatch() {
+    const btn = document.getElementById('saveAttendanceBtn');
+    const info = document.getElementById('attendanceSaveInfo');
+    if (!btn) return;
+
+    const entries = getAttendanceChecks().map(cb => ({
+        name: cb.dataset.name,
+        phone: cb.dataset.phone,
+        present: cb.checked,
+    }));
+    if (entries.length === 0) return;
+
+    const prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '저장 중…';
+
+    const { success, updated, session, error } = await updateAttendanceBatch(entries);
+
+    if (success) {
+        // 저장 성공 → 현재 체크 상태를 새 기준선으로
+        getAttendanceChecks().forEach(cb => { cb.dataset.initial = cb.checked ? '1' : '0'; });
+        if (info) {
+            info.textContent = `✅ ${session ? session + ' ' : ''}${updated ?? entries.length}건 저장 완료`;
+        }
+        // 요약 카드 갱신
+        if (currentRenderedTeam) {
+            const summaryEl = document.getElementById('teamSummaryCard');
+            if (summaryEl) renderTeamSummary(summaryEl, getTeamMembers(currentRenderedTeam.name));
+        }
+        setTimeout(refreshSaveBar, 2500);
+    } else {
+        alert('출석 저장 실패: ' + (error?.message || '알 수 없는 오류'));
+        btn.textContent = prevText;
+        btn.disabled = false;
+    }
 }
 
 // ============================================================================
@@ -876,26 +955,9 @@ function closeMatrixModal() {
 }
 
 // ============================================================================
-// 7. 출석 토글 (Optimistic update는 데이터 계층이 담당)
+// 7. 조 요약 카드
 // ============================================================================
 let currentRenderedTeam = null; // 현재 표시 중인 조 (요약 카드 갱신용)
-
-async function toggleAttendanceUI(name, phone, checked, checkboxElement) {
-    const { success, error } = await updateAttendance(name, phone, checked);
-    if (!success) {
-        alert('출석 처리 실패: ' + (error?.message || '알 수 없는 오류'));
-        if (checkboxElement) checkboxElement.checked = !checked;
-        return;
-    }
-    // 요약 카드 즉시 갱신
-    if (currentRenderedTeam) {
-        const summaryEl = document.getElementById('teamSummaryCard');
-        if (summaryEl) {
-            const members = getTeamMembers(currentRenderedTeam.name);
-            renderTeamSummary(summaryEl, members);
-        }
-    }
-}
 
 // 요약 카드만 재렌더 (체크박스 리스트는 그대로 유지)
 function renderTeamSummary(summaryEl, members) {
@@ -923,8 +985,6 @@ function renderTeamSummary(summaryEl, members) {
         </div>
     `;
 }
-// 인라인 onclick에서 접근 가능하도록 window에 노출
-window.toggleAttendanceUI = toggleAttendanceUI;
 
 // ============================================================================
 // 8. 에러 표시
@@ -987,6 +1047,9 @@ function initEventListeners() {
 
     // 폰트 크기 토글
     safeAdd(elements.fontScaleToggle, 'click', cycleFontScale, 'fontScaleToggle');
+
+    // 출석 일괄 저장
+    safeAdd(document.getElementById('saveAttendanceBtn'), 'click', saveAttendanceBatch, 'saveAttendanceBtn');
 
     // 조 전체 출석표 모달
     safeAdd(document.getElementById('openMatrixBtn'), 'click', openMatrixModal, 'openMatrixBtn');

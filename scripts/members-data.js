@@ -13,7 +13,7 @@
 // ============================================================================
 import { matches as hangulMatches } from './hangul.js';
 
-export const MODULE_VERSION = 'members-data v24';
+export const MODULE_VERSION = 'members-data v25';
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
 
 // ============================================================================
@@ -109,6 +109,18 @@ async function postAttendance(name, phone, status) {
   });
   const result = await res.json();
   if (!result.success) throw new Error(result.message || '출석 업데이트 실패');
+  return result;
+}
+
+async function postAttendanceBatch(entries) {
+  // GAS v21+ 는 { batch: [{name, phone, status}, ...] } 를 한 번에 처리
+  const res = await fetch(GAS_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ batch: entries }),
+  });
+  const result = await res.json();
+  if (!result.success) throw new Error(result.message || '출석 저장 실패');
   return result;
 }
 
@@ -263,6 +275,48 @@ export async function updateAttendance(name, phone, present) {
     state.members[idx].attendance = previous;
     writeCacheSync();
     notify({ type: 'attendance-rollback', name, phone, status: previous });
+    return { success: false, error: err };
+  }
+}
+
+/**
+ * 조 단위 출석 일괄 저장.
+ * 체크된 사람은 'O', 나머지는 'X'로 한 번에 반영.
+ * 실패 시 메모리·캐시를 이전 상태로 되돌림.
+ *
+ * @param {Array<{name: string, phone: string, present: boolean}>} entries
+ * @returns {Promise<{success: boolean, updated?: number, session?: string, error?: Error}>}
+ */
+export async function updateAttendanceBatch(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return { success: false, error: new Error('저장할 항목이 없습니다.') };
+  }
+
+  const payload = entries.map(e => ({
+    name: e.name,
+    phone: e.phone,
+    status: e.present ? 'O' : 'X',
+  }));
+
+  // Optimistic: 로컬 먼저 반영 (롤백용 이전 값 보관)
+  const previous = [];
+  for (const p of payload) {
+    const idx = state.members.findIndex(m => m.name === p.name && m.phone === p.phone);
+    if (idx < 0) continue;
+    previous.push({ idx, value: state.members[idx].attendance ?? '' });
+    state.members[idx].attendance = p.status;
+  }
+  writeCacheSync();
+  notify({ type: 'attendance-batch-optimistic', count: payload.length });
+
+  try {
+    const result = await postAttendanceBatch(payload);
+    notify({ type: 'attendance-batch-confirmed', count: result.updated ?? payload.length });
+    return { success: true, updated: result.updated, session: result.session };
+  } catch (err) {
+    for (const p of previous) state.members[p.idx].attendance = p.value;
+    writeCacheSync();
+    notify({ type: 'attendance-batch-rollback' });
     return { success: false, error: err };
   }
 }
