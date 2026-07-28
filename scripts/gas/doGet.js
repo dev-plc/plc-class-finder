@@ -1,7 +1,11 @@
 // Google Apps Script — doGet + doPost 확장 버전
 // 기존 doGet · doPost 함수 전체를 이 코드로 교체.
 //
-// 핵심 변경 (v20):
+// 핵심 변경 (v21):
+//   - doPost가 배치 저장 지원: { batch: [{name, phone, status}, ...] }
+//     ID→행 인덱스를 한 번만 만들고 컬럼 전체를 1회 read/write → 조 단위 저장이 빠름
+//     기존 단건 { name, phone, status } 형식도 그대로 동작
+//
 //   - 출석체크·조회는 '가장 최근 지난 강의' 컬럼 기준으로 동작
 //     예) 3/15와 3/22 세션이 있고 오늘이 3/18이면 → 3/15에 기록·조회
 //     예) 오늘이 3/22면 → 3/22에 기록·조회
@@ -56,14 +60,24 @@ function findRecentPastSessionCol_(headers, todayNorm) {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 20;
+  var currentVersion = 21;
 
   try {
     var postData = JSON.parse(e.postData.contents);
-    var name = String(postData.name || "").replace(/\s/g, '');
-    var phone = String(postData.phone || "").replace(/[^0-9]/g, '');
-    var targetId = name + phone;
-    var status = postData.status;
+
+    // 단건 { name, phone, status } 또는
+    // 배치 { batch: [{ name, phone, status }, ...] } 모두 지원
+    var entries = [];
+    if (Array.isArray(postData.batch)) {
+      entries = postData.batch;
+    } else {
+      entries = [{ name: postData.name, phone: postData.phone, status: postData.status }];
+    }
+    if (entries.length === 0) {
+      return output.setContent(JSON.stringify({
+        success: false, version: currentVersion, message: "변경할 항목이 없습니다."
+      }));
+    }
 
     var ss = SpreadsheetApp.openById("12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM");
     var sheet = ss.getSheetByName("출석부(DB)");
@@ -77,7 +91,6 @@ function doPost(e) {
     var lastCol = Math.max(sheet.getLastColumn(), 1);
     var originalHeaders = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
 
-    var tz = Session.getScriptTimeZone();
     var today = new Date();
     var todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
@@ -92,30 +105,68 @@ function doPost(e) {
     attendanceCol = attendanceCol + 1; // 1-based
 
     var lastRow = sheet.getLastRow();
-    var isUpdated = false;
-    if (lastRow > headerRow) {
-      var idRange = sheet.getRange(headerRow + 1, idCol, lastRow - headerRow, 1);
-      var foundCell = idRange.createTextFinder(targetId).matchEntireCell(true).findNext();
-      if (foundCell) {
-        sheet.getRange(foundCell.getRow(), attendanceCol).setValue(status);
-        isUpdated = true;
-      }
+    if (lastRow <= headerRow) {
+      return output.setContent(JSON.stringify({
+        success: false, version: currentVersion, message: "데이터 행이 없습니다."
+      }));
+    }
+
+    // ID → 행 번호 인덱스를 한 번만 구축 (배치 성능)
+    var rowCount = lastRow - headerRow;
+    var idValues = sheet.getRange(headerRow + 1, idCol, rowCount, 1).getValues();
+    var idToRow = {};
+    for (var i = 0; i < idValues.length; i++) {
+      var key = String(idValues[i][0]).replace(/\s/g, '');
+      if (key) idToRow[key] = headerRow + 1 + i;
+    }
+
+    // 대상 컬럼 전체를 한 번에 읽어 메모리에서 수정 후 한 번에 쓰기
+    var colValues = sheet.getRange(headerRow + 1, attendanceCol, rowCount, 1).getValues();
+    var updated = 0;
+    var notFound = [];
+    for (var j = 0; j < entries.length; j++) {
+      var en = entries[j] || {};
+      var nm = String(en.name || "").replace(/\s/g, '');
+      var ph = String(en.phone || "").replace(/[^0-9]/g, '');
+      var targetId = nm + ph;
+      var rowNum = idToRow[targetId];
+      if (!rowNum) { notFound.push(targetId); continue; }
+      colValues[rowNum - (headerRow + 1)][0] = en.status;
+      updated++;
+    }
+
+    if (updated > 0) {
+      sheet.getRange(headerRow + 1, attendanceCol, rowCount, 1).setValues(colValues);
+    }
+
+    var sessionLabel = originalHeaders[attendanceCol - 1];
+    if (sessionLabel instanceof Date) {
+      sessionLabel = Utilities.formatDate(sessionLabel, Session.getScriptTimeZone(), "M/d");
+    } else {
+      sessionLabel = String(sessionLabel || "").trim();
     }
 
     return output.setContent(JSON.stringify({
-      success: isUpdated, version: currentVersion,
-      message: isUpdated ? "출석 완료" : "ID 불일치"
+      success: updated > 0,
+      version: currentVersion,
+      updated: updated,
+      total: entries.length,
+      notFound: notFound,
+      session: sessionLabel,
+      message: updated > 0
+        ? (sessionLabel + " 출석 " + updated + "건 저장")
+        : "일치하는 ID가 없습니다."
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 20, message: e.message
+      success: false, version: 21, message: e.message
     }));
   }
 }
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 20; // 최근 지난 강의 기준 + 김밥/과제
+  var currentVersion = 21; // 최근 지난 강의 기준 + 김밥/과제 + 배치 출석
 
   try {
     var ss = SpreadsheetApp.openById("12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM");
@@ -405,7 +456,7 @@ function doGet(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 20, message: e.message
+      success: false, version: 21, message: e.message
     }));
   }
 }

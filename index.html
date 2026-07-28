@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 
-    <link rel="stylesheet" href="style.css?v=30">
+    <link rel="stylesheet" href="style.css?v=31">
 </head>
 <body>
     <div class="container">
@@ -173,6 +173,10 @@
                         <div id="teamSummaryCard" class="team-summary-card"></div>
                         <div id="teamMemberList" class="team-member-list-grid">
                         </div>
+                        <div id="attendanceSaveBar" class="attendance-save-bar" style="display:none;">
+                            <span id="attendanceSaveInfo" class="attendance-save-info"></span>
+                            <button type="button" id="saveAttendanceBtn" class="attendance-save-btn" disabled>변경 사항 없음</button>
+                        </div>
                     </div>
                 </div>
 
@@ -258,6 +262,6 @@
         </div>
     </div>
 
-<script type="module" src="script.js?v=30"></script>
+<script type="module" src="script.js?v=31"></script>
 </body>
 </html>

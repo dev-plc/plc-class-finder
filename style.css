@@ -1408,3 +1408,42 @@ body.dark-mode .matrix-table thead th { background: #111827; }
     transform: translate(-50%, 0);
     opacity: 1;
 }
+
+/* 출석 일괄 저장 바 */
+.attendance-save-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    flex-wrap: wrap;
+}
+.attendance-save-bar.has-changes {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+.attendance-save-info {
+    font-size: calc(12px * var(--font-scale));
+    color: var(--text-light, #6B7280);
+}
+.attendance-save-btn {
+    padding: 8px 16px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: calc(13px * var(--font-scale));
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.attendance-save-btn:disabled {
+    background: #d1d5db;
+    color: #6b7280;
+    cursor: default;
+}
+.attendance-save-btn:not(:disabled):hover { opacity: 0.92; }
