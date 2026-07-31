@@ -1,147 +1,125 @@
-# 다음 작업 목록
+# Phase C — DB 원본 전환 + 행정 자동화
 
-## 우선순위
+## 목표
 
-1. 튜터 조 전체 출석표 뷰 (핵심 신기능)
-2. 김밥·과제 리스트 "더보기" 패턴
-3. SW 업데이트 배너 (편의)
+행정력 최소화. "관리자가 시트를 눈으로 훑어 대상자를 찾아내는" 일을 없앤다.
+DB 전환은 수단이고, 목표는 자동 판정 · 자동 리포트 · 당사자 자가 확인이다.
 
----
+## 원칙
 
-## 튜터용 조 전체 출석표 뷰
-
-**요약**: 튜터 뷰에서 버튼 → 자기 조 전체 출석표를 출석부(DB)와 유사한 가로 형태로 조회.
-
-### 요구사항
-- 튜터·서브튜터·바나바 조회 결과에 **"전체 출석표"** 버튼 추가
-- 클릭 시 모달 또는 별도 섹션으로 표 오픈
-- 출석부(DB) 같은 레이아웃 (가로로 김)
-- 각 셀에 **출석 · 김밥 · 과제** 통합 표시
-
-### 레이아웃 (안)
-```
-┌──────────┬──────┬──────┬──────┬─────┬─────┬─────┬──────┐
-│          │교리1 │교리2 │교리3 │ ... │교리12│나눔 │대화1 │...
-│          │3/15  │3/22  │3/29  │     │6/07  │6/14 │6/21  │
-├──────────┼──────┼──────┼──────┼─────┼─────┼─────┼──────┤
-│김세진8930│O 🍙  │O     │O 📝  │ ... │ X   │  −  │ O 🍙 │
-├──────────┼──────┼──────┼──────┼─────┼─────┼─────┼──────┤
-│최윤서8596│O     │O 📝  │O     │ ... │ O   │  O  │ X    │
-├──────────┼──────┼──────┼──────┼─────┼─────┼─────┼──────┤
-│...       │      │      │      │     │     │     │      │
-└──────────┴──────┴──────┴──────┴─────┴─────┴─────┴──────┘
-```
-
-### 구현 포인트
-- **가로 스크롤**: 셀 폭 고정, container `overflow-x: auto`
-- **첫 열 sticky**: `position: sticky; left: 0` 로 이름 열 고정 (좌우 스크롤 시)
-- **헤더 행 sticky**: `position: sticky; top: 0` 로 상단 세션명 고정 (세로 스크롤 시)
-- 데이터는 이미 있음:
-  - 출석: `member[MM/DD]` (출석부 컬럼)
-  - 김밥: `getKimbapDetail(member.id)`
-  - 과제: `getHomeworkList(member.id)` — 세션별 매칭 필요
-- 셀 표시:
-  - O/X/◎/− 텍스트 + 색상 (기존 attendance-cell 스타일 재사용)
-  - 김밥 신청이면 🍙 뱃지
-  - 과제 제출이면 📝 뱃지 (클릭 → 링크)
-- 세션 목록: 김밥 탭의 세션명 순서 사용 (교리1 → 교리12 → 교재 → 교제 → 나눔 → 성경적대화1~4)
-- 강의 외(교제/나눔)는 배경 다르게 표시
-
-### UI 위치 후보
-- **A**: 조원 명단 위 · 요약 카드 옆에 버튼
-- **B**: 조원 명단 하단에 접기·펼치기
-- **C**: 별도 모달 (풀스크린)
-
-가장 실용적: **C 모달** (가로로 넓게 쓸 수 있고, 기존 조원 명단은 그대로 유지)
-
-### 파일 변경 예정
-- `index.html`: 버튼 + 모달 컨테이너 추가
-- `script.js`: `renderTeamAttendanceTable()` 함수 신설, 버튼 이벤트
-- `style.css`: 가로 표 스타일, sticky 헤더/열
+- **입력은 익숙한 도구로, 조회·판단은 DB로**
+  - 편성 → 시트에서 (드래그·복사가 웹 UI보다 빠름)
+  - 김밥·과제 신청 → 구글 폼에서
+  - 출석 체크 → 웹앱에서 (이미 구현됨)
+- **웹앱은 DB만 읽는다** → 진실은 하나
+- **규칙은 SQL 뷰 한 곳에만** → 기준 변경 시 한 줄만 수정
 
 ---
 
-## 김밥·과제 "더보기" 패턴
+## 확정된 수료 규칙
 
-### 정렬 규칙 (핵심)
-- **오늘 기준으로 가까운 항목부터** 표시 (=날짜 내림차순, 최근이 위)
-- 기본: 위에서 **5개**만 노출
-- 하단 "**+N건 더 보기 ▼**" 버튼 → 클릭 시 과거 항목까지 전부 펼침
-- "**접기 ▲**"로 다시 축소
-
-### A. 김밥 신청 요약 (칩)
-- 대상: `getKimbapDetail(id)`의 applied=1 세션들
-- 정렬: 세션 date 내림차순 (예: 성경적대화3 7/5 → 성경적대화2 6/28 → ...)
-- 기본 표시: 상위 5개 칩
-- 예시:
-  ```
-  🍙 총 13회 신청
-  [성경적대화3 7/5] [성경적대화1 6/21] [교리10 5/17]
-  [교리9 5/10] [교리7 4/26]
-  + 8건 더 보기 ▼
-  ```
-
-### B. 과제 제출 목록
-- 대상: `getHomeworkList(id)` 세션별 그룹
-- 정렬: 세션 date 내림차순 (김밥과 매칭된 session date 사용, 또는 sessionOrdinal 역순 fallback)
-- 기본 표시: 상위 5행
-- 예시:
-  ```
-  📝 총 12건 제출
-  ─────────────────────
-  성경적대화3   과제, 소감문   🔗
-  성경적대화1   과제           🔗
-  교리10        과제           🔗
-  교리8         소감문         🔗
-  교리6         과제, 소감문   🔗
-
-  + 7건 더 보기 ▼
-  ```
-
-### 정렬용 날짜 얻기
-- 김밥: `kimbapDetail[key].date` → MM/DD 파싱
-- 과제: session 이름을 김밥 세션명과 매칭해 그 세션의 date 사용
-  - 매칭 실패 시 fallback: sessionOrdinal 역순
-- 날짜 없으면 맨 아래로
-
-### 구현 스켈레톤
-```js
-function makeExpandable(container, items, renderItemFn, keepN = 5) {
-    if (items.length <= keepN) {
-        container.innerHTML = items.map(renderItemFn).join('');
-        return;
-    }
-    const shown = items.slice(0, keepN).map(renderItemFn).join('');
-    const hidden = items.slice(keepN).map(renderItemFn).join('');
-    container.innerHTML = `
-        ${shown}
-        <div class="hidden-items" hidden>${hidden}</div>
-        <button class="expand-toggle" type="button">+ ${items.length - keepN}건 더 보기 ▼</button>
-    `;
-    const btn = container.querySelector('.expand-toggle');
-    const hiddenEl = container.querySelector('.hidden-items');
-    btn.addEventListener('click', () => {
-        const expanded = hiddenEl.hasAttribute('hidden');
-        if (expanded) {
-            hiddenEl.removeAttribute('hidden');
-            btn.textContent = '접기 ▲';
-        } else {
-            hiddenEl.setAttribute('hidden', '');
-            btn.textContent = `+ ${items.length - keepN}건 더 보기 ▼`;
-        }
-    });
-}
 ```
+분모: 실제 강의 16강 = 교리1~12 + 성경적대화1~4
+      (교제, 나눔은 분모에서 제외)
 
-### 적용 대상 (미적용)
-- 출석 그리드: 접지 않음 (한눈에 봐야 함)
-- 통합 그리드의 강의 셀: 접지 않음 (전체 흐름 봐야 함)
+출석 인정:
+  O  현장 출석
+  ◎  지난 기수 이수분 (출석으로 카운트)
+  X  + 해당 주차 과제·소감문 제출 → 출석 인정, 최대 3회
+  −  수업 없음 → 분모에서 제외
+
+수료(O)  : 인정 출석 = 16
+미수료(X): 그 외
+
+보충 3회 초과:
+  원칙적으로 미수료. 단 참작 사유가 있으면 관리자 재량으로 인정.
+  → 시스템은 "관리자 확인 필요" 플래그를 세우고 최종 판단은 사람이.
+
+△(부분수료): 기준 미확정. 확정 전까지 시트 값 그대로 표시만 하고
+             자동 판정에는 쓰지 않는다.
+```
 
 ---
 
-## SW 업데이트 배너
+## 작업 순서
 
-- 새 SW 감지 시 하단 배너 표시: "🎉 새 버전이 준비됐어요. [지금 업데이트]"
-- 탭 → skipWaiting → controllerchange → 자동 리로드
-- 30분 주기 update() + visibilitychange update() 이미 개념 정리됨
-- 자세한 코드는 세션 대화 참조 (script.js registerServiceWorker 확장, sw.js message 핸들러, style.css .update-banner)
+### 1단계 — 기반 (규칙과 무관, 즉시 착수 가능)
+
+- [ ] **스키마 보강**
+  - `kimbap_signups` (cohort_id, member_id, session_label, session_date, applied)
+  - `homework_submissions` (cohort_id, member_id, session_label, type, url, submitted_at)
+  - `sessions`에 `is_class` 컬럼 (교리·성경적대화 = true, 교제·나눔 = false)
+  - `members`에 `admin_note`, `needs_review` (관리자 확인 필요 플래그)
+- [ ] **동기화 스크립트** — GAS doGet 응답 → Supabase 전량 upsert
+  - 기존 `scripts/migrate-to-supabase.mjs` 확장
+  - members / attendance / kimbap_signups / homework_submissions / sessions
+- [ ] **GitHub Actions**
+  - `workflow_dispatch` (수동 실행) + 일 1회 스케줄
+  - 스케줄이 keepalive 역할도 겸함 (7일 무활동 pause 방지)
+  - Secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+
+> allowlist 불필요: Actions가 실행 주체이고, 웹앱은 사용자 브라우저에서 동작.
+
+### 2단계 — 판정 규칙 (뷰)
+
+- [ ] `v_attendance_summary` — 인원별 인정 출석 / 실결석 / 보충 사용 횟수
+- [ ] `v_completion_status` — 수료 판정 (O / X / 관리자확인필요)
+- [ ] `v_homework_required` — **결석한 주차만** 과제 대상으로 산출
+      (출석한 주차는 과제 안내 대상 아님)
+- [ ] `v_completion_risk` — 남은 강의 다 나와도 수료 불가한 인원
+
+### 3단계 — 본인 안내 (행정력 절감 효과 최대)
+
+당사자가 스스로 알면 관리자가 찾아 알릴 일이 사라진다.
+
+- [ ] 조회 결과에 진행률 표시
+  ```
+  📊 출석 12/16 — 수료까지 4회
+  ⚠️ 제출 필요한 과제 2건: 6강, 9강   [제출하기 →]
+  ```
+- [ ] 결석 주차 중 미제출 건만 노출 (출석한 주차는 제외)
+- [ ] 보충 3회 다 쓴 경우 안내 문구 변경
+
+### 4단계 — 튜터·관리자 도구
+
+- [ ] **조별 리포트** — 튜터별 대상자 목록
+  ```
+  📋 새A조 — 7/26 기준
+  ⚠️ 수료 위험 2명 / 📝 과제 미제출 3명 / 🍙 이번 주 김밥 4명
+  ```
+- [ ] **출석부 생성** — 인쇄·공유용 출력물
+  - 조별 · 전체 두 형태
+  - 기존 `attendance_sheet.html` 참고
+- [ ] **관리자 확인 목록** — 보충 3회 초과 등 재량 판단 필요 건
+
+### 5단계 — 운영 편의
+
+- [ ] **김밥 신청 배너** — 매월 마지막 주에 앱에 노출, 구글 폼으로 연결
+  - ⚠️ 김밥 전용 폼이 아직 없음 → 새로 만들어야 함 (관리자 작업)
+  - 폼 응답 → 시트 → 동기화 → DB 경로
+- [ ] **신규 신청자 목록** — 교육신청 폼으로 들어온 미편성 인원 표시
+  - 편성 자체는 시트에서, 앱은 "누가 새로 왔는지" 알림만
+- [ ] **수료·하차 처리** — 시트에서 상태 변경 후 동기화
+
+### 6단계 — 자동 발송 (선택)
+
+- [ ] 텔레그램 봇 → 조별 방에 주간 리포트 자동 게시
+  - 이미 조별 텔레그램 방이 있으므로 자연스러움
+  - 봇 토큰 발급 필요
+
+---
+
+## 미결정 / 확인 필요
+
+- `△`(부분수료) 기준 — 확정되면 `v_completion_status`에 반영
+- 김밥 신청 폼 — 신규 제작 필요. 항목 구성 협의 필요
+- 리포트 발송 주기·시각 — 주 1회? 수업 직후?
+
+---
+
+## 참고: 현재 상태 (2026-07-28)
+
+- 웹앱: GAS v21 → Supabase 전환 대기
+- DB: 7/22 이관 스냅샷 (142명 / 2698 출석). 이후 갱신 없음
+- 김밥·과제: GAS가 시트 탭을 직접 파싱 중. DB에 테이블 없음 (1단계에서 추가)
+- 팬텀 컬럼(07/19, 07/22) 시트에서 삭제 완료

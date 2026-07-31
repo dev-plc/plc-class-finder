@@ -1,0 +1,45 @@
+name: DB 조회
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: '미리 정의된 조회'
+        type: choice
+        required: true
+        default: 'completion_status'
+        options:
+          - completion_status      # 수료 판정 전체
+          - completion_risk        # 수료 위험자
+          - homework_required      # 과제 제출 필요 (결석 주차)
+          - team_report            # 조별 요약
+          - needs_admin_review     # 관리자 확인 필요
+      team:
+        description: '조 필터 (비우면 전체)'
+        required: false
+        default: ''
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci || npm install
+      - name: 조회 실행
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PRESET: ${{ github.event.inputs.preset }}
+          TEAM: ${{ github.event.inputs.team }}
+        run: node scripts/query-db.mjs
+      - name: 결과 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: query-result
+          path: query-result.*
+          if-no-files-found: ignore
