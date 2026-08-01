@@ -11,7 +11,6 @@ on:
         options:
           - completion_status      # 수료 판정 전체
           - completion_risk        # 수료 위험자
-          - in_progress            # 진행중 (중도 합류)
           - homework_required      # 과제 제출 필요 (결석 주차)
           - makeup_detail          # 과제로 출석 인정받은 내역
           - team_report            # 조별 요약
