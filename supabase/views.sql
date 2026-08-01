@@ -12,6 +12,22 @@
 --             이전 주차는 과제로 보충하거나 다음 기수에 이어서 듣는다.
 
 -- ===================================================================
+-- 기존 뷰 정리
+--   create or replace view 는 컬럼을 중간에 추가하지 못한다
+--   ("cannot change name of view column ..." 오류).
+--   컬럼 구성이 바뀌었으므로 의존 역순으로 먼저 제거한다.
+--   데이터는 테이블에 있으므로 뷰를 지워도 손실 없음.
+-- ===================================================================
+drop view if exists v_team_report;
+drop view if exists v_completion_risk;
+drop view if exists v_inactive_members;
+drop view if exists v_recent_members;
+drop view if exists v_makeup_detail;
+drop view if exists v_homework_required;
+drop view if exists v_completion_status;
+drop view if exists v_attendance_summary;
+
+-- ===================================================================
 -- 상수: 수료 요건
 -- ===================================================================
 create or replace function completion_required_sessions()
