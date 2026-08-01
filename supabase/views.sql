@@ -173,11 +173,11 @@ group by team, cohort_id;
 -- ===================================================================
 -- GRANT
 -- ===================================================================
-grant select on v_attendance_summary to anon, authenticated;
-grant select on v_completion_status  to anon, authenticated;
-grant select on v_homework_required  to anon, authenticated;
-grant select on v_completion_risk    to anon, authenticated;
-grant select on v_team_report        to anon, authenticated;
+grant select on v_attendance_summary to anon, authenticated, service_role;
+grant select on v_completion_status  to anon, authenticated, service_role;
+grant select on v_homework_required  to anon, authenticated, service_role;
+grant select on v_completion_risk    to anon, authenticated, service_role;
+grant select on v_team_report        to anon, authenticated, service_role;
 
 
 -- ===================================================================
@@ -210,5 +210,5 @@ from members m
 left join v_completion_status c on c.member_id = m.id
 where m.status <> 'active';
 
-grant select on v_recent_members   to anon, authenticated;
-grant select on v_inactive_members to anon, authenticated;
+grant select on v_recent_members   to anon, authenticated, service_role;
+grant select on v_inactive_members to anon, authenticated, service_role;
