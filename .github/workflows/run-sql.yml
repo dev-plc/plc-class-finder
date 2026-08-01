@@ -1,0 +1,33 @@
+name: SQL 조회 (진단용)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sql:
+        description: 'SELECT 문 (비우면 supabase/adhoc.sql 사용)'
+        required: false
+        default: ''
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci || npm install
+      - name: SQL 실행
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SQL: ${{ github.event.inputs.sql }}
+        run: node scripts/run-sql.mjs
+      - name: 결과 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-result
+          path: sql-result.json
+          if-no-files-found: ignore
