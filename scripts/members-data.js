@@ -1,42 +1,40 @@
 // scripts/members-data.js
 //
-// 데이터 접근 추상화 계층.
-// 목적: script.js·admin.js가 GAS/CSV/DB 등 백엔드 세부사항을 알지 않도록 격리.
+// 데이터 접근 계층. UI는 이 파일의 함수만 쓰고 백엔드를 알지 못한다.
+// Phase C: 백엔드를 GAS → Supabase 로 교체했다. 외부 인터페이스는 그대로.
 //
-// Phase A (현재): 내부에서 GAS 호출. localStorage 캐시.
-// Phase C (이후): 내부만 Supabase 호출로 교체. 외부 인터페이스 불변.
-//
-// 사용: <script type="module" src="script.js?v=20"></script>
+// 원본 분담
+//   출석            DB 가 원본. 앱에서 RPC 로 기록한다.
+//   그 외(편성·명단·과제·김밥)  시트가 원본. 일 1회 동기화로 DB에 들어온다.
 
-// ============================================================================
-// 백엔드 엔드포인트
-// ============================================================================
 import { matches as hangulMatches } from './hangul.js';
+import { sbSelect, sbRpc, COHORT_ID } from './supabase-config.js';
 
-export const MODULE_VERSION = 'members-data v25';
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec";
+export const MODULE_VERSION = 'members-data v30 (Supabase)';
 
 // ============================================================================
 // 캐시 설정
 // ============================================================================
-const CACHE_VERSION = 18;
+const CACHE_VERSION = 30;
 const CK = {
   members:     `plc_members_v${CACHE_VERSION}`,
   locationMap: `plc_location_map_v${CACHE_VERSION}`,
   teamLinks:   `plc_team_links_v${CACHE_VERSION}`,
   homework:    `plc_homework_v${CACHE_VERSION}`,
   kimbap:      `plc_kimbap_v${CACHE_VERSION}`,
+  sessions:    `plc_sessions_v${CACHE_VERSION}`,
 };
 
 // ============================================================================
 // 메모리 상태
 // ============================================================================
 const state = {
-  members: [],
+  members: [],       // UI 호환 형태 (MM/DD 키 포함)
+  sessions: [],      // [{session_date, label, label_norm, is_class, session_no}]
   locationMap: {},
   teamLinks: {},
-  homework: {},      // { id: [{session, type, url, completion, submittedAt}, ...] }
-  kimbap: {},        // { id: { "교리1": {applied, date}, "교리2": {...}, ... } }
+  homework: {},      // { id: [{session, type, url, submittedAt}, ...] }
+  kimbap: {},        // { id: { '교리1': {applied, date}, ... } }
   loaded: false,
 };
 const subscribers = new Set();
@@ -52,17 +50,18 @@ function notify(event) {
 // ============================================================================
 function readCacheSync() {
   try {
-    const m  = localStorage.getItem(CK.members);
-    const lm = localStorage.getItem(CK.locationMap);
-    const tl = localStorage.getItem(CK.teamLinks);
-    const hw = localStorage.getItem(CK.homework);
-    const kb = localStorage.getItem(CK.kimbap);
+    const m = localStorage.getItem(CK.members);
     if (!m) return false;
+    const get = (k, fallback) => {
+      const v = localStorage.getItem(k);
+      return v ? JSON.parse(v) : fallback;
+    };
     state.members     = JSON.parse(m);
-    state.locationMap = lm ? JSON.parse(lm) : {};
-    state.teamLinks   = tl ? JSON.parse(tl) : {};
-    state.homework    = hw ? JSON.parse(hw) : {};
-    state.kimbap      = kb ? JSON.parse(kb) : {};
+    state.sessions    = get(CK.sessions, []);
+    state.locationMap = get(CK.locationMap, {});
+    state.teamLinks   = get(CK.teamLinks, {});
+    state.homework    = get(CK.homework, {});
+    state.kimbap      = get(CK.kimbap, {});
     state.loaded = true;
     return true;
   } catch (e) {
@@ -74,6 +73,7 @@ function readCacheSync() {
 function writeCacheSync() {
   try {
     localStorage.setItem(CK.members,     JSON.stringify(state.members));
+    localStorage.setItem(CK.sessions,    JSON.stringify(state.sessions));
     localStorage.setItem(CK.locationMap, JSON.stringify(state.locationMap));
     localStorage.setItem(CK.teamLinks,   JSON.stringify(state.teamLinks));
     localStorage.setItem(CK.homework,    JSON.stringify(state.homework));
@@ -84,237 +84,285 @@ function writeCacheSync() {
 }
 
 // ============================================================================
-// 서버 통신 (Phase A: GAS)
+// DB → UI 형태 변환
+// ============================================================================
+
+// 'YYYY-MM-DD' → 'MM/DD' (UI가 이 키로 출결을 읽는다)
+function toMMDD(isoDate) {
+  const m = String(isoDate || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[2]}/${m[3]}` : null;
+}
+
+// DB 레코드를 기존 GAS 응답과 같은 모양으로 조립한다.
+// UI가 member['03/15'] · member['수료'] 같은 키를 직접 쓰고 있어
+// 그 형태를 유지해 UI 변경을 피한다.
+function buildMemberRow(m, sessions, attByMember) {
+  const row = {
+    id: `${m.name}${m.phone || ''}`,
+    _uuid: m.id,                       // RPC 호출에 필요
+    name: m.name,
+    phone: m.phone || '',
+    team: m.team || '',
+    location: m.location || '',
+    role: m.role || '',
+    gen: m.gender || '',
+    age: m.age ?? '',
+    status: m.status || 'active',
+    '연락처': m.full_phone || '',
+    '결혼': m.marital || '',
+    '담당교역자': m.pastor || '',
+    'no.': m.team_no ?? '',
+    '.note': m.note || '',
+    '수료': m.completion || '',
+    '김밥1차': m.lunch1 || '',
+    '김밥2차': m.lunch2 || '',
+    telegram: m.telegram_ok === true ? 'true' : m.telegram_ok === false ? 'false' : '',
+    '안내문자': m.sms_ok === true ? 'true' : m.sms_ok === false ? 'false' : '',
+  };
+
+  // 세션별 출결을 MM/DD 키로 펼친다
+  const att = attByMember.get(m.id) || new Map();
+  let absentCount = 0;
+  for (const s of sessions) {
+    const key = toMMDD(s.session_date);
+    if (!key) continue;
+    const v = att.get(s.session_date) ?? '';
+    row[key] = v;
+    if (s.is_class && String(v).trim().toUpperCase() === 'X') absentCount++;
+  }
+  row['결석횟수'] = String(absentCount);
+
+  return row;
+}
+
+// ============================================================================
+// 서버 통신
 // ============================================================================
 async function fetchFromServer() {
-  const url = GAS_API_URL + "?t=" + Date.now();
-  const res = await fetch(url);
-  const result = await res.json();
-  if (!result.success) throw new Error('서버 응답 실패');
+  const enc = encodeURIComponent(COHORT_ID);
+
+  const [members, sessions, attendance, kimbap, homework, teamLinks, locationMaps] =
+    await Promise.all([
+      sbSelect(`members?select=*&cohort_id=eq.${enc}&status=eq.active&order=team,team_no`),
+      sbSelect(`sessions?select=*&cohort_id=eq.${enc}&order=session_date`),
+      sbSelect(`attendance?select=member_id,session_date,status`),
+      sbSelect(`kimbap_signups?select=member_id,session_label,session_date,applied&cohort_id=eq.${enc}`),
+      sbSelect(`homework_submissions?select=member_id,session_label,session_raw,type,url,submitted_at&cohort_id=eq.${enc}`),
+      sbSelect(`team_links?select=team,chat_url&cohort_id=eq.${enc}`),
+      sbSelect(`location_maps?select=location,image_url,detail_url`),
+    ]);
+
+  // 출결을 member_id → (session_date → status) 로 정리
+  const attByMember = new Map();
+  for (const a of attendance) {
+    if (!attByMember.has(a.member_id)) attByMember.set(a.member_id, new Map());
+    attByMember.get(a.member_id).set(a.session_date, a.status ?? '');
+  }
+
+  const rows = members.map(m => buildMemberRow(m, sessions, attByMember));
+
+  // uuid → 표시용 id 매핑 (김밥·과제를 붙일 때 사용)
+  const uuidToId = new Map(members.map(m => [m.id, `${m.name}${m.phone || ''}`]));
+
+  const kimbapMap = {};
+  for (const k of kimbap) {
+    const id = uuidToId.get(k.member_id);
+    if (!id) continue;
+    (kimbapMap[id] ||= {})[k.session_label] = {
+      applied: k.applied ? 1 : 0,
+      date: toMMDD(k.session_date) || '',
+    };
+  }
+
+  const homeworkMap = {};
+  for (const h of homework) {
+    const id = uuidToId.get(h.member_id);
+    if (!id) continue;
+    (homeworkMap[id] ||= []).push({
+      session: h.session_raw || h.session_label,
+      type: h.type || '',
+      url: h.url || '',
+      submittedAt: h.submitted_at || '',
+    });
+  }
+
+  const teamLinkMap = {};
+  for (const t of teamLinks) if (t.team) teamLinkMap[t.team] = t.chat_url || '';
+
+  const locationMap = {};
+  for (const l of locationMaps) {
+    if (!l.location) continue;
+    locationMap[l.location] = l.image_url || '';
+    if (l.detail_url) locationMap[`${l.location}링크`] = l.detail_url;
+  }
+
   return {
-    members:     Array.isArray(result.data) ? result.data : [],
-    locationMap: result.locationMap || {},
-    teamLinks:   result.teamLinks || {},
-    homework:    result.homework || {},
-    kimbap:      result.kimbap || {},
+    members: rows,
+    sessions,
+    locationMap,
+    teamLinks: teamLinkMap,
+    homework: homeworkMap,
+    kimbap: kimbapMap,
   };
-}
-
-async function postAttendance(name, phone, status) {
-  // GAS Apps Script는 { name, phone, status } 형식만 인식
-  const res = await fetch(GAS_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ name, phone, status }),
-  });
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '출석 업데이트 실패');
-  return result;
-}
-
-async function postAttendanceBatch(entries) {
-  // GAS v21+ 는 { batch: [{name, phone, status}, ...] } 를 한 번에 처리
-  const res = await fetch(GAS_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ batch: entries }),
-  });
-  const result = await res.json();
-  if (!result.success) throw new Error(result.message || '출석 저장 실패');
-  return result;
 }
 
 // ============================================================================
 // 공개 API
 // ============================================================================
 
-/**
- * 캐시를 메모리로 로드. 없으면 false 반환.
- */
 export function loadCache() {
   return readCacheSync();
 }
 
-/**
- * 서버에서 최신 데이터를 강제로 받아와 메모리·캐시 갱신.
- * @returns {Promise<boolean>} 성공 여부
- */
 export async function refresh() {
   const fresh = await fetchFromServer();
-  state.members     = fresh.members;
-  state.locationMap = fresh.locationMap;
-  state.teamLinks   = fresh.teamLinks;
-  state.homework    = fresh.homework;
-  state.kimbap      = fresh.kimbap;
-  state.loaded = true;
+  Object.assign(state, fresh, { loaded: true });
   writeCacheSync();
   notify({ type: 'refresh' });
   return true;
 }
 
-/**
- * 캐시 우선 로드. 캐시 히트면 즉시 반환하고 백그라운드로 refresh.
- * 캐시 미스면 서버 응답을 기다림.
- *
- * @param {object} opts
- * @param {boolean} opts.forceRefresh — 캐시 무시하고 서버 우선
- * @param {(err: Error) => void} opts.onBackgroundRefreshError — 백그라운드 갱신 실패 콜백
- * @returns {Promise<{cacheHit: boolean, backgroundRefreshing: boolean}>}
- */
 export async function ensureLoaded({ forceRefresh = false, onBackgroundRefreshError } = {}) {
   const cacheHit = !forceRefresh && loadCache();
   if (cacheHit) {
     notify({ type: 'cache-hit' });
-    // 백그라운드 refresh (await 안 함)
     refresh().catch(err => {
       console.warn('백그라운드 refresh 실패:', err);
-      if (onBackgroundRefreshError) onBackgroundRefreshError(err);
+      onBackgroundRefreshError?.(err);
     });
     return { cacheHit: true, backgroundRefreshing: true };
   }
-  // 캐시 없음 — 서버 응답 대기
   await refresh();
   return { cacheHit: false, backgroundRefreshing: false };
 }
 
-/**
- * 현재 로드된 전체 인원 배열 (읽기 전용으로 사용 권장).
- */
 export function getMembers() {
   return state.members;
 }
 
 /**
- * (name, phone) 조합으로 단일 인원 조회.
- * 1) 정확 매칭 우선. 2) 이름이 초성만이거나 부분이면 자모 매칭 fallback.
- *    (전화번호 뒷 4자리는 정확 일치 필수)
+ * 세션 목록. 관리자 출석 화면에서 주차를 고를 때 쓴다.
+ */
+export function getSessions() {
+  return state.sessions;
+}
+
+/**
+ * (name, phone) 로 단일 인원 조회.
+ * 정확 매칭 우선, 실패하면 초성·부분 매칭 (전화번호는 정확 일치 필수).
  */
 export function findMember(name, phone) {
   const cleanName = (name || '').trim().replace(/\s/g, '');
   const cleanPhone = (phone || '').trim().replace(/[^0-9]/g, '');
   if (!cleanName || !cleanPhone) return null;
 
-  // 1) 정확 매칭 (기존 로직)
   const target = cleanName + cleanPhone;
   const exact = state.members.find(m => m.id === target || (m.name + m.phone) === target);
   if (exact) return exact;
 
-  // 2) 초성·부분 매칭 fallback
   return state.members.find(m => m.phone === cleanPhone && hangulMatches(m.name, cleanName)) || null;
 }
 
-/**
- * 특정 조 소속 인원 배열.
- */
 export function getTeamMembers(teamName) {
   if (!teamName) return [];
   return state.members.filter(m => m.team === teamName);
 }
 
-/**
- * 장소 지도 이미지 URL.
- */
 export function getLocationImage(location) {
   if (!location) return null;
   return state.locationMap[String(location).trim()] || null;
 }
 
-/**
- * 조 채팅방 링크.
- */
 export function getTeamLink(teamName) {
   if (!teamName) return null;
   return state.teamLinks[teamName] || null;
 }
 
-/**
- * 새가족교육안내방 링크 (특수).
- */
 export function getGeneralAnnouncementLink() {
   return state.teamLinks['새가족교육안내방'] || null;
 }
 
-/**
- * 특정 인원의 김밥 신청 세션 맵.
- * @returns {Object<string, {applied: 0|1, date: string}>}
- */
 export function getKimbapDetail(memberId) {
   return state.kimbap[memberId] || {};
 }
 
-/**
- * 특정 인원의 과제 제출 목록.
- * @returns {Array<{session, type, url, completion, submittedAt}>}
- */
 export function getHomeworkList(memberId) {
   return state.homework[memberId] || [];
 }
 
-/**
- * 출석 토글. Optimistic update: 로컬 먼저 갱신 → 서버 실패 시 롤백.
- * @param {string} name
- * @param {string} phone
- * @param {boolean} present — 체크 상태
- * @returns {Promise<{success: boolean, error?: Error}>}
- */
-export async function updateAttendance(name, phone, present) {
-  const status = present ? 'O' : 'X';
-  const idx = state.members.findIndex(m => m.name === name && m.phone === phone);
-  if (idx < 0) return { success: false, error: new Error('인원을 찾을 수 없음') };
+// ============================================================================
+// 출석 기록 (DB 가 원본)
+// ============================================================================
 
-  const previous = state.members[idx].attendance ?? '';
-  state.members[idx].attendance = status;
-  writeCacheSync();
-  notify({ type: 'attendance-optimistic', name, phone, status });
+// 오늘 기준 가장 최근 지난 세션. 출석 체크의 기본 대상.
+function currentSessionDate() {
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const past = state.sessions.filter(s => s.session_date <= todayIso);
+  if (past.length) return past[past.length - 1].session_date;
+  return state.sessions[0]?.session_date ?? null;
+}
 
-  try {
-    await postAttendance(name, phone, status);
-    notify({ type: 'attendance-confirmed', name, phone, status });
-    return { success: true };
-  } catch (err) {
-    state.members[idx].attendance = previous;
-    writeCacheSync();
-    notify({ type: 'attendance-rollback', name, phone, status: previous });
-    return { success: false, error: err };
-  }
+export function getCurrentSessionDate() {
+  return currentSessionDate();
 }
 
 /**
  * 조 단위 출석 일괄 저장.
- * 체크된 사람은 'O', 나머지는 'X'로 한 번에 반영.
- * 실패 시 메모리·캐시를 이전 상태로 되돌림.
+ * 실패 시 메모리·캐시를 이전 값으로 되돌린다.
  *
- * @param {Array<{name: string, phone: string, present: boolean}>} entries
- * @returns {Promise<{success: boolean, updated?: number, session?: string, error?: Error}>}
+ * @param {Array<{name, phone, present}|{memberUuid, status}>} entries
+ * @param {string} [sessionDate] 생략하면 가장 최근 지난 세션
  */
-export async function updateAttendanceBatch(entries) {
+export async function updateAttendanceBatch(entries, sessionDate) {
   if (!Array.isArray(entries) || entries.length === 0) {
     return { success: false, error: new Error('저장할 항목이 없습니다.') };
   }
-
-  const payload = entries.map(e => ({
-    name: e.name,
-    phone: e.phone,
-    status: e.present ? 'O' : 'X',
-  }));
-
-  // Optimistic: 로컬 먼저 반영 (롤백용 이전 값 보관)
-  const previous = [];
-  for (const p of payload) {
-    const idx = state.members.findIndex(m => m.name === p.name && m.phone === p.phone);
-    if (idx < 0) continue;
-    previous.push({ idx, value: state.members[idx].attendance ?? '' });
-    state.members[idx].attendance = p.status;
+  const target = sessionDate || currentSessionDate();
+  if (!target) {
+    return { success: false, error: new Error('출석 대상 세션을 찾지 못했습니다.') };
   }
+  const mmdd = toMMDD(target);
+
+  // 입력을 { uuid, status } 로 정규화
+  const payload = [];
+  const previous = [];
+  for (const e of entries) {
+    let row, status;
+    if (e.memberUuid) {
+      row = state.members.find(m => m._uuid === e.memberUuid);
+      status = e.status;
+    } else {
+      row = state.members.find(m => m.name === e.name && m.phone === e.phone);
+      status = e.status ?? (e.present ? 'O' : 'X');
+    }
+    if (!row?._uuid) continue;
+    payload.push({ member_id: row._uuid, status });
+    previous.push({ row, mmdd, value: row[mmdd] ?? '' });
+    row[mmdd] = status;                       // optimistic
+  }
+
+  if (payload.length === 0) {
+    return { success: false, error: new Error('대상 인원을 찾지 못했습니다.') };
+  }
+
   writeCacheSync();
   notify({ type: 'attendance-batch-optimistic', count: payload.length });
 
   try {
-    const result = await postAttendanceBatch(payload);
-    notify({ type: 'attendance-batch-confirmed', count: result.updated ?? payload.length });
-    return { success: true, updated: result.updated, session: result.session };
+    const result = await sbRpc('set_attendance_batch', {
+      p_session_date: target,
+      p_entries: payload,
+    });
+    notify({ type: 'attendance-batch-confirmed', count: result?.updated ?? payload.length });
+    return {
+      success: true,
+      updated: result?.updated ?? payload.length,
+      session: mmdd,
+      skipped: result?.skipped ?? [],
+    };
   } catch (err) {
-    for (const p of previous) state.members[p.idx].attendance = p.value;
+    for (const p of previous) p.row[p.mmdd] = p.value;
     writeCacheSync();
     notify({ type: 'attendance-batch-rollback' });
     return { success: false, error: err };
@@ -322,22 +370,29 @@ export async function updateAttendanceBatch(entries) {
 }
 
 /**
- * 데이터 변경 이벤트 구독.
- * @param {(event: {type: string, [key:string]: any}) => void} callback
- * @returns {() => void} 해지 함수
+ * 단건 출석 기록.
  */
+export async function updateAttendance(name, phone, presentOrStatus, sessionDate) {
+  const status = typeof presentOrStatus === 'boolean'
+    ? (presentOrStatus ? 'O' : 'X')
+    : presentOrStatus;
+  return updateAttendanceBatch([{ name, phone, status }], sessionDate);
+}
+
+// ============================================================================
+// 기타
+// ============================================================================
+
 export function subscribe(callback) {
   subscribers.add(callback);
   return () => subscribers.delete(callback);
 }
 
-/**
- * 캐시 존재 여부 및 통계.
- */
 export function getCacheInfo() {
   return {
     loaded: state.loaded,
     memberCount: state.members.length,
+    sessionCount: state.sessions.length,
     teamCount: new Set(state.members.map(m => m.team).filter(Boolean)).size,
     locationCount: Object.keys(state.locationMap).length,
     teamLinkCount: Object.keys(state.teamLinks).length,
@@ -345,14 +400,14 @@ export function getCacheInfo() {
   };
 }
 
-/**
- * 캐시 완전 삭제 (진단·리셋용).
- */
 export function clearCache() {
   Object.values(CK).forEach(k => localStorage.removeItem(k));
   state.members = [];
+  state.sessions = [];
   state.locationMap = {};
   state.teamLinks = {};
+  state.homework = {};
+  state.kimbap = {};
   state.loaded = false;
   notify({ type: 'cache-cleared' });
 }
