@@ -12,7 +12,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
     <link rel="stylesheet" href="style.css?v=32">
-    <link rel="stylesheet" href="admin.css?v=1">
+    <link rel="stylesheet" href="admin.css?v=2">
 </head>
 <body>
     <div class="admin-container">
@@ -56,13 +56,47 @@
 
         <!-- 탭 네비게이션 -->
         <nav class="tab-nav">
-            <button class="tab-btn active" data-tab="search">검색 모드</button>
+            <button class="tab-btn active" data-tab="attendance">출석 관리</button>
+            <button class="tab-btn" data-tab="search">검색 모드</button>
             <button class="tab-btn" data-tab="teams">조별 보기</button>
             <button class="tab-btn" data-tab="members">개인별 보기</button>
         </nav>
 
+        <!-- 출석 관리 (DB 가 원본. 시트에서 고치지 않는다) -->
+        <div class="tab-content active" id="attendanceTab">
+            <div class="att-picker">
+                <div class="att-field">
+                    <label for="attSession">주차</label>
+                    <select id="attSession"></select>
+                </div>
+                <div class="att-field">
+                    <label for="attTeam">조</label>
+                    <select id="attTeam"></select>
+                </div>
+            </div>
+
+            <div class="att-meta" id="attMeta"></div>
+
+            <div class="att-toolbar">
+                <div class="att-bulk">
+                    <button type="button" class="att-bulk-btn" data-bulk="O">전체 출석</button>
+                    <button type="button" class="att-bulk-btn" data-bulk="fillX">빈칸 → 결석</button>
+                    <button type="button" class="att-bulk-btn" data-bulk="clear">전체 지우기</button>
+                    <button type="button" class="att-bulk-btn ghost" data-bulk="reset">되돌리기</button>
+                </div>
+                <div class="att-counts" id="attCounts"></div>
+            </div>
+
+            <div class="att-list" id="attList"></div>
+
+            <div class="att-savebar" id="attSaveBar">
+                <span class="att-save-info" id="attSaveInfo">변경 사항 없음</span>
+                <button type="button" id="attSaveBtn" class="att-save-btn" disabled>저장</button>
+            </div>
+        </div>
+
         <!-- 검색 모드 -->
-        <div class="tab-content active" id="searchTab">
+        <div class="tab-content" id="searchTab">
             <div class="search-section">
                 <div class="search-box">
                     <div class="input-group">
@@ -163,7 +197,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=5"></script>
+    <script type="module" src="admin.js?v=6"></script>
 </body>
 </html>
 
