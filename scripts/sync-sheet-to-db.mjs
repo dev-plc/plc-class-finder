@@ -279,12 +279,15 @@ if (kimbapExtraLabels.size) {
 }
 
 // 과제 제출
-const homeworkRows = [];
+// 같은 사람이 같은 강의·유형으로 여러 번 제출할 수 있다 (재제출·수정 제출).
+// upsert 키가 (member_id, session_label, type) 이므로 최신 1건만 남긴다.
+const homeworkByKey = new Map();
+let homeworkDupes = 0;
 for (const [gasId, list] of Object.entries(homeworkIn)) {
   for (const h of (list || [])) {
     const norm = normalizeSession(h.session);
     if (!norm) continue;
-    homeworkRows.push({
+    const row = {
       _gasId: gasId,
       cohort_id: COHORT_ID,
       session_label: norm,
@@ -292,8 +295,20 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       type: trim(h.type),
       url: trim(h.url),
       submitted_at: h.submittedAt ? new Date(h.submittedAt).toISOString() : null,
-    });
+    };
+    const key = `${gasId}|${norm}|${row.type ?? ''}`;
+    const prev = homeworkByKey.get(key);
+    if (!prev) { homeworkByKey.set(key, row); continue; }
+    homeworkDupes++;
+    // 제출 시각이 늦은 쪽을 채택 (시각 없으면 나중에 나온 것)
+    const prevAt = prev.submitted_at ? Date.parse(prev.submitted_at) : -Infinity;
+    const curAt  = row.submitted_at  ? Date.parse(row.submitted_at)  : -Infinity;
+    if (curAt >= prevAt) homeworkByKey.set(key, row);
   }
+}
+const homeworkRows = [...homeworkByKey.values()];
+if (homeworkDupes) {
+  console.log(`ℹ️  과제 중복 제출 ${homeworkDupes}건 → 최신 제출만 반영`);
 }
 
 console.log('📊 변환 결과');
@@ -317,6 +332,20 @@ const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 async function upsert(table, data, onConflict) {
   if (!data.length) return [];
+
+  // 같은 배치에 conflict 키가 중복되면 Postgres가 거부한다
+  // ("ON CONFLICT DO UPDATE command cannot affect row a second time").
+  // 뒤에 오는 행을 최신으로 보고 앞의 것을 덮어쓴다.
+  if (onConflict) {
+    const cols = onConflict.split(',').map(c => c.trim());
+    const byKey = new Map();
+    for (const row of data) byKey.set(cols.map(c => row[c] ?? '').join('||'), row);
+    if (byKey.size !== data.length) {
+      console.log(`   ℹ️ ${table}: 배치 내 중복 ${data.length - byKey.size}건 제거`);
+      data = [...byKey.values()];
+    }
+  }
+
   const out = [];
   for (let i = 0; i < data.length; i += 500) {
     const batch = data.slice(i, i + 500);
