@@ -11,6 +11,9 @@ import {
     getKimbapDetail,
     getHomeworkList,
     getSessions,
+    getProgress,
+    getRequiredHomework,
+    MAKEUP_LIMIT,
     updateAttendanceBatch,
     getCacheInfo,
     MODULE_VERSION,
@@ -282,6 +285,9 @@ function displayResult(member) {
             member.team ? `${member.team} 안내방 입장하기` : ''
         );
 
+        // 본인 안내 (수료 진행률·제출 필요 과제)
+        renderMyStatus(member);
+
         // 상세 현황 (출석·김밥·과제·수료)
         renderStatusDetail(member);
 
@@ -312,6 +318,86 @@ function displayResult(member) {
         console.error("❌ [displayResult] 에러:", err);
         alert("결과 표시 중 에러 발생: " + err.message);
     }
+}
+
+// ============================================================================
+// 본인 안내 — 수료까지 얼마나 남았는지, 제출할 과제가 있는지
+//
+// 판정은 DB 뷰(v_completion_status)가 하고 여기서는 표시만 한다.
+// 당사자가 스스로 알면 관리자가 찾아 알릴 일이 줄어든다.
+// ============================================================================
+const HOMEWORK_FORM_URL =
+    'https://docs.google.com/forms/d/e/1FAIpQLSex87UOQx7C9-9H1MJtrY-rLfNh_wfQWVVQ66-1XnY6YJ2M9A/viewform';
+
+function renderMyStatus(member) {
+    const el = document.getElementById('myStatusCard');
+    if (!el) return;
+
+    const p = getProgress(member);
+    if (!p) { el.style.display = 'none'; return; }
+
+    const pending = getRequiredHomework(member);
+    const pct = p.required > 0 ? Math.round((p.credited / p.required) * 100) : 0;
+    const done = p.verdict === '수료';
+
+    // 진행률 막대
+    const bar = `
+        <div class="ms-bar" role="img" aria-label="수료 진행률 ${pct}%">
+            <div class="ms-bar-fill" style="width:${Math.min(pct, 100)}%"></div>
+        </div>`;
+
+    // 헤드라인: 수료했으면 축하, 아니면 남은 횟수
+    const headline = done
+        ? `<div class="ms-headline done">🎓 수료 요건을 채웠어요</div>`
+        : `<div class="ms-headline">
+             <strong>${p.credited}</strong> / ${p.required}강 이수
+             <span class="ms-remain">· 수료까지 ${p.remainingNeeded}회</span>
+           </div>`;
+
+    // 보충 안내 (결석을 과제로 메울 수 있는 기회가 얼마나 남았는지)
+    let makeupNote = '';
+    if (p.makeupOverflow > 0) {
+        makeupNote = `<div class="ms-note warn">
+            과제로 인정받을 수 있는 횟수(${MAKEUP_LIMIT}회)를 넘었어요. 담당자 확인이 필요합니다.
+        </div>`;
+    } else if (p.makeupUsed > 0) {
+        makeupNote = `<div class="ms-note">
+            과제로 ${p.makeupUsed}회 인정받았어요 (남은 기회 ${p.makeupLeft}회)
+        </div>`;
+    }
+
+    // 제출이 필요한 과제 — 결석한 주차 중 아직 안 낸 것만
+    let homeworkBlock = '';
+    if (pending.length > 0) {
+        const shown = pending.slice(0, 4).map(h => h.sessionLabel).join(' · ');
+        const more = pending.length > 4 ? ` 외 ${pending.length - 4}건` : '';
+        const canStillCount = p.makeupLeft > 0 && !done;
+        homeworkBlock = `
+            <div class="ms-homework">
+                <div class="ms-hw-head">
+                    <span class="ms-hw-title">📝 제출하지 않은 과제 ${pending.length}건</span>
+                    <a class="ms-hw-btn" href="${HOMEWORK_FORM_URL}" target="_blank" rel="noopener">제출하기 →</a>
+                </div>
+                <div class="ms-hw-list">${shown}${more}</div>
+                ${canStillCount
+                    ? `<div class="ms-hw-hint">지금 제출하면 최대 ${p.makeupLeft}회까지 출석으로 인정돼요</div>`
+                    : ''}
+            </div>`;
+    }
+
+    el.className = 'my-status' + (done ? ' done' : '');
+    el.innerHTML = `
+        ${headline}
+        ${bar}
+        <div class="ms-stats">
+            <span>출석 ${p.presentCount}</span>
+            <span>결석 ${p.absentCount}</span>
+            ${p.makeupUsed ? `<span>과제 인정 ${p.makeupUsed}</span>` : ''}
+        </div>
+        ${makeupNote}
+        ${homeworkBlock}
+    `;
+    el.style.display = 'block';
 }
 
 // ============================================================================
@@ -970,6 +1056,8 @@ function showError(msg) {
     elements.resultContainer.style.display = 'none';
     const sd = document.getElementById('statusDetailContainer');
     if (sd) sd.style.display = 'none';
+    const ms = document.getElementById('myStatusCard');
+    if (ms) ms.style.display = 'none';
 }
 
 // ============================================================================
