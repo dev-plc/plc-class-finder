@@ -25,7 +25,8 @@ const PRESETS = {
     title: '수료 판정 현황',
     view: 'v_completion_status',
     columns: ['team', 'name', 'phone', 'credited', 'required', 'remaining_needed',
-              'absent_count', 'na_count', 'makeup_used', 'verdict'],
+              'absent_count', 'before_join_count', 'no_class_count',
+              'makeup_used', 'verdict'],
     order: { column: 'team' },
   },
   makeup_detail: {
@@ -38,8 +39,8 @@ const PRESETS = {
   in_progress: {
     title: '진행중 (중도 합류 — 다음 기수 이어듣기 대상)',
     view: 'v_completion_status',
-    columns: ['team', 'name', 'phone', 'credited', 'na_count',
-              'absent_count', 'makeup_used', 'verdict'],
+    columns: ['team', 'name', 'phone', 'credited', 'required',
+              'before_join_count', 'absent_count', 'makeup_used', 'verdict'],
     filter: (q) => q.eq('verdict', '진행중'),
     order: { column: 'team' },
   },
