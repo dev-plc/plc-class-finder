@@ -107,6 +107,10 @@ function mmddKey(v) {
   return `${String(m[1]).padStart(2,'0')}/${String(m[2]).padStart(2,'0')}`;
 }
 
+// 커리큘럼 세션인지 (김밥 탭에는 '신규', '수료자 김밥' 같은 운영용 컬럼도 섞여 있다)
+const isCurriculumLabel = (norm) =>
+  /^교리\d+$/.test(norm) || /^성경적대화\d+$/.test(norm) || norm === '교제' || norm === '나눔';
+
 // 김밥 데이터에서 MM/DD → 세션명 매핑.
 // 인원마다 비어 있는 칸이 있을 수 있으므로 전원을 훑어 채운다.
 const mmddToLabel = new Map();
@@ -115,7 +119,7 @@ for (const detail of Object.values(kimbapIn)) {
     const key = mmddKey(info?.date);
     if (!key || mmddToLabel.has(key)) continue;
     const norm = normalizeSession(rawName);
-    if (norm) mmddToLabel.set(key, norm);
+    if (norm && isCurriculumLabel(norm)) mmddToLabel.set(key, norm);
   }
 }
 
@@ -130,10 +134,10 @@ function sessionOrder(norm) {
   return 999;
 }
 
-// 김밥 탭에 존재하는 세션명 전체 (표준 순서)
+// 김밥 탭에 존재하는 세션명 전체 (커리큘럼만, 표준 순서)
 const allKimbapLabels = [...new Set(
   Object.values(kimbapIn).flatMap(d => Object.keys(d || {}).map(normalizeSession))
-)].filter(Boolean).sort((a, b) => sessionOrder(a) - sessionOrder(b));
+)].filter(l => l && isCurriculumLabel(l)).sort((a, b) => sessionOrder(a) - sessionOrder(b));
 
 // 1차: 날짜로 매핑 → 2차: 남은 것끼리 순서대로 대응
 const usedLabels = new Set(mmddToLabel.values());
@@ -219,14 +223,16 @@ for (const s of sessions) {
 }
 
 const kimbapRows = [];
-const kimbapExtraLabels = new Set();
+const kimbapOpsLabels = new Set();   // '신규', '수료자 김밥' 등 운영용
+const kimbapExtraLabels = new Set(); // 커리큘럼이지만 출석부에 없는 것
 for (const [gasId, detail] of Object.entries(kimbapIn)) {
   for (const [rawName, info] of Object.entries(detail || {})) {
     const norm = normalizeSession(rawName);
     if (!norm) continue;
+    if (!isCurriculumLabel(norm)) { kimbapOpsLabels.add(norm); }
+    else if (!labelToDate.has(norm)) { kimbapExtraLabels.add(norm); }
     const key = mmddKey(info?.date);
     const date = (key && dateOf.get(key)) || labelToDate.get(norm) || null;
-    if (!labelToDate.has(norm)) kimbapExtraLabels.add(norm);
     kimbapRows.push({
       _gasId: gasId,
       cohort_id: COHORT_ID,
@@ -237,9 +243,12 @@ for (const [gasId, detail] of Object.entries(kimbapIn)) {
   }
 }
 
+if (kimbapOpsLabels.size) {
+  console.log(`ℹ️  김밥 운영용 항목 ${kimbapOpsLabels.size}종 (강의 아님, 신청 기록은 보존): ${[...kimbapOpsLabels].join(', ')}`);
+}
 if (kimbapExtraLabels.size) {
-  console.warn(`⚠️  출석부에 없는 김밥 세션 ${kimbapExtraLabels.size}종: ${[...kimbapExtraLabels].join(', ')}`);
-  console.warn('    김밥 탭에만 있는 세션입니다. 의도한 것인지 확인하세요.\n');
+  console.warn(`⚠️  출석부에 없는 커리큘럼 세션 ${kimbapExtraLabels.size}종: ${[...kimbapExtraLabels].join(', ')}`);
+  console.warn('    김밥 탭에만 있는 세션입니다. 확인이 필요합니다.\n');
 }
 
 // 과제 제출
