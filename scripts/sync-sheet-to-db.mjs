@@ -20,7 +20,10 @@ const dryRun = args.includes('--dry-run');
 const getArg = (n) => args.find(a => a.startsWith(`--${n}=`))?.split('=')[1];
 
 const COHORT_ID  = getArg('cohort') || process.env.COHORT_ID || '2기';
-const START_YEAR = parseInt(getArg('start-year') || process.env.START_YEAR || '2026', 10);
+// 기수 시작 연도. 명시하지 않으면 DB의 cohorts.started_at 에서 읽고,
+// 그것도 없으면 현재 연도를 쓴다.
+// (하드코딩하면 기수가 바뀔 때 세션이 두 연도로 갈라져 집계가 깨진다)
+const START_YEAR_ARG = getArg('start-year') || process.env.START_YEAR;
 const GAS_API_URL = process.env.GAS_API_URL
   || 'https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec';
 
@@ -29,6 +32,24 @@ if (!SUPABASE_URL) { console.error('❌ SUPABASE_URL 없음'); process.exit(1); 
 if (!dryRun && !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('❌ SUPABASE_SERVICE_ROLE_KEY 없음 (--dry-run 은 가능)');
   process.exit(1);
+}
+
+const sb = SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  : null;
+
+// 기수 시작 연도 결정: 인자 > DB의 cohorts.started_at > 현재 연도
+let START_YEAR;
+if (START_YEAR_ARG) {
+  START_YEAR = parseInt(START_YEAR_ARG, 10);
+} else {
+  let fromDb = null;
+  if (sb) {
+    const { data } = await sb.from('cohorts').select('started_at').eq('id', COHORT_ID).maybeSingle();
+    if (data?.started_at) fromDb = new Date(data.started_at).getFullYear();
+  }
+  START_YEAR = fromDb ?? new Date().getFullYear();
+  console.log(`ℹ️  기준 연도 자동 결정: ${START_YEAR} (${fromDb ? 'cohorts.started_at' : '현재 연도'})`);
 }
 
 console.log(`🏷️  cohort: ${COHORT_ID} / 기준 연도 ${START_YEAR}`);
@@ -328,7 +349,6 @@ if (dryRun) {
 }
 
 // ---------------------------------------------------------------- upsert
-const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 async function upsert(table, data, onConflict) {
   if (!data.length) return [];
