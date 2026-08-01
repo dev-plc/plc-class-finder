@@ -134,43 +134,70 @@ function sessionOrder(norm) {
   return 999;
 }
 
-// 김밥 탭에 존재하는 세션명 전체 (커리큘럼만, 표준 순서)
-const allKimbapLabels = [...new Set(
-  Object.values(kimbapIn).flatMap(d => Object.keys(d || {}).map(normalizeSession))
-)].filter(l => l && isCurriculumLabel(l)).sort((a, b) => sessionOrder(a) - sessionOrder(b));
+// 세션명 배정
+//
+// 김밥 탭 매핑만으로는 취약하다 (날짜 누락·운영용 컬럼 혼재).
+// 커리큘럼은 고정 순서이므로 출석부 컬럼 순서를 기준으로 직접 배정하고,
+// 김밥 탭에서 얻은 매핑은 '교제'·'나눔'의 위치 파악에만 쓴다.
+//
+// 커리큘럼: 교리1~12 → (중간에 교제·나눔이 낀 주가 있음) → 성경적대화1~4
+const CURRICULUM = [
+  ...Array.from({ length: 12 }, (_, i) => `교리${i + 1}`),
+  ...Array.from({ length: 4 },  (_, i) => `성경적대화${i + 1}`),
+];
 
-// 1차: 날짜로 매핑 → 2차: 남은 것끼리 순서대로 대응
-const usedLabels = new Set(mmddToLabel.values());
-const leftoverLabels = allKimbapLabels.filter(l => !usedLabels.has(l));
-const unmappedKeys = mmddKeys.filter(k => !mmddToLabel.has(k));
-const orderFallback = new Map();
-unmappedKeys.forEach((k, i) => {
-  if (i < leftoverLabels.length) orderFallback.set(k, leftoverLabels[i]);
-});
+// 김밥 탭에서 확인된 비강의 주차 (교제·나눔)
+const nonClassKeys = new Set(
+  [...mmddToLabel].filter(([, v]) => v === '교제' || v === '나눔').map(([k]) => k)
+);
 
-const sessions = mmddKeys.map((k, i) => {
-  const norm = mmddToLabel.get(k) || orderFallback.get(k) || '';
-  return {
+const sessions = [];
+let curriculumIdx = 0;
+mmddKeys.forEach((k, i) => {
+  let norm;
+  if (nonClassKeys.has(k)) {
+    norm = mmddToLabel.get(k);                       // 교제 / 나눔
+  } else if (curriculumIdx < CURRICULUM.length) {
+    norm = CURRICULUM[curriculumIdx++];              // 강의 순서대로 배정
+  } else {
+    norm = mmddToLabel.get(k) || null;               // 커리큘럼 초과분 (팬텀 컬럼 등)
+  }
+  sessions.push({
     cohort_id: COHORT_ID,
     session_date: dateOf.get(k),
     label: k,
-    label_norm: norm || null,
+    label_norm: norm,
     session_no: i + 1,
-    // 세션명을 못 찾으면 강의로 단정하지 않는다 (교제·나눔 오분류 방지)
     is_class: norm ? isClassSession(norm) : false,
-  };
+  });
 });
 
-if (orderFallback.size) {
-  console.log(`ℹ️  날짜 없어 순서로 매핑 ${orderFallback.size}건: ` +
-    [...orderFallback].map(([k, v]) => `${k}→${v}`).join(', '));
+// 김밥 탭 매핑과 어긋나는 곳이 있으면 알린다 (시트 구조 변경 감지)
+const conflicts = sessions.filter(s => {
+  const fromKimbap = mmddToLabel.get(s.label);
+  return fromKimbap && s.label_norm && fromKimbap !== s.label_norm;
+});
+if (conflicts.length) {
+  console.warn(`⚠️  김밥 탭 세션명과 불일치 ${conflicts.length}건:`);
+  for (const c of conflicts) {
+    console.warn(`    ${c.label}: 순서기준 ${c.label_norm} / 김밥탭 ${mmddToLabel.get(c.label)}`);
+  }
+  console.warn('    커리큘럼 순서가 바뀌었는지 확인하세요.\n');
 }
+
 const unmapped = sessions.filter(s => !s.label_norm);
 if (unmapped.length) {
-  console.warn(`⚠️  세션명 매핑 실패 ${unmapped.length}건: ${unmapped.map(s => s.label).join(', ')}`);
-  console.warn('    강의 카운트에서 제외됩니다. 김밥 탭 날짜 행을 확인하세요.\n');
+  console.warn(`⚠️  커리큘럼 범위 밖 세션 ${unmapped.length}건: ${unmapped.map(s => s.label).join(', ')}`);
+  console.warn('    강의 카운트에서 제외됩니다 (팬텀 컬럼일 수 있음).\n');
 }
-console.log(`ℹ️  강의로 판정된 세션: ${sessions.filter(s => s.is_class).map(s => s.label_norm).join(', ')}\n`);
+
+const classList = sessions.filter(s => s.is_class);
+console.log(`ℹ️  강의 ${classList.length}개: ${classList.map(s => `${s.label}=${s.label_norm}`).join(', ')}`);
+const nonClass = sessions.filter(s => s.label_norm && !s.is_class);
+if (nonClass.length) {
+  console.log(`ℹ️  비강의 ${nonClass.length}개: ${nonClass.map(s => `${s.label}=${s.label_norm}`).join(', ')}`);
+}
+console.log('');
 
 const members = [];
 const attendance = [];   // member key 기준, uuid는 이관 후 매핑
@@ -312,9 +339,35 @@ await upsert('sessions', sessions, 'cohort_id,session_date');
 console.log('▶ members');
 const savedMembers = await upsert(
   'members',
-  members.map(({ _key, _id, ...m }) => m),
+  members.map(({ _key, _id, ...m }) => m).map(m => ({ ...m, status: 'active' })),
   'cohort_id,name,phone'
 );
+
+// 시트에서 사라진 인원 처리
+// 매주 수료·하차가 발생하므로 DB에만 남은 사람을 표시해야 한다.
+// 삭제하지 않고 status만 바꿔 이력(출석·과제)을 보존한다.
+{
+  const sheetKeys = new Set(members.map(m => `${m.name}|${m.phone || ''}`));
+  const { data: dbMembers, error } = await sb
+    .from('members')
+    .select('id, name, phone, status')
+    .eq('cohort_id', COHORT_ID);
+  if (error) throw new Error(`members 조회 실패: ${error.message}`);
+
+  const gone = (dbMembers || []).filter(
+    m => m.status === 'active' && !sheetKeys.has(`${m.name}|${m.phone || ''}`)
+  );
+  if (gone.length) {
+    const { error: upErr } = await sb
+      .from('members')
+      .update({ status: 'inactive' })
+      .in('id', gone.map(m => m.id));
+    if (upErr) throw new Error(`inactive 처리 실패: ${upErr.message}`);
+    console.log(`   시트에서 빠진 ${gone.length}명 → status=inactive: ${gone.map(m => m.name).join(', ')}`);
+  }
+
+  // 다시 시트에 나타난 사람은 위 upsert에서 status='active'로 복귀됨
+}
 const keyToUuid = new Map();
 const gasIdToUuid = new Map();
 for (const m of savedMembers) {

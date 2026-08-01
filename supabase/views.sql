@@ -178,3 +178,37 @@ grant select on v_completion_status  to anon, authenticated;
 grant select on v_homework_required  to anon, authenticated;
 grant select on v_completion_risk    to anon, authenticated;
 grant select on v_team_report        to anon, authenticated;
+
+
+-- ===================================================================
+-- 6. 최근 편성된 신규 인원
+--    매주 수료·추가가 발생하므로 '누가 새로 왔는지' 빠르게 파악
+-- ===================================================================
+create or replace view v_recent_members as
+select
+  m.id, m.cohort_id, m.name, m.phone, m.team, m.role,
+  m.location, m.status, m.created_at,
+  -- 첫 출석 기록이 있는 세션
+  (select min(s.session_date)
+     from attendance a
+     join sessions s on s.session_date = a.session_date and s.cohort_id = m.cohort_id
+    where a.member_id = m.id
+      and upper(trim(coalesce(a.status,''))) in ('O','◎')) as first_attended
+from members m
+where m.status = 'active'
+order by m.created_at desc nulls last;
+
+-- ===================================================================
+-- 7. 비활성 인원 (시트에서 빠진 사람 = 수료·하차)
+-- ===================================================================
+create or replace view v_inactive_members as
+select
+  m.id, m.cohort_id, m.name, m.phone, m.team, m.role,
+  m.completion, m.updated_at,
+  c.credited, c.required, c.verdict
+from members m
+left join v_completion_status c on c.member_id = m.id
+where m.status <> 'active';
+
+grant select on v_recent_members   to anon, authenticated;
+grant select on v_inactive_members to anon, authenticated;

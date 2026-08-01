@@ -16,7 +16,8 @@ alter table sessions add column if not exists is_class boolean default true;
 alter table members add column if not exists admin_note text;
 alter table members add column if not exists needs_review boolean default false;
 alter table members add column if not exists status text default 'active';
-  -- active | completed | withdrawn (수료·하차 처리용)
+  -- active | inactive (시트에서 빠진 인원 = 수료·하차. 삭제하지 않고 표시만)
+alter table members add column if not exists created_at timestamptz default now();
 
 -- ===================================================================
 -- 3. 김밥 신청 (세션별)
