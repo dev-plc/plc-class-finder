@@ -24,9 +24,9 @@ const PRESETS = {
   completion_status: {
     title: '수료 판정 현황',
     view: 'v_completion_status',
-    columns: ['team', 'name', 'phone', 'credited', 'required', 'remaining_needed',
-              'absent_count', 'before_join_count', 'no_class_count',
-              'makeup_used', 'verdict'],
+    columns: ['team', 'name', 'phone', 'present_count', 'absent_count',
+              'makeup_used', 'credited', 'required', 'remaining_needed',
+              'skipped_count', 'unrecorded_count', 'verdict'],
     order: { column: 'team' },
   },
   makeup_detail: {
@@ -34,14 +34,6 @@ const PRESETS = {
     view: 'v_makeup_detail',
     columns: ['team', 'name', 'phone', 'session_label', 'session_date',
               'homework_type', 'seq', 'counted'],
-    order: { column: 'team' },
-  },
-  in_progress: {
-    title: '진행중 (중도 합류 — 다음 기수 이어듣기 대상)',
-    view: 'v_completion_status',
-    columns: ['team', 'name', 'phone', 'credited', 'required',
-              'before_join_count', 'absent_count', 'makeup_used', 'verdict'],
-    filter: (q) => q.eq('verdict', '진행중'),
     order: { column: 'team' },
   },
   completion_risk: {
@@ -60,7 +52,7 @@ const PRESETS = {
   team_report: {
     title: '조별 요약',
     view: 'v_team_report',
-    columns: ['team', 'member_count', 'completed', 'in_progress', 'needs_review',
+    columns: ['team', 'member_count', 'completed', 'needs_review',
               'incomplete', 'makeup_total', 'avg_credited', 'avg_pct'],
     order: { column: 'team' },
   },
