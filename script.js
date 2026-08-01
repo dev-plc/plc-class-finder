@@ -10,6 +10,7 @@ import {
     getGeneralAnnouncementLink,
     getKimbapDetail,
     getHomeworkList,
+    getSessions,
     updateAttendanceBatch,
     getCacheInfo,
     MODULE_VERSION,
@@ -476,22 +477,20 @@ function renderStatusDetail(member) {
     const kimbapDetail = getKimbapDetail(memberId);
     const homeworkList = getHomeworkList(memberId);
 
-    const rawSessions = extractSessions(member);
-    const hasKimbap = Object.keys(kimbapDetail).length > 0;
-
-    // 김밥 탭에 매칭되는 세션만 유지 (07/19, 07/22 같은 유령 컬럼 제거)
-    // 김밥 데이터 없으면 원본 그대로 (fallback)
-    const enriched = [];
-    for (const mmdd of rawSessions) {
-        const kb = matchKimbapForDate(kimbapDetail, mmdd);
-        if (hasKimbap && !kb) continue;
-        enriched.push({
+    // 세션 목록은 DB(sessions 테이블)에서 온다.
+    // label_norm·is_class 가 이미 정해져 있어 추론이 필요 없다.
+    const dbSessions = getSessions();
+    const enriched = dbSessions.map(s => {
+        const mmdd = String(s.label || '').trim();
+        const name = s.label_norm || '';
+        const kb = name ? kimbapDetail[name] : null;
+        return {
             mmdd,
-            sessionName: kb?.name || '',
+            sessionName: name,
             kimbapApplied: kb?.applied === 1,
-            isClass: kb ? isClassSession(kb.name) : true,
-        });
-    }
+            isClass: s.is_class === true,
+        };
+    }).filter(e => e.mmdd);
 
     const grid = document.getElementById('attendanceGrid');
     const summary = document.getElementById('attendanceSummary');
@@ -831,39 +830,15 @@ async function saveAttendanceBatch() {
 // 조 전체 출석표 (매트릭스 모달)
 // ============================================================================
 
-// 조 전체에서 공통으로 쓸 세션 목록 산출.
-// 각 조원의 MM/DD 키 합집합 → 김밥 세션명 매칭 → 날짜순 정렬.
-function buildSessionColumns(members) {
-    const mmddSet = new Set();
-    for (const m of members) {
-        for (const k of Object.keys(m)) {
-            if (SESSION_KEY_RE.test(k)) mmddSet.add(k);
-        }
-    }
-    // 아무 조원의 kimbapDetail로 세션명 매칭 (조원 전체가 같은 커리큘럼)
-    const sampleDetail = members.reduce((acc, m) => {
-        if (Object.keys(acc).length) return acc;
-        const id = m.id || (String(m.name || '') + String(m.phone || ''));
-        return getKimbapDetail(id);
-    }, {});
-    const hasKimbap = Object.keys(sampleDetail).length > 0;
-
-    const cols = [];
-    for (const mmdd of mmddSet) {
-        const kb = matchKimbapForDate(sampleDetail, mmdd);
-        if (hasKimbap && !kb) continue;   // 팬텀 컬럼 제외
-        cols.push({
-            mmdd,
-            name: kb?.name || '',
-            isClass: kb ? isClassSession(kb.name) : true,
-        });
-    }
-    cols.sort((a, b) => {
-        const [am, ad] = a.mmdd.split('/').map(Number);
-        const [bm, bd] = b.mmdd.split('/').map(Number);
-        return am === bm ? ad - bd : am - bm;
-    });
-    return cols;
+// 조 전체 출석표의 세션 컬럼. DB의 sessions 테이블을 그대로 쓴다.
+function buildSessionColumns() {
+    return getSessions()
+        .map(s => ({
+            mmdd: String(s.label || '').trim(),
+            name: s.label_norm || '',
+            isClass: s.is_class === true,
+        }))
+        .filter(c => c.mmdd);
 }
 
 function renderTeamMatrix(teamName, members) {
@@ -873,7 +848,7 @@ function renderTeamMatrix(teamName, members) {
 
     if (titleEl) titleEl.textContent = `👥 ${teamName} 전체 현황 (${members.length}명)`;
 
-    const cols = buildSessionColumns(members);
+    const cols = buildSessionColumns();
     const sorted = [...members].sort((a, b) => {
         const pa = rolePriority[a.role] || 4;
         const pb = rolePriority[b.role] || 4;
@@ -895,7 +870,7 @@ function renderTeamMatrix(teamName, members) {
 
         const cells = cols.map(c => {
             const s = classifyStatus(m[c.mmdd]);
-            const kb = matchKimbapForDate(kimbapDetail, c.mmdd);
+            const kb = c.name ? kimbapDetail[c.name] : null;
             const hw = c.name ? homeworkForSession(homeworkList, c.name) : [];
             const badges = [];
             if (kb?.applied === 1) badges.push('🍙');
