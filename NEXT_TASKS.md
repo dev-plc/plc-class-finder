@@ -20,53 +20,56 @@ DB 전환은 수단이고, 목표는 자동 판정 · 자동 리포트 · 당사
 
 ```
 분모: 실제 강의 16강 = 교리1~12 + 성경적대화1~4
-      (교제, 나눔은 분모에서 제외)
+      (교제·나눔은 is_class=false 로 제외)
 
-출석 인정:
-  O  현장 출석
-  ◎  지난 기수 이수분 (출석으로 카운트)
-  X  + 해당 주차 과제·소감문 제출 → 출석 인정, 최대 3회
-  −  수업 없음 → 분모에서 제외
+출석 인정:  O (현장)  ·  ◎ (지난 기수 이수분)
+결석:       X
+집계 제외:  -  (하차·중도합류·휴강 등 사유 불문)
+            빈칸 (아직 기록되지 않음)
 
-수료(O)  : 인정 출석 = 16
-미수료(X): 그 외
+보충: 결석(X)한 주차에 과제·소감문 제출 시 출석 인정, 최대 3회
+      인정 건수 makeup_used, 상세는 v_makeup_detail
 
-보충 3회 초과:
-  원칙적으로 미수료. 단 참작 사유가 있으면 관리자 재량으로 인정.
-  → 시스템은 "관리자 확인 필요" 플래그를 세우고 최종 판단은 사람이.
+수료(O)      : credited(= present + makeup_used) >= 16
+관리자확인   : 보충이 3회를 초과 (참작 사유 판단 필요)
+미수료(X)    : 그 외
 
-△(부분수료): 기준 미확정. 확정 전까지 시트 값 그대로 표시만 하고
-             자동 판정에는 쓰지 않는다.
+△(부분수료): 기준 미확정. 시트 값만 보존하고 자동 판정에는 미사용
 ```
+
+**규칙은 `supabase/views.sql` 한 곳에만 있다.** 기준이 바뀌면 이 파일만 고친다.
 
 ---
 
 ## 작업 순서
 
-### 1단계 — 기반 (규칙과 무관, 즉시 착수 가능)
+### 1단계 — 기반  ✅ 완료
 
-- [ ] **스키마 보강**
-  - `kimbap_signups` (cohort_id, member_id, session_label, session_date, applied)
-  - `homework_submissions` (cohort_id, member_id, session_label, type, url, submitted_at)
-  - `sessions`에 `is_class` 컬럼 (교리·성경적대화 = true, 교제·나눔 = false)
-  - `members`에 `admin_note`, `needs_review` (관리자 확인 필요 플래그)
-- [ ] **동기화 스크립트** — GAS doGet 응답 → Supabase 전량 upsert
-  - 기존 `scripts/migrate-to-supabase.mjs` 확장
-  - members / attendance / kimbap_signups / homework_submissions / sessions
-- [ ] **GitHub Actions**
-  - `workflow_dispatch` (수동 실행) + 일 1회 스케줄
-  - 스케줄이 keepalive 역할도 겸함 (7일 무활동 pause 방지)
-  - Secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- [x] 스키마 보강 (`supabase/schema_v2.sql`)
+      sessions.label_norm·is_class / members.status·created_at·admin_note
+      kimbap_signups / homework_submissions
+- [x] 동기화 (`scripts/sync-sheet-to-db.mjs`)
+      GAS v21 응답 → Supabase 전량 upsert
+      시트에서 빠진 인원은 status=inactive (이력 보존)
+      기수 시작 연도는 cohorts.started_at 에서 읽음
+- [x] GitHub Actions
+      sync-db.yml   수동 + 일 1회 (Supabase pause 방지 겸용)
+      query-db.yml  preset 조회
+      run-sql.yml   임의 SELECT (진단용, exec_sql RPC 경유)
 
-> allowlist 불필요: Actions가 실행 주체이고, 웹앱은 사용자 브라우저에서 동작.
+### 2단계 — 판정 규칙  ✅ 완료
 
-### 2단계 — 판정 규칙 (뷰)
+- [x] v_attendance_summary  출석·결석·보충 집계
+- [x] v_completion_status   수료/관리자확인/미수료
+- [x] v_homework_required   결석(X) 주차 중 미제출 건만
+- [x] v_completion_risk     남은 강의로도 도달 불가한 인원
+- [x] v_team_report         조별 요약
+- [x] v_makeup_detail       보충 인정 건별 내역
+- [x] v_recent_members / v_inactive_members
 
-- [ ] `v_attendance_summary` — 인원별 인정 출석 / 실결석 / 보충 사용 횟수
-- [ ] `v_completion_status` — 수료 판정 (O / X / 관리자확인필요)
-- [ ] `v_homework_required` — **결석한 주차만** 과제 대상으로 산출
-      (출석한 주차는 과제 안내 대상 아님)
-- [ ] `v_completion_risk` — 남은 강의 다 나와도 수료 불가한 인원
+검증 (2026-07-31 기준 142명):
+  수료 41 · 관리자확인 1 · 미수료 100
+  present + makeup_used = credited 전 행 일치, credited <= 16 확인
 
 ### 3단계 — 본인 안내 (행정력 절감 효과 최대)
 
