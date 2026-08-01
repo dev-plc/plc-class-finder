@@ -5,14 +5,14 @@
 //
 // 캐시 무효화: CACHE_VERSION 숫자 bump
 
-const CACHE_VERSION = 'plc-v14';
+const CACHE_VERSION = 'plc-v15';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './admin.html',
-  './style.css?v=31',
+  './style.css?v=32',
   './admin.css?v=1',
-  './script.js?v=31',
+  './script.js?v=32',
   './admin.js?v=5',
   './scripts/members-data.js',
   './scripts/supabase-config.js',

@@ -10,7 +10,10 @@
 import { matches as hangulMatches } from './hangul.js';
 import { sbSelect, sbRpc, COHORT_ID } from './supabase-config.js';
 
-export const MODULE_VERSION = 'members-data v30 (Supabase)';
+export const MODULE_VERSION = 'members-data v31 (Supabase + 진행상황)';
+
+// 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
+export const MAKEUP_LIMIT = 3;
 
 // ============================================================================
 // 캐시 설정
@@ -23,6 +26,8 @@ const CK = {
   homework:    `plc_homework_v${CACHE_VERSION}`,
   kimbap:      `plc_kimbap_v${CACHE_VERSION}`,
   sessions:    `plc_sessions_v${CACHE_VERSION}`,
+  progress:    `plc_progress_v${CACHE_VERSION}`,
+  needHomework:`plc_need_hw_v${CACHE_VERSION}`,
 };
 
 // ============================================================================
@@ -35,6 +40,8 @@ const state = {
   teamLinks: {},
   homework: {},      // { id: [{session, type, url, submittedAt}, ...] }
   kimbap: {},        // { id: { '교리1': {applied, date}, ... } }
+  progress: {},      // { uuid: {credited, required, remaining_needed, ...} }
+  needHomework: {},  // { uuid: [{session_label, session_date}, ...] }
   loaded: false,
 };
 const subscribers = new Set();
@@ -62,6 +69,8 @@ function readCacheSync() {
     state.teamLinks   = get(CK.teamLinks, {});
     state.homework    = get(CK.homework, {});
     state.kimbap      = get(CK.kimbap, {});
+    state.progress     = get(CK.progress, {});
+    state.needHomework = get(CK.needHomework, {});
     state.loaded = true;
     return true;
   } catch (e) {
@@ -78,6 +87,8 @@ function writeCacheSync() {
     localStorage.setItem(CK.teamLinks,   JSON.stringify(state.teamLinks));
     localStorage.setItem(CK.homework,    JSON.stringify(state.homework));
     localStorage.setItem(CK.kimbap,      JSON.stringify(state.kimbap));
+    localStorage.setItem(CK.progress,     JSON.stringify(state.progress));
+    localStorage.setItem(CK.needHomework, JSON.stringify(state.needHomework));
   } catch (e) {
     console.warn('캐시 쓰기 실패, 무시:', e);
   }
@@ -141,7 +152,8 @@ function buildMemberRow(m, sessions, attByMember) {
 async function fetchFromServer() {
   const enc = encodeURIComponent(COHORT_ID);
 
-  const [members, sessions, attendance, kimbap, homework, teamLinks, locationMaps] =
+  const [members, sessions, attendance, kimbap, homework, teamLinks, locationMaps,
+         progress, needHomework] =
     await Promise.all([
       sbSelect(`members?select=*&cohort_id=eq.${enc}&status=eq.active&order=team,team_no`),
       sbSelect(`sessions?select=*&cohort_id=eq.${enc}&order=session_date`),
@@ -150,6 +162,11 @@ async function fetchFromServer() {
       sbSelect(`homework_submissions?select=member_id,session_label,session_raw,type,url,submitted_at&cohort_id=eq.${enc}`),
       sbSelect(`team_links?select=team,chat_url&cohort_id=eq.${enc}`),
       sbSelect(`location_maps?select=location,image_url,detail_url`),
+      // 판정 결과는 DB 뷰에서 그대로 읽는다 (규칙이 views.sql 한 곳에만 있도록)
+      sbSelect(`v_completion_status?select=member_id,credited,required,remaining_needed,` +
+               `present_count,absent_count,makeup_used,makeup_available,makeup_overflow,` +
+               `unrecorded_count,verdict&cohort_id=eq.${enc}`),
+      sbSelect(`v_homework_required?select=member_id,session_label,session_date&cohort_id=eq.${enc}`),
     ]);
 
   // 출결을 member_id → (session_date → status) 로 정리
@@ -186,6 +203,21 @@ async function fetchFromServer() {
     });
   }
 
+  const progressMap = {};
+  for (const p of progress) progressMap[p.member_id] = p;
+
+  const needHomeworkMap = {};
+  for (const h of needHomework) {
+    (needHomeworkMap[h.member_id] ||= []).push({
+      sessionLabel: h.session_label,
+      sessionDate: h.session_date,
+    });
+  }
+  // 최근 강의부터 (과제 안내는 최근 것이 먼저 눈에 들어와야 한다)
+  for (const list of Object.values(needHomeworkMap)) {
+    list.sort((a, b) => String(b.sessionDate).localeCompare(String(a.sessionDate)));
+  }
+
   const teamLinkMap = {};
   for (const t of teamLinks) if (t.team) teamLinkMap[t.team] = t.chat_url || '';
 
@@ -203,6 +235,8 @@ async function fetchFromServer() {
     teamLinks: teamLinkMap,
     homework: homeworkMap,
     kimbap: kimbapMap,
+    progress: progressMap,
+    needHomework: needHomeworkMap,
   };
 }
 
@@ -280,6 +314,46 @@ export function getTeamLink(teamName) {
 
 export function getGeneralAnnouncementLink() {
   return state.teamLinks['새가족교육안내방'] || null;
+}
+
+/**
+ * 본인의 수료 진행 상황.
+ * 판정 규칙은 DB 뷰(v_completion_status)에 있고 여기서는 읽기만 한다.
+ *
+ * @param {object} member  findMember 등이 돌려준 인원 객체
+ * @returns {{credited, required, remainingNeeded, presentCount, absentCount,
+ *            makeupUsed, makeupAvailable, makeupOverflow, unrecordedCount,
+ *            verdict, makeupLeft}|null}
+ */
+export function getProgress(member) {
+  const uuid = member?._uuid;
+  if (!uuid) return null;
+  const p = state.progress[uuid];
+  if (!p) return null;
+  return {
+    credited:        p.credited ?? 0,
+    required:        p.required ?? 16,
+    remainingNeeded: p.remaining_needed ?? 0,
+    presentCount:    p.present_count ?? 0,
+    absentCount:     p.absent_count ?? 0,
+    makeupUsed:      p.makeup_used ?? 0,
+    makeupAvailable: p.makeup_available ?? 0,
+    makeupOverflow:  p.makeup_overflow ?? 0,
+    unrecordedCount: p.unrecorded_count ?? 0,
+    verdict:         p.verdict ?? '',
+    // 남은 보충 기회 (한도 3회 기준)
+    makeupLeft: Math.max(0, MAKEUP_LIMIT - (p.makeup_used ?? 0)),
+  };
+}
+
+/**
+ * 제출이 필요한 과제 목록 (결석한 주차 중 미제출).
+ * @returns {Array<{sessionLabel: string, sessionDate: string}>} 최근 강의부터
+ */
+export function getRequiredHomework(member) {
+  const uuid = member?._uuid;
+  if (!uuid) return [];
+  return state.needHomework[uuid] || [];
 }
 
 export function getKimbapDetail(memberId) {
@@ -408,6 +482,8 @@ export function clearCache() {
   state.teamLinks = {};
   state.homework = {};
   state.kimbap = {};
+  state.progress = {};
+  state.needHomework = {};
   state.loaded = false;
   notify({ type: 'cache-cleared' });
 }
