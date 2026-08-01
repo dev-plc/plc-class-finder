@@ -4,9 +4,12 @@
 -- 규칙 (2026-07-28 확정):
 --   분모: 실제 강의 16강 = 교리1~12 + 성경적대화1~4 (교제·나눔 제외)
 --   출석 인정: O(현장) / ◎(지난 기수 이수분)
---   보충: 결석(X)한 주차의 과제·소감문 제출 시 출석 인정, 최대 3회
+--   보충: 결석(X)·미기록 주차에 과제·소감문 제출 시 출석 인정, 최대 3회
+--         인정 건수는 makeup_used, 상세는 v_makeup_detail 에서 확인
 --   수료: 인정 출석 = 16
---   보충 3회 초과: 원칙 미수료, 참작 사유 있으면 관리자 재량 → needs_review 플래그
+--   보충 3회 초과: 원칙 미수료, 참작 사유 있으면 관리자 재량 → '관리자확인'
+--   중도 합류: 합류 전 주차는 '-'. 이번 기수에 16강을 채울 수 없으므로 '진행중'.
+--             이전 주차는 과제로 보충하거나 다음 기수에 이어서 듣는다.
 
 -- ===================================================================
 -- 상수: 수료 요건
@@ -48,6 +51,8 @@ scored as (
     (raw_status in ('O', '◎'))                          as present,
     -- 결석 (미기록도 결석 취급, 단 수업없음 '-'은 제외)
     (raw_status not in ('O', '◎', '-'))                 as absent,
+    -- 미참여 ('-'): 합류 전 주차이거나 해당 주 수업 없음
+    (raw_status = '-')                                  as not_applicable,
     -- 해당 주차 과제 제출 여부
     exists (
       select 1 from homework_submissions h
@@ -61,6 +66,8 @@ select
   count(*)                                        as total_sessions,
   count(*) filter (where present)                 as present_count,
   count(*) filter (where absent)                  as absent_count,
+  -- 미참여 주차 (중도 합류 판단용)
+  count(*) filter (where not_applicable)          as na_count,
   -- 결석했지만 과제 제출한 주차 = 보충 가능 건
   count(*) filter (where absent and has_homework) as makeup_available,
   -- 실제 인정되는 보충 (한도 내)
@@ -88,12 +95,20 @@ select
   s.*,
   completion_required_sessions()          as required,
   greatest(completion_required_sessions() - s.credited, 0) as remaining_needed,
+  -- 중도 합류: 합류 전 주차가 '-'로 남아 이번 기수에 16강을 채울 수 없는 경우.
+  -- 이전 주차는 과제로 보충하거나 다음 기수에 이어서 듣는다.
+  (s.na_count > 0
+     and s.credited + s.na_count >= completion_required_sessions()
+     and s.credited < completion_required_sessions())    as joined_midway,
   case
     when s.credited >= completion_required_sessions() then '수료'
     when s.makeup_overflow > 0                        then '관리자확인'
+    when s.na_count > 0
+     and s.credited + s.na_count >= completion_required_sessions()
+                                                      then '진행중'
     else '미수료'
   end                                     as verdict,
-  -- 관리자 재량 판단이 필요한 경우
+  -- 관리자 재량 판단이 필요한 경우 (보충 한도 초과)
   (s.makeup_overflow > 0)                 as needs_admin_review,
   m.needs_review                          as flagged_by_admin,
   m.admin_note
@@ -149,7 +164,7 @@ select
   c.verdict
 from v_completion_status c
 join remaining r on r.member_id = c.member_id
-where c.verdict <> '수료'
+where c.verdict not in ('수료', '진행중')
   and c.credited + r.sessions_left < c.required
   and c.status = 'active';
 
@@ -162,8 +177,11 @@ select
   cohort_id,
   count(*)                                        as member_count,
   count(*) filter (where verdict = '수료')         as completed,
+  count(*) filter (where verdict = '진행중')       as in_progress,
   count(*) filter (where verdict = '관리자확인')    as needs_review,
   count(*) filter (where verdict = '미수료')       as incomplete,
+  -- 과제로 출석 인정받은 총 건수 (조 단위)
+  sum(makeup_used)                                as makeup_total,
   round(avg(credited)::numeric, 1)                as avg_credited,
   round(100.0 * avg(credited) / nullif(max(required), 0), 1) as avg_pct
 from v_completion_status
@@ -212,3 +230,49 @@ where m.status <> 'active';
 
 grant select on v_recent_members   to anon, authenticated, service_role;
 grant select on v_inactive_members to anon, authenticated, service_role;
+
+
+-- ===================================================================
+-- 8. 과제로 출석 인정받은 내역 (보충 상세)
+--    결석·미기록 주차에 과제·소감문을 제출해 출석으로 인정된 건.
+--    인정 한도(3회)를 넘은 건은 counted=false 로 구분한다.
+-- ===================================================================
+create or replace view v_makeup_detail as
+with base as (
+  select
+    m.id            as member_id,
+    m.cohort_id,
+    m.name, m.phone, m.team, m.status,
+    s.label_norm    as session_label,
+    s.session_date,
+    upper(trim(coalesce(a.status, ''))) as att_status,
+    h.type          as homework_type,
+    h.url           as homework_url,
+    h.submitted_at
+  from members m
+  join sessions s
+    on s.cohort_id = m.cohort_id and s.is_class is true
+  left join attendance a
+    on a.member_id = m.id and a.session_date = s.session_date
+  join homework_submissions h
+    on h.member_id = m.id and h.session_label = s.label_norm
+  where upper(trim(coalesce(a.status, ''))) not in ('O', '◎', '-')
+),
+ranked as (
+  select
+    base.*,
+    row_number() over (
+      partition by member_id
+      order by session_date, submitted_at nulls last
+    ) as seq
+  from base
+)
+select
+  member_id, cohort_id, name, phone, team, status,
+  session_label, session_date,
+  att_status, homework_type, homework_url, submitted_at,
+  seq,
+  (seq <= makeup_limit()) as counted   -- 한도 내면 출석 인정
+from ranked;
+
+grant select on v_makeup_detail to anon, authenticated, service_role;

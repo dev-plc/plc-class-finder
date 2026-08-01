@@ -25,7 +25,22 @@ const PRESETS = {
     title: '수료 판정 현황',
     view: 'v_completion_status',
     columns: ['team', 'name', 'phone', 'credited', 'required', 'remaining_needed',
+              'absent_count', 'na_count', 'makeup_used', 'verdict'],
+    order: { column: 'team' },
+  },
+  makeup_detail: {
+    title: '과제로 출석 인정받은 내역',
+    view: 'v_makeup_detail',
+    columns: ['team', 'name', 'phone', 'session_label', 'session_date',
+              'homework_type', 'seq', 'counted'],
+    order: { column: 'team' },
+  },
+  in_progress: {
+    title: '진행중 (중도 합류 — 다음 기수 이어듣기 대상)',
+    view: 'v_completion_status',
+    columns: ['team', 'name', 'phone', 'credited', 'na_count',
               'absent_count', 'makeup_used', 'verdict'],
+    filter: (q) => q.eq('verdict', '진행중'),
     order: { column: 'team' },
   },
   completion_risk: {
@@ -44,8 +59,8 @@ const PRESETS = {
   team_report: {
     title: '조별 요약',
     view: 'v_team_report',
-    columns: ['team', 'member_count', 'completed', 'needs_review',
-              'incomplete', 'avg_credited', 'avg_pct'],
+    columns: ['team', 'member_count', 'completed', 'in_progress', 'needs_review',
+              'incomplete', 'makeup_total', 'avg_credited', 'avg_pct'],
     order: { column: 'team' },
   },
   needs_admin_review: {
