@@ -520,3 +520,278 @@ body.dark-mode .logout-btn:hover {
     }
 }
 
+
+/* ==========================================================================
+   출석 관리 탭
+   DB가 원본. 조·주차를 고르고 4단 상태를 찍은 뒤 한 번에 저장한다.
+   ========================================================================== */
+.att-picker {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.att-field {
+    flex: 1 1 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.att-field label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-light);
+    letter-spacing: -0.2px;
+}
+
+.att-field select {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-weight: 600;
+    border: 2px solid var(--warm-beige);
+    border-radius: 12px;
+    background: var(--white);
+    color: var(--text-dark);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+}
+
+.att-field select:focus {
+    outline: none;
+    border-color: var(--midnight-blue);
+    box-shadow: 0 0 0 3px rgba(27, 59, 111, 0.1);
+}
+
+.att-meta {
+    font-size: 13px;
+    color: var(--text-light);
+    margin-bottom: 14px;
+    padding-left: 2px;
+}
+
+.att-meta b { color: var(--text-dark); }
+.att-meta-off { color: #b45309; font-weight: 700; }
+
+.att-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.att-bulk {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.att-bulk-btn {
+    padding: 7px 13px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 2px solid var(--warm-beige);
+    border-radius: 18px;
+    background: var(--white);
+    color: var(--text-dark);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.att-bulk-btn:hover {
+    border-color: var(--midnight-blue);
+    transform: translateY(-1px);
+}
+
+.att-bulk-btn.ghost { color: var(--text-light); }
+
+.att-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.att-counts .c-o { color: #059669; }
+.att-counts .c-d { color: #2563eb; }
+.att-counts .c-x { color: #dc2626; }
+.att-counts .c-n { color: var(--text-light); }
+.att-counts .c-b { color: #b45309; }
+
+.att-list {
+    background: var(--white);
+    border-radius: 16px;
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    margin-bottom: 90px;
+}
+
+.att-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-light);
+    font-size: 15px;
+}
+
+.att-group {
+    padding: 10px 16px;
+    background: var(--warm-beige);
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-dark);
+    letter-spacing: -0.2px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.att-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--warm-beige);
+}
+
+.att-row:first-child { border-top: none; }
+
+/* 아직 아무 표시도 없는 사람 — 왼쪽에 주황 띠 */
+.att-row.blank { box-shadow: inset 3px 0 0 #f59e0b; }
+
+/* 저장하지 않은 변경 */
+.att-row.changed {
+    background: rgba(37, 99, 235, 0.07);
+    box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.att-who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.att-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-dark);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.att-phone {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-light);
+    margin-left: 3px;
+}
+
+.att-role {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: var(--warm-beige);
+    color: var(--text-light);
+}
+
+.att-states {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.att-state {
+    width: 40px;
+    height: 38px;
+    border: 2px solid var(--warm-beige);
+    border-radius: 10px;
+    background: var(--white);
+    color: var(--text-light);
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.att-state:hover { transform: translateY(-1px); border-color: var(--midnight-blue); }
+
+.att-state.on { color: #fff; border-color: transparent; }
+.att-state.on.s-o { background: #059669; }
+.att-state.on.s-d { background: #2563eb; }
+.att-state.on.s-x { background: #dc2626; }
+.att-state.on.s-n { background: #6b7280; }
+
+/* 저장 바 — 화면 아래 고정 */
+.att-savebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+    background: var(--white);
+    border-top: 2px solid var(--warm-beige);
+    box-shadow: 0 -4px 16px rgba(27, 59, 111, 0.12);
+}
+
+.att-save-info {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-light);
+}
+
+.att-save-info.ok { color: #059669; }
+.att-save-info.fail { color: var(--error-red); }
+
+.att-save-btn {
+    padding: 11px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--midnight-blue) 0%, var(--navy) 100%);
+    color: var(--white);
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.att-save-btn:hover:not(:disabled) { transform: translateY(-1px); }
+
+.att-save-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+    box-shadow: none;
+}
+
+/* 다크 모드에서 --white 가 어두운 색이라 흰 글씨가 그대로 읽힌다 */
+body.dark-mode .att-state.on { color: #0f172a; }
+body.dark-mode .att-row.changed { background: rgba(96, 165, 250, 0.12); }
+body.dark-mode .att-save-btn { color: #1a1f3a; }
+
+@media (max-width: 480px) {
+    .att-picker { gap: 8px; }
+    .att-field { flex: 1 1 100%; }
+    .att-row { padding: 9px 10px; }
+    .att-name { font-size: 14px; }
+    .att-state { width: 36px; height: 36px; font-size: 14px; }
+    .att-counts { font-size: 12px; gap: 7px; }
+    .att-savebar { padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
+    .att-save-btn { padding: 10px 18px; font-size: 14px; }
+    .att-save-info { font-size: 13px; }
+}

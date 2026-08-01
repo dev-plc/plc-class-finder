@@ -1,7 +1,13 @@
-// 데이터 계층 (Phase A: GAS, Phase C: Supabase 예정)
+// 데이터 계층. 백엔드(Supabase)는 이 모듈 안에만 있다.
 import {
     ensureLoaded,
     getMembers,
+    getSessions,
+    getTeams,
+    getSessionKey,
+    getCurrentSessionDate,
+    getTeamMembers,
+    updateAttendanceBatch,
 } from './scripts/members-data.js';
 import { matches as hangulMatches } from './scripts/hangul.js';
 
@@ -50,6 +56,7 @@ async function loadData() {
         console.log('✅ 데이터 로드:', getMembers().length, '명');
         renderTeamsView();
         renderMembersView();
+        initAttendanceTab();
     } catch (error) {
         console.error('❌ 데이터 로드 실패:', error);
         alert('데이터를 불러오는데 실패했습니다.');
@@ -316,6 +323,307 @@ function renderMembersView(filterText = '') {
 
 memberFilter?.addEventListener('input', (e) => {
     renderMembersView(e.target.value.trim());
+});
+
+// ============================================================================
+// 출석 관리
+//
+// 출석은 DB가 원본이다. 시트에서 고치지 않고 여기서만 기록한다.
+// 저장은 set_attendance_batch RPC 한 번으로 끝나고,
+// 바꾼 칸만 보낸다 (건드리지 않은 사람은 기존 값 그대로).
+// ============================================================================
+
+// 화면에 노출하는 4단 상태. DB가 허용하는 값과 같아야 한다.
+const ATT_STATES = [
+    { value: 'O', label: 'O', title: '출석' },
+    { value: '◎', label: '◎', title: '지난 기수에 이수 (출석 인정)' },
+    { value: 'X', label: 'X', title: '결석' },
+    { value: '-', label: '−', title: '집계 제외' },
+];
+const ATT_PREF_KEY = 'plc_admin_att_prefs';
+const TEAM_ALL = '__all__';
+
+const attSessionSelect = document.getElementById('attSession');
+const attTeamSelect = document.getElementById('attTeam');
+const attMeta = document.getElementById('attMeta');
+const attCounts = document.getElementById('attCounts');
+const attList = document.getElementById('attList');
+const attSaveInfo = document.getElementById('attSaveInfo');
+const attSaveBtn = document.getElementById('attSaveBtn');
+
+let attSessionDate = null;
+let attTeamName = TEAM_ALL;
+let attBaseline = new Map();   // uuid → 저장돼 있는 상태
+let attDraft = new Map();      // uuid → 화면에서 고른 상태
+let attSaving = false;
+
+function normStatus(v) {
+    const s = String(v ?? '').trim();
+    return s === '' ? '' : s.toUpperCase();
+}
+
+function attTargets() {
+    const rows = attTeamName === TEAM_ALL ? getMembers() : getTeamMembers(attTeamName);
+    return rows.filter(m => m._uuid);
+}
+
+function loadAttPrefs() {
+    try { return JSON.parse(localStorage.getItem(ATT_PREF_KEY) || '{}'); }
+    catch { return {}; }
+}
+
+function saveAttPrefs() {
+    try {
+        localStorage.setItem(ATT_PREF_KEY,
+            JSON.stringify({ session: attSessionDate, team: attTeamName }));
+    } catch { /* 저장 실패는 무시 */ }
+}
+
+function initAttendanceTab() {
+    if (!attSessionSelect || !attTeamSelect) return;
+
+    const sessions = getSessions();
+    const prefs = loadAttPrefs();
+
+    // 주차 — 최근이 위로 (방금 끝난 수업을 바로 찾도록)
+    attSessionSelect.innerHTML = '';
+    [...sessions].reverse().forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.session_date;
+        const name = s.label_norm || '';
+        opt.textContent = s.is_class
+            ? `${s.label}${name ? ' · ' + name : ''}`
+            : `${s.label}${name ? ' · ' + name : ''} (수료 미반영)`;
+        attSessionSelect.appendChild(opt);
+    });
+
+    const known = new Set(sessions.map(s => s.session_date));
+    attSessionDate = (prefs.session && known.has(prefs.session))
+        ? prefs.session
+        : getCurrentSessionDate();
+    if (attSessionDate) attSessionSelect.value = attSessionDate;
+
+    // 조
+    const teams = getTeams();
+    attTeamSelect.innerHTML = '';
+    const allOpt = document.createElement('option');
+    allOpt.value = TEAM_ALL;
+    allOpt.textContent = `전체 (${getMembers().length}명)`;
+    attTeamSelect.appendChild(allOpt);
+    teams.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = `${t} (${getTeamMembers(t).length}명)`;
+        attTeamSelect.appendChild(opt);
+    });
+    attTeamName = (prefs.team && (prefs.team === TEAM_ALL || teams.includes(prefs.team)))
+        ? prefs.team
+        : TEAM_ALL;
+    attTeamSelect.value = attTeamName;
+
+    resetAttDraft();
+    renderAttList();
+}
+
+// 화면의 선택 상태를 저장돼 있는 값으로 되돌린다.
+function resetAttDraft() {
+    attBaseline = new Map();
+    attDraft = new Map();
+    if (!attSessionDate) return;
+    const key = getSessionKey(attSessionDate);
+    for (const m of attTargets()) {
+        const cur = normStatus(m[key]);
+        attBaseline.set(m._uuid, cur);
+        attDraft.set(m._uuid, cur);
+    }
+}
+
+function attChanges() {
+    const out = [];
+    for (const [uuid, status] of attDraft) {
+        if (attBaseline.get(uuid) !== status) out.push({ memberUuid: uuid, status });
+    }
+    return out;
+}
+
+function renderAttList() {
+    if (!attList) return;
+
+    const targets = attTargets();
+    const session = getSessions().find(s => s.session_date === attSessionDate);
+
+    if (!attSessionDate || !session) {
+        attList.innerHTML = '<div class="att-empty">주차 정보를 불러오지 못했습니다.</div>';
+        if (attMeta) attMeta.textContent = '';
+        updateAttSummary();
+        return;
+    }
+    if (targets.length === 0) {
+        attList.innerHTML = '<div class="att-empty">해당 조에 인원이 없습니다.</div>';
+        updateAttSummary();
+        return;
+    }
+
+    if (attMeta) attMeta.innerHTML = session.is_class
+        ? `<b>${session.label}</b> ${session.label_norm || ''} · 수료 카운트에 포함`
+        : `<b>${session.label}</b> ${session.label_norm || ''} · <span class="att-meta-off">수료 카운트 제외</span>`;
+
+    const groupByTeam = attTeamName === TEAM_ALL;
+    let html = '';
+    let lastTeam = null;
+
+    for (const m of targets) {
+        if (groupByTeam && m.team !== lastTeam) {
+            lastTeam = m.team;
+            html += `<div class="att-group">${escapeHtml(m.team || '미편성')}</div>`;
+        }
+        const cur = attDraft.get(m._uuid) ?? '';
+        const changed = attBaseline.get(m._uuid) !== cur;
+        const role = m.role ? `<span class="att-role">${escapeHtml(m.role)}</span>` : '';
+
+        const buttons = ATT_STATES.map(st => `
+            <button type="button"
+                    class="att-state${cur === st.value ? ' on s-' + stateClass(st.value) : ''}"
+                    data-uuid="${m._uuid}" data-status="${st.value}"
+                    title="${st.title}" aria-pressed="${cur === st.value}">${st.label}</button>`).join('');
+
+        html += `
+            <div class="att-row${changed ? ' changed' : ''}${cur === '' ? ' blank' : ''}" data-uuid="${m._uuid}">
+                <div class="att-who">
+                    <span class="att-name">${escapeHtml(m.name)}<span class="att-phone">${escapeHtml(m.phone)}</span></span>
+                    ${role}
+                </div>
+                <div class="att-states">${buttons}</div>
+            </div>`;
+    }
+
+    attList.innerHTML = html;
+    updateAttSummary();
+}
+
+function stateClass(v) {
+    return { 'O': 'o', '◎': 'd', 'X': 'x', '-': 'n' }[v] || 'n';
+}
+
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function updateAttSummary() {
+    const counts = { 'O': 0, '◎': 0, 'X': 0, '-': 0, '': 0 };
+    for (const v of attDraft.values()) counts[v] = (counts[v] ?? 0) + 1;
+
+    if (attCounts) {
+        attCounts.innerHTML =
+            `<span class="c-o">출석 ${counts['O']}</span>` +
+            `<span class="c-d">대체 ${counts['◎']}</span>` +
+            `<span class="c-x">결석 ${counts['X']}</span>` +
+            `<span class="c-n">제외 ${counts['-']}</span>` +
+            `<span class="c-b">미기록 ${counts['']}</span>`;
+    }
+
+    const changes = attChanges();
+    if (!attSaveInfo || !attSaveBtn) return;
+    if (attSaving) {
+        attSaveInfo.textContent = '저장 중…';
+        attSaveBtn.disabled = true;
+        attSaveBtn.textContent = '저장 중…';
+    } else if (changes.length === 0) {
+        attSaveInfo.textContent = '변경 사항 없음';
+        attSaveBtn.disabled = true;
+        attSaveBtn.textContent = '저장';
+    } else {
+        attSaveInfo.textContent = `${changes.length}명 변경됨`;
+        attSaveBtn.disabled = false;
+        attSaveBtn.textContent = `${changes.length}명 저장`;
+    }
+}
+
+attSessionSelect?.addEventListener('change', () => {
+    if (attChanges().length && !confirm('저장하지 않은 변경이 있습니다. 버리고 이동할까요?')) {
+        attSessionSelect.value = attSessionDate;
+        return;
+    }
+    attSessionDate = attSessionSelect.value;
+    saveAttPrefs();
+    resetAttDraft();
+    renderAttList();
+});
+
+attTeamSelect?.addEventListener('change', () => {
+    if (attChanges().length && !confirm('저장하지 않은 변경이 있습니다. 버리고 이동할까요?')) {
+        attTeamSelect.value = attTeamName;
+        return;
+    }
+    attTeamName = attTeamSelect.value;
+    saveAttPrefs();
+    resetAttDraft();
+    renderAttList();
+});
+
+// 상태 버튼 (같은 값을 다시 누르면 미기록으로 되돌아간다)
+attList?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.att-state');
+    if (!btn || attSaving) return;
+    const uuid = btn.dataset.uuid;
+    const next = attDraft.get(uuid) === btn.dataset.status ? '' : btn.dataset.status;
+    attDraft.set(uuid, next);
+    renderAttList();
+});
+
+// 일괄 처리
+document.querySelectorAll('.att-bulk-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (attSaving) return;
+        const mode = btn.dataset.bulk;
+        if (mode === 'reset') {
+            for (const [uuid, v] of attBaseline) attDraft.set(uuid, v);
+        } else if (mode === 'clear') {
+            for (const uuid of attDraft.keys()) attDraft.set(uuid, '');
+        } else if (mode === 'fillX') {
+            for (const [uuid, v] of attDraft) if (v === '') attDraft.set(uuid, 'X');
+        } else {
+            for (const uuid of attDraft.keys()) attDraft.set(uuid, mode);
+        }
+        renderAttList();
+    });
+});
+
+attSaveBtn?.addEventListener('click', async () => {
+    const changes = attChanges();
+    if (changes.length === 0 || attSaving) return;
+
+    attSaving = true;
+    updateAttSummary();
+
+    const result = await updateAttendanceBatch(changes, attSessionDate);
+
+    attSaving = false;
+    if (result.success) {
+        // 데이터 계층이 인원 행을 이미 갱신했다. 그 값을 새 기준으로 삼는다.
+        for (const c of changes) attBaseline.set(c.memberUuid, c.status);
+        renderAttList();
+        const skipped = result.skipped?.length ?? 0;
+        attSaveInfo.textContent = skipped
+            ? `${result.updated}명 저장 · ${skipped}명 실패`
+            : `${result.updated}명 저장했습니다`;
+        attSaveInfo.classList.add('ok');
+        setTimeout(() => attSaveInfo.classList.remove('ok'), 2500);
+    } else {
+        renderAttList();
+        attSaveInfo.textContent = `저장 실패: ${result.error?.message || '알 수 없는 오류'}`;
+        attSaveInfo.classList.add('fail');
+        setTimeout(() => attSaveInfo.classList.remove('fail'), 5000);
+    }
+});
+
+// 저장하지 않고 창을 닫으려 하면 경고
+window.addEventListener('beforeunload', (e) => {
+    if (attChanges().length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
 });
 
 // ESC 키로 모달 닫기

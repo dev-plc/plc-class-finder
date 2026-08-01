@@ -10,7 +10,7 @@
 import { matches as hangulMatches } from './hangul.js';
 import { sbSelect, sbRpc, COHORT_ID } from './supabase-config.js';
 
-export const MODULE_VERSION = 'members-data v31 (Supabase + 진행상황)';
+export const MODULE_VERSION = 'members-data v32 (Supabase + 관리자 출석)';
 
 // 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
 export const MAKEUP_LIMIT = 3;
@@ -149,6 +149,33 @@ function buildMemberRow(m, sessions, attByMember) {
 // ============================================================================
 // 서버 통신
 // ============================================================================
+
+// 판정 결과 두 뷰. 출석이 바뀌면 값이 달라지므로 저장 직후에도 다시 읽는다.
+const PROGRESS_QUERY =
+  `v_completion_status?select=member_id,credited,required,remaining_needed,` +
+  `present_count,absent_count,makeup_used,makeup_available,makeup_overflow,` +
+  `unrecorded_count,verdict&cohort_id=eq.`;
+const NEED_HW_QUERY =
+  `v_homework_required?select=member_id,session_label,session_date&cohort_id=eq.`;
+
+function indexProgress(progress, needHomework) {
+  const progressMap = {};
+  for (const p of progress) progressMap[p.member_id] = p;
+
+  const needHomeworkMap = {};
+  for (const h of needHomework) {
+    (needHomeworkMap[h.member_id] ||= []).push({
+      sessionLabel: h.session_label,
+      sessionDate: h.session_date,
+    });
+  }
+  // 최근 강의부터 (과제 안내는 최근 것이 먼저 눈에 들어와야 한다)
+  for (const list of Object.values(needHomeworkMap)) {
+    list.sort((a, b) => String(b.sessionDate).localeCompare(String(a.sessionDate)));
+  }
+  return { progress: progressMap, needHomework: needHomeworkMap };
+}
+
 async function fetchFromServer() {
   const enc = encodeURIComponent(COHORT_ID);
 
@@ -163,10 +190,8 @@ async function fetchFromServer() {
       sbSelect(`team_links?select=team,chat_url&cohort_id=eq.${enc}`),
       sbSelect(`location_maps?select=location,image_url,detail_url`),
       // 판정 결과는 DB 뷰에서 그대로 읽는다 (규칙이 views.sql 한 곳에만 있도록)
-      sbSelect(`v_completion_status?select=member_id,credited,required,remaining_needed,` +
-               `present_count,absent_count,makeup_used,makeup_available,makeup_overflow,` +
-               `unrecorded_count,verdict&cohort_id=eq.${enc}`),
-      sbSelect(`v_homework_required?select=member_id,session_label,session_date&cohort_id=eq.${enc}`),
+      sbSelect(PROGRESS_QUERY + enc),
+      sbSelect(NEED_HW_QUERY + enc),
     ]);
 
   // 출결을 member_id → (session_date → status) 로 정리
@@ -203,20 +228,8 @@ async function fetchFromServer() {
     });
   }
 
-  const progressMap = {};
-  for (const p of progress) progressMap[p.member_id] = p;
-
-  const needHomeworkMap = {};
-  for (const h of needHomework) {
-    (needHomeworkMap[h.member_id] ||= []).push({
-      sessionLabel: h.session_label,
-      sessionDate: h.session_date,
-    });
-  }
-  // 최근 강의부터 (과제 안내는 최근 것이 먼저 눈에 들어와야 한다)
-  for (const list of Object.values(needHomeworkMap)) {
-    list.sort((a, b) => String(b.sessionDate).localeCompare(String(a.sessionDate)));
-  }
+  const { progress: progressMap, needHomework: needHomeworkMap } =
+    indexProgress(progress, needHomework);
 
   const teamLinkMap = {};
   for (const t of teamLinks) if (t.team) teamLinkMap[t.team] = t.chat_url || '';
@@ -270,6 +283,21 @@ export async function ensureLoaded({ forceRefresh = false, onBackgroundRefreshEr
   return { cacheHit: false, backgroundRefreshing: false };
 }
 
+/**
+ * 판정 뷰만 다시 읽는다. 출석을 저장하면 수료 진행률·과제 대상이 바뀌므로
+ * 전량 refresh 없이 이 두 가지만 갱신한다.
+ */
+export async function refreshProgress() {
+  const enc = encodeURIComponent(COHORT_ID);
+  const [progress, needHomework] = await Promise.all([
+    sbSelect(PROGRESS_QUERY + enc),
+    sbSelect(NEED_HW_QUERY + enc),
+  ]);
+  Object.assign(state, indexProgress(progress, needHomework));
+  writeCacheSync();
+  notify({ type: 'progress-refresh' });
+}
+
 export function getMembers() {
   return state.members;
 }
@@ -300,6 +328,25 @@ export function findMember(name, phone) {
 export function getTeamMembers(teamName) {
   if (!teamName) return [];
   return state.members.filter(m => m.team === teamName);
+}
+
+/**
+ * 조 이름 목록. 시트 편성 순서(team, team_no)를 그대로 따른다.
+ */
+export function getTeams() {
+  const seen = new Set();
+  const out = [];
+  for (const m of state.members) {
+    if (m.team && !seen.has(m.team)) { seen.add(m.team); out.push(m.team); }
+  }
+  return out;
+}
+
+/**
+ * 'YYYY-MM-DD' → 'MM/DD'. 인원 행에서 출결을 읽을 때 쓰는 키.
+ */
+export function getSessionKey(sessionDate) {
+  return toMMDD(sessionDate);
 }
 
 export function getLocationImage(location) {
@@ -429,6 +476,8 @@ export async function updateAttendanceBatch(entries, sessionDate) {
       p_entries: payload,
     });
     notify({ type: 'attendance-batch-confirmed', count: result?.updated ?? payload.length });
+    // 수료 진행률·과제 대상은 출석에서 파생된다. 저장을 막지 않도록 배경에서 갱신.
+    refreshProgress().catch(err => console.warn('진행상황 갱신 실패:', err));
     return {
       success: true,
       updated: result?.updated ?? payload.length,
