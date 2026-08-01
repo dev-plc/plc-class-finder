@@ -22,22 +22,40 @@ let sql = process.env.SQL || '';
 if (!sql && fileArg && existsSync(fileArg)) sql = readFileSync(fileArg, 'utf8');
 if (!sql && existsSync('supabase/adhoc.sql')) sql = readFileSync('supabase/adhoc.sql', 'utf8');
 
-sql = sql.trim().replace(/;+\s*$/, '');
-if (!sql) {
+// 선행 주석·빈 줄을 걷어낸 뒤 검사한다 (파일은 대개 설명 주석으로 시작)
+function stripLeadingComments(text) {
+  let s = text;
+  for (;;) {
+    const before = s;
+    s = s.replace(/^\s+/, '');
+    s = s.replace(/^--[^\n]*\n?/, '');   // 줄 주석
+    s = s.replace(/^\/\*[\s\S]*?\*\/\s*/, ''); // 블록 주석
+    if (s === before) return s;
+  }
+}
+
+sql = sql.replace(/;+\s*$/, '');
+const body = stripLeadingComments(sql).trim();
+
+if (!body) {
   console.error('❌ 실행할 SQL이 없습니다. SQL 환경변수나 supabase/adhoc.sql 을 지정하세요.');
   process.exit(1);
 }
 
 // 조회만 허용 (실수로 데이터를 바꾸지 않도록)
-if (!/^\s*(select|with)\b/i.test(sql)) {
+if (!/^(select|with)\b/i.test(body)) {
   console.error('❌ SELECT 또는 WITH 로 시작하는 조회만 실행할 수 있습니다.');
   console.error('   데이터 변경은 Supabase SQL Editor 에서 직접 하세요.');
+  console.error(`   받은 첫 구문: ${body.slice(0, 60)}…`);
   process.exit(1);
 }
-if (/;/.test(sql)) {
+if (/;/.test(body)) {
   console.error('❌ 세미콜론이 포함되어 있습니다. 한 번에 하나의 조회만 실행하세요.');
   process.exit(1);
 }
+
+// 주석을 제거한 본문만 전달 (DB 함수도 같은 검사를 하므로)
+sql = body;
 
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
