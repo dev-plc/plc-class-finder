@@ -4,8 +4,9 @@
 //
 // 사용법:
 //   node scripts/sync-sheet-to-db.mjs --dry-run
-//   node scripts/sync-sheet-to-db.mjs
-//   COHORT_ID=2기 node scripts/sync-sheet-to-db.mjs
+//   node scripts/sync-sheet-to-db.mjs                    (활성 기수 자동)
+//   node scripts/sync-sheet-to-db.mjs --cohort=3기
+//   node scripts/sync-sheet-to-db.mjs --cohort=3기 --activate   (기수 전환)
 //
 // 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GAS_API_URL(선택)
 
@@ -19,7 +20,12 @@ const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const getArg = (n) => args.find(a => a.startsWith(`--${n}=`))?.split('=')[1];
 
-const COHORT_ID  = getArg('cohort') || process.env.COHORT_ID || '2기';
+// 기수를 이 파일에 박아두면 3기·4기로 넘어갈 때마다 코드를 고쳐야 한다.
+// 지정이 없으면 DB의 활성 기수(cohorts.is_active)를 따라간다.
+const COHORT_ARG = getArg('cohort') || (process.env.COHORT_ID || '').trim();
+// --activate: 이 기수를 활성 기수로 지정하고 나머지를 비활성으로 내린다.
+// 기수 전환 때만 쓴다. 매일 도는 동기화가 활성 기수를 건드리면 안 된다.
+const ACTIVATE = args.includes('--activate');
 // 기수 시작 연도. 명시하지 않으면 DB의 cohorts.started_at 에서 읽고,
 // 그것도 없으면 현재 연도를 쓴다.
 // (하드코딩하면 기수가 바뀔 때 세션이 두 연도로 갈라져 집계가 깨진다)
@@ -38,6 +44,24 @@ const sb = SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
+// 기수 결정: 인자 > DB의 활성 기수 > 2기
+let COHORT_ID = COHORT_ARG;
+if (!COHORT_ID) {
+  if (sb) {
+    const { data } = await sb.from('cohorts')
+      .select('id').eq('is_active', true)
+      .order('started_at', { ascending: false }).limit(1).maybeSingle();
+    if (data?.id) {
+      COHORT_ID = data.id;
+      console.log(`ℹ️  기수 자동 결정: ${COHORT_ID} (cohorts.is_active)`);
+    }
+  }
+  if (!COHORT_ID) {
+    COHORT_ID = '2기';
+    console.log('ℹ️  활성 기수를 찾지 못해 기본값 사용: 2기');
+  }
+}
+
 // 기수 시작 연도 결정: 인자 > DB의 cohorts.started_at > 현재 연도
 let START_YEAR;
 if (START_YEAR_ARG) {
@@ -53,7 +77,7 @@ if (START_YEAR_ARG) {
 }
 
 console.log(`🏷️  cohort: ${COHORT_ID} / 기준 연도 ${START_YEAR}`);
-console.log(`🔧 mode:   ${dryRun ? 'DRY RUN' : 'LIVE'}\n`);
+console.log(`🔧 mode:   ${dryRun ? 'DRY RUN' : 'LIVE'}${ACTIVATE ? ' · 활성 기수로 지정' : ''}\n`);
 
 // ---------------------------------------------------------------- helpers
 const trim   = (v) => (v == null ? null : String(v).trim() || null);
@@ -97,9 +121,47 @@ function buildSessionDates(keys, startYear) {
 
 // ---------------------------------------------------------------- fetch
 console.log('▶ GAS 응답 가져오는 중…');
+
+// 배포 ID 는 URL 에 그대로 드러나므로 로그에는 앞뒤만 남긴다
+function maskGas(url) {
+  return String(url).replace(/\/s\/([\w-]{12})[\w-]+([\w-]{6})\//, '/s/$1…$2/');
+}
+function gasFailHint(status) {
+  console.error(`   요청 URL: ${maskGas(GAS_API_URL)}`);
+  console.error(`   출처:     ${process.env.GAS_API_URL ? 'GAS_API_URL 시크릿' : '스크립트 안의 기본 URL'}`);
+  if (status === 404) {
+    console.error('');
+    console.error('   404 는 그 배포가 더 이상 존재하지 않는다는 뜻입니다. 대개 둘 중 하나입니다.');
+    console.error('     1) "새 배포"를 만들어 URL 이 바뀌었는데 시크릿이 옛 URL 그대로');
+    console.error('     2) 기존 배포를 보관처리(archive)했다');
+    console.error('');
+    console.error('   Apps Script → 배포 → 배포 관리 에서 활성 배포의 웹 앱 URL 을 복사해');
+    console.error('   GitHub → Settings → Secrets → GAS_API_URL 을 갱신하세요.');
+    console.error('   ※ 다음부터는 "새 배포" 대신 기존 배포의 ✏️ → 버전: 새 버전 → 배포 를 쓰면');
+    console.error('     URL 이 그대로 유지돼 시크릿을 다시 만질 일이 없습니다.');
+  } else if (status === 401 || status === 403) {
+    console.error('   배포의 "액세스 권한이 있는 사용자"가 모든 사용자인지 확인하세요.');
+  }
+}
+
 const res = await fetch(GAS_API_URL + '?t=' + Date.now());
-if (!res.ok) { console.error(`❌ GAS 응답 실패: HTTP ${res.status}`); process.exit(1); }
-const gas = await res.json();
+if (!res.ok) {
+  console.error(`❌ GAS 응답 실패: HTTP ${res.status}`);
+  gasFailHint(res.status);
+  process.exit(1);
+}
+
+// 배포가 로그인 페이지로 넘기면 200 + HTML 이 돌아온다. JSON 파싱 오류보다 먼저 잡는다.
+const raw = await res.text();
+let gas;
+try {
+  gas = JSON.parse(raw);
+} catch {
+  console.error('❌ GAS 응답이 JSON 이 아닙니다 (로그인 페이지일 가능성이 큽니다).');
+  console.error(`   앞부분: ${raw.slice(0, 120).replace(/\s+/g, ' ')}`);
+  gasFailHint(res.status);
+  process.exit(1);
+}
 if (!gas.success) { console.error('❌ GAS success=false:', gas.message); process.exit(1); }
 
 const rows       = Array.isArray(gas.data) ? gas.data : [];
@@ -377,10 +439,22 @@ async function upsert(table, data, onConflict) {
 }
 
 console.log('▶ cohorts');
-await upsert('cohorts', [{
-  id: COHORT_ID, name: COHORT_ID, is_active: true,
+// is_active 는 --activate 일 때만 건드린다.
+// 매일 도는 동기화가 활성 기수를 되돌려 놓으면 기수 전환이 무너진다.
+const cohortRow = {
+  id: COHORT_ID, name: COHORT_ID,
   started_at: sessions[0]?.session_date ?? null,
-}], 'id');
+};
+if (ACTIVATE) cohortRow.is_active = true;
+await upsert('cohorts', [cohortRow], 'id');
+
+if (ACTIVATE) {
+  const { error } = await sb.from('cohorts')
+    .update({ is_active: false, archived_at: new Date().toISOString() })
+    .neq('id', COHORT_ID).eq('is_active', true);
+  if (error) throw new Error(`활성 기수 전환 실패: ${error.message}`);
+  console.log(`   ${COHORT_ID} → 활성 기수 (나머지 기수는 비활성)`);
+}
 
 console.log('▶ sessions');
 await upsert('sessions', sessions, 'cohort_id,session_date');

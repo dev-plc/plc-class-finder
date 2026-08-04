@@ -1,6 +1,8 @@
 // Google Apps Script — doGet + doPost 확장 버전
 // 기존 doGet · doPost 함수 전체를 이 코드로 교체.
 //
+// 핵심 변경 (v22): 시트 ID·탭 이름을 상단 상수로 분리 (기수 전환 시 한 줄만 수정)
+//
 // 핵심 변경 (v21):
 //   - doPost가 배치 저장 지원: { batch: [{name, phone, status}, ...] }
 //     ID→행 인덱스를 한 번만 만들고 컬럼 전체를 1회 read/write → 조 단위 저장이 빠름
@@ -26,6 +28,19 @@
 // 과제 시트 구조:
 //   Row 1: 헤더 (타임스탬프, 아이디, 연락처, 성별, 몇 강, 어떤 과제, 제출 URL, 수료여부)
 //   Row 2+: 폼 응답 (한 사람이 여러 행 가능)
+
+// ---------------------------------------------------------------------------
+// 이 기수의 스프레드시트 ID.
+// 기수가 바뀌어 새 시트를 쓰게 되면 이 한 줄만 바꾸고 재배포하면 된다.
+// (지난 기수 시트는 건드리지 않고 그대로 얼려 둔다)
+// ---------------------------------------------------------------------------
+var SHEET_ID = "12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM";
+
+// 탭 이름
+var TAB_ROSTER   = "출석부(DB)";
+var TAB_KIMBAP   = "김밥";
+var TAB_HOMEWORK = "과제";
+var TAB_LINKS    = "새가족링크";
 
 // 가장 최근 지난 (오늘 포함) 세션 컬럼 index. 없으면 -1.
 // 유일 기준: '출석부(DB)' 시트의 헤더 행 (외부 필터 없음).
@@ -60,7 +75,7 @@ function findRecentPastSessionCol_(headers, todayNorm) {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 21;
+  var currentVersion = 22;
 
   try {
     var postData = JSON.parse(e.postData.contents);
@@ -79,8 +94,8 @@ function doPost(e) {
       }));
     }
 
-    var ss = SpreadsheetApp.openById("12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM");
-    var sheet = ss.getSheetByName("출석부(DB)");
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(TAB_ROSTER);
     if (!sheet) throw new Error("'출석부(DB)' 시트를 찾을 수 없습니다.");
 
     var idCell = sheet.getRange(1, 1, 5, 26).createTextFinder("id").matchCase(false).matchEntireCell(true).findNext();
@@ -159,17 +174,17 @@ function doPost(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 21, message: e.message
+      success: false, version: 22, message: e.message
     }));
   }
 }
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 21; // 최근 지난 강의 기준 + 김밥/과제 + 배치 출석
+  var currentVersion = 22; // 최근 지난 강의 기준 + 김밥/과제 + 배치 출석
 
   try {
-    var ss = SpreadsheetApp.openById("12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM");
+    var ss = SpreadsheetApp.openById(SHEET_ID);
     var tz = Session.getScriptTimeZone();
     var today = new Date();
     var todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -179,7 +194,7 @@ function doGet(e) {
     // =========================================================
     var kimbapMap = {};    // 기존 호환: { id: "O"|"X" } (가장 가까운 예정 세션)
     var kimbapDetail = {}; // 신규: { id: { "교리1": {applied, date}, ... } }
-    var kimbapSheet = ss.getSheetByName("김밥");
+    var kimbapSheet = ss.getSheetByName(TAB_KIMBAP);
     if (kimbapSheet) {
       var kbData = kimbapSheet.getDataRange().getValues();
 
@@ -316,7 +331,7 @@ function doGet(e) {
     // 과제 탭 — 폼 응답 로그 (사람당 여러 행 가능)
     // =========================================================
     var homeworkMap = {}; // { id: [ {session, type, url, submittedAt}, ... ] }
-    var hwSheet = ss.getSheetByName("과제");
+    var hwSheet = ss.getSheetByName(TAB_HOMEWORK);
     if (hwSheet) {
       var hwData = hwSheet.getDataRange().getValues();
       if (hwData.length > 1) {
@@ -361,7 +376,7 @@ function doGet(e) {
     // =========================================================
     // 새가족링크 탭 (기존 그대로)
     // =========================================================
-    var telegramSheet = ss.getSheetByName("새가족링크");
+    var telegramSheet = ss.getSheetByName(TAB_LINKS);
     var telegramMap = {};
     var locationMap = {};
     if (telegramSheet) {
@@ -396,7 +411,7 @@ function doGet(e) {
     // =========================================================
     // 출석부(DB) 탭 (기존 그대로)
     // =========================================================
-    var sheet = ss.getSheetByName("출석부(DB)");
+    var sheet = ss.getSheetByName(TAB_ROSTER);
     if (!sheet) throw new Error("'출석부(DB)' 시트를 찾을 수 없습니다.");
     var data = sheet.getDataRange().getValues();
 
@@ -456,7 +471,7 @@ function doGet(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 21, message: e.message
+      success: false, version: 22, message: e.message
     }));
   }
 }

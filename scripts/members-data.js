@@ -8,9 +8,9 @@
 //   그 외(편성·명단·과제·김밥)  시트가 원본. 일 1회 동기화로 DB에 들어온다.
 
 import { matches as hangulMatches } from './hangul.js';
-import { sbSelect, sbRpc, COHORT_ID } from './supabase-config.js';
+import { sbSelect, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js';
 
-export const MODULE_VERSION = 'members-data v32 (Supabase + 관리자 출석)';
+export const MODULE_VERSION = 'members-data v33 (Supabase + 기수 자동 추적)';
 
 // 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
 export const MAKEUP_LIMIT = 3;
@@ -18,7 +18,7 @@ export const MAKEUP_LIMIT = 3;
 // ============================================================================
 // 캐시 설정
 // ============================================================================
-const CACHE_VERSION = 30;
+const CACHE_VERSION = 33;
 const CK = {
   members:     `plc_members_v${CACHE_VERSION}`,
   locationMap: `plc_location_map_v${CACHE_VERSION}`,
@@ -28,12 +28,14 @@ const CK = {
   sessions:    `plc_sessions_v${CACHE_VERSION}`,
   progress:    `plc_progress_v${CACHE_VERSION}`,
   needHomework:`plc_need_hw_v${CACHE_VERSION}`,
+  cohort:      `plc_cohort_v${CACHE_VERSION}`,
 };
 
 // ============================================================================
 // 메모리 상태
 // ============================================================================
 const state = {
+  cohortId: null,    // 이 데이터가 어느 기수 것인지 (기수 전환 감지에 쓴다)
   members: [],       // UI 호환 형태 (MM/DD 키 포함)
   sessions: [],      // [{session_date, label, label_norm, is_class, session_no}]
   locationMap: {},
@@ -71,6 +73,7 @@ function readCacheSync() {
     state.kimbap      = get(CK.kimbap, {});
     state.progress     = get(CK.progress, {});
     state.needHomework = get(CK.needHomework, {});
+    state.cohortId     = localStorage.getItem(CK.cohort) || getCachedCohortId();
     state.loaded = true;
     return true;
   } catch (e) {
@@ -89,6 +92,7 @@ function writeCacheSync() {
     localStorage.setItem(CK.kimbap,      JSON.stringify(state.kimbap));
     localStorage.setItem(CK.progress,     JSON.stringify(state.progress));
     localStorage.setItem(CK.needHomework, JSON.stringify(state.needHomework));
+    if (state.cohortId) localStorage.setItem(CK.cohort, state.cohortId);
   } catch (e) {
     console.warn('캐시 쓰기 실패, 무시:', e);
   }
@@ -176,15 +180,16 @@ function indexProgress(progress, needHomework) {
   return { progress: progressMap, needHomework: needHomeworkMap };
 }
 
-async function fetchFromServer() {
-  const enc = encodeURIComponent(COHORT_ID);
+async function fetchFromServer(cohortId) {
+  const enc = encodeURIComponent(cohortId);
 
   const [members, sessions, attendance, kimbap, homework, teamLinks, locationMaps,
          progress, needHomework] =
     await Promise.all([
       sbSelect(`members?select=*&cohort_id=eq.${enc}&status=eq.active&order=team,team_no`),
       sbSelect(`sessions?select=*&cohort_id=eq.${enc}&order=session_date`),
-      sbSelect(`attendance?select=member_id,session_date,status`),
+      sbSelect(`attendance?select=member_id,session_date,status,members!inner(cohort_id)` +
+               `&members.cohort_id=eq.${enc}`),
       sbSelect(`kimbap_signups?select=member_id,session_label,session_date,applied&cohort_id=eq.${enc}`),
       sbSelect(`homework_submissions?select=member_id,session_label,session_raw,type,url,submitted_at&cohort_id=eq.${enc}`),
       sbSelect(`team_links?select=team,chat_url&cohort_id=eq.${enc}`),
@@ -262,9 +267,17 @@ export function loadCache() {
 }
 
 export async function refresh() {
-  const fresh = await fetchFromServer();
-  Object.assign(state, fresh, { loaded: true });
+  const cohortId = await getActiveCohortId();
+  const previous = state.cohortId;
+  const fresh = await fetchFromServer(cohortId);
+  // fresh 가 모든 데이터 키를 덮으므로 이전 기수 값은 남지 않는다
+  Object.assign(state, fresh, { cohortId, loaded: true });
   writeCacheSync();
+
+  if (previous && previous !== cohortId) {
+    console.log(`기수 전환 감지: ${previous} → ${cohortId}`);
+    notify({ type: 'cohort-changed', from: previous, to: cohortId });
+  }
   notify({ type: 'refresh' });
   return true;
 }
@@ -288,7 +301,7 @@ export async function ensureLoaded({ forceRefresh = false, onBackgroundRefreshEr
  * 전량 refresh 없이 이 두 가지만 갱신한다.
  */
 export async function refreshProgress() {
-  const enc = encodeURIComponent(COHORT_ID);
+  const enc = encodeURIComponent(state.cohortId || await getActiveCohortId());
   const [progress, needHomework] = await Promise.all([
     sbSelect(PROGRESS_QUERY + enc),
     sbSelect(NEED_HW_QUERY + enc),
@@ -300,6 +313,13 @@ export async function refreshProgress() {
 
 export function getMembers() {
   return state.members;
+}
+
+/**
+ * 지금 화면에 올라와 있는 데이터의 기수 ID.
+ */
+export function getCohortId() {
+  return state.cohortId;
 }
 
 /**
@@ -514,6 +534,7 @@ export function subscribe(callback) {
 export function getCacheInfo() {
   return {
     loaded: state.loaded,
+    cohortId: state.cohortId,
     memberCount: state.members.length,
     sessionCount: state.sessions.length,
     teamCount: new Set(state.members.map(m => m.team).filter(Boolean)).size,
@@ -525,6 +546,7 @@ export function getCacheInfo() {
 
 export function clearCache() {
   Object.values(CK).forEach(k => localStorage.removeItem(k));
+  state.cohortId = null;
   state.members = [];
   state.sessions = [];
   state.locationMap = {};

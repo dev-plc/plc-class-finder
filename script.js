@@ -16,10 +16,12 @@ import {
     MAKEUP_LIMIT,
     updateAttendanceBatch,
     getCacheInfo,
+    getCohortId,
+    subscribe,
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v31 (출석 일괄 저장)';
+const SCRIPT_VERSION = 'script.js v33 (기수 전환 대응)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -134,6 +136,17 @@ async function loadData() {
         }
     }
 }
+
+// 기수 전환 감지
+//
+// 새 기수가 시작되면 캐시에 남은 이전 기수 결과가 화면에 떠 있을 수 있다.
+// 조용히 바꾸면 본인 것인 줄 알고 오해하므로, 걷어내고 알린다.
+subscribe((event) => {
+    if (event.type !== 'cohort-changed') return;
+    if (elements.resultContainer) elements.resultContainer.style.display = 'none';
+    if (elements.mapContainer) elements.mapContainer.style.display = 'none';
+    showError(`${event.to} 명단으로 갱신되었습니다. 다시 조회해 주세요.`);
+});
 
 // ============================================================================
 // 4. 검색 로직
