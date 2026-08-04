@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       cohort:
-        description: '기수 ID (기본 2기)'
+        description: '기수 ID (비우면 DB의 활성 기수를 따라감)'
         required: false
-        default: '2기'
+        default: ''
+      activate:
+        description: '이 기수를 활성 기수로 지정 (기수 전환 때만 체크)'
+        type: boolean
+        required: false
+        default: false
       dry_run:
         description: 'dry-run (쓰기 없이 확인만)'
         type: boolean
@@ -39,10 +44,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GAS_API_URL: ${{ secrets.GAS_API_URL }}
-          COHORT_ID: ${{ github.event.inputs.cohort || '2기' }}
+          COHORT_ID: ${{ github.event.inputs.cohort }}
         run: |
+          FLAGS=""
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            node scripts/sync-sheet-to-db.mjs --dry-run
-          else
-            node scripts/sync-sheet-to-db.mjs
+            FLAGS="$FLAGS --dry-run"
           fi
+          if [ "${{ github.event.inputs.activate }}" = "true" ]; then
+            FLAGS="$FLAGS --activate"
+          fi
+          echo "flags:${FLAGS:-(없음)}"
+          node scripts/sync-sheet-to-db.mjs $FLAGS

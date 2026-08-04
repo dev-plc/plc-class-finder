@@ -8,6 +8,8 @@ import {
     getCurrentSessionDate,
     getTeamMembers,
     updateAttendanceBatch,
+    getCohortId,
+    subscribe,
 } from './scripts/members-data.js';
 import { matches as hangulMatches } from './scripts/hangul.js';
 
@@ -53,7 +55,9 @@ async function loadData() {
         await ensureLoaded({
             onBackgroundRefreshError: (err) => console.warn('배경 갱신 실패:', err),
         });
-        console.log('✅ 데이터 로드:', getMembers().length, '명');
+        console.log('✅ 데이터 로드:', getCohortId(), getMembers().length, '명');
+        const badge = document.querySelector('.admin-badge');
+        if (badge && getCohortId()) badge.textContent = `${getCohortId()} · 관리자`;
         renderTeamsView();
         renderMembersView();
         initAttendanceTab();
@@ -62,6 +66,16 @@ async function loadData() {
         alert('데이터를 불러오는데 실패했습니다.');
     }
 }
+
+// 기수 전환 감지 — 배경 갱신 중에 새 기수가 들어오면 화면 전체를 다시 그린다
+subscribe((event) => {
+    if (event.type !== 'cohort-changed') return;
+    console.log(`기수 전환: ${event.from} → ${event.to}`);
+    renderTeamsView();
+    renderMembersView();
+    initAttendanceTab();
+    alert(`${event.to} 명단으로 갱신되었습니다.`);
+});
 
 // ============================================================================
 // 테마 / 로그아웃 / 탭

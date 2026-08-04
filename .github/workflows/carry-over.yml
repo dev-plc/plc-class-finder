@@ -1,0 +1,51 @@
+name: 지난 기수 이수분(◎) 이월
+
+# 새 기수 명단이 DB에 들어온 뒤 한 번만 돌린다.
+# 지난 기수에 이미 들은 주차를 새 기수 출석부에 ◎ 로 찍어 준다.
+# 기본은 dry-run 이고, apply 를 체크해야 실제로 쓴다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_cohort:
+        description: '지난 기수 (예: 2기)'
+        required: true
+      to_cohort:
+        description: '새 기수 (예: 3기)'
+        required: true
+      apply:
+        description: '실제로 기록 (체크 안 하면 미리보기만)'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: carry-over
+  cancel-in-progress: false
+
+jobs:
+  carry-over:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: 의존성 설치
+        run: npm ci || npm install
+
+      - name: 이월 실행
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          FLAGS=""
+          if [ "${{ github.event.inputs.apply }}" = "true" ]; then
+            FLAGS="--apply"
+          fi
+          node scripts/carry-over-attendance.mjs \
+            --from='${{ github.event.inputs.from_cohort }}' \
+            --to='${{ github.event.inputs.to_cohort }}' $FLAGS
