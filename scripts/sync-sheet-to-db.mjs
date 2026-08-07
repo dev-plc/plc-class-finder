@@ -468,10 +468,18 @@ const cohortStart = sessions[0]?.session_date || null;
 // 시간대 차이로 첫 강의 당일 제출이 걸리지 않도록 하루 여유를 둔다
 const homeworkCutoff = cohortStart ? minusDays(cohortStart, 1) : null;
 
+// 제출 시각이 아예 없는 행이 있다 (관리자가 손으로 적은 '오프라인제출' 등).
+// 그건 날짜로 못 거르지만, 다른 신호가 있다:
+//   아직 하지 않은 강의의 과제는 이 기수 것일 수 없다.
+// 결석 보충 과제는 그 강의를 하고 난 뒤에 내는 것이므로 선제출이 없다.
+const todayIso = new Date().toISOString().slice(0, 10);
+
 const homeworkByKey = new Map();
 let homeworkDupes = 0;
 let homeworkStale = 0;
+let homeworkFuture = 0;
 let homeworkNoDate = 0;
+const homeworkFutureSample = new Set();
 for (const [gasId, list] of Object.entries(homeworkIn)) {
   for (const h of (list || [])) {
     const norm = normalizeSession(h.session);
@@ -485,9 +493,17 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       url: trim(h.url),
       submitted_at: h.submittedAt ? new Date(h.submittedAt).toISOString() : null,
     };
+    // 아직 하지 않은 강의의 과제 → 이 기수 것이 아니다 (제출 시각이 없어도 걸러진다)
+    const sessionDate = labelToDate.get(norm);
+    if (sessionDate && sessionDate > todayIso) {
+      homeworkFuture++;
+      if (homeworkFutureSample.size < 5) homeworkFutureSample.add(`${gasId} ${norm}`);
+      continue;
+    }
+
     if (homeworkCutoff) {
       if (!row.submitted_at) {
-        homeworkNoDate++;                         // 시각이 없으면 판단 불가 — 그대로 둔다
+        homeworkNoDate++;                         // 시각이 없으면 날짜로는 판단 불가
       } else if (row.submitted_at.slice(0, 10) < homeworkCutoff) {
         homeworkStale++;
         continue;
@@ -511,8 +527,13 @@ if (homeworkDupes) {
 if (homeworkStale) {
   console.log(`ℹ️  ${homeworkCutoff} 이전 제출 ${homeworkStale}건 제외 (지난 기수 응답)`);
 }
+if (homeworkFuture) {
+  console.log(`ℹ️  아직 하지 않은 강의의 과제 ${homeworkFuture}건 제외 (지난 기수 응답)`);
+  console.log(`    예: ${[...homeworkFutureSample].join(' / ')}`);
+}
 if (homeworkNoDate) {
-  console.warn(`⚠️  제출 시각이 없는 과제 ${homeworkNoDate}건 — 기수 판별 불가로 그대로 반영합니다.`);
+  console.warn(`⚠️  제출 시각이 없는 과제 ${homeworkNoDate}건 — 이미 지난 강의라 그대로 반영합니다.`);
+  console.warn('    지난 기수 응답이 섞여 있다면 과제 탭에서 그 행들을 지우세요.');
 }
 
 console.log('📊 변환 결과');
