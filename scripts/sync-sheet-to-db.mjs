@@ -437,8 +437,25 @@ if (kimbapExtraLabels.size) {
 // 과제 제출
 // 같은 사람이 같은 강의·유형으로 여러 번 제출할 수 있다 (재제출·수정 제출).
 // upsert 키가 (member_id, session_label, type) 이므로 최신 1건만 남긴다.
+//
+// 과제 탭은 폼 응답이 계속 쌓이는 곳이라 지난 기수 응답이 남아 있기 쉽다.
+// 대부분은 그 사람이 새 기수 명단에 없어 자연히 걸러지지만,
+// 지난 기수에서 이월된 사람은 ID(이름+전화)가 같아 그대로 붙어 버린다.
+// 그러면 내지도 않은 과제로 결석 보충을 인정받는다.
+// 이 기수 첫 강의보다 먼저 제출된 건은 지난 기수 것으로 보고 뺀다.
+function minusDays(isoDate, n) {
+  const d = new Date(isoDate + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+const cohortStart = sessions[0]?.session_date || null;
+// 시간대 차이로 첫 강의 당일 제출이 걸리지 않도록 하루 여유를 둔다
+const homeworkCutoff = cohortStart ? minusDays(cohortStart, 1) : null;
+
 const homeworkByKey = new Map();
 let homeworkDupes = 0;
+let homeworkStale = 0;
+let homeworkNoDate = 0;
 for (const [gasId, list] of Object.entries(homeworkIn)) {
   for (const h of (list || [])) {
     const norm = normalizeSession(h.session);
@@ -452,6 +469,15 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       url: trim(h.url),
       submitted_at: h.submittedAt ? new Date(h.submittedAt).toISOString() : null,
     };
+    if (homeworkCutoff) {
+      if (!row.submitted_at) {
+        homeworkNoDate++;                         // 시각이 없으면 판단 불가 — 그대로 둔다
+      } else if (row.submitted_at.slice(0, 10) < homeworkCutoff) {
+        homeworkStale++;
+        continue;
+      }
+    }
+
     const key = `${gasId}|${norm}|${row.type ?? ''}`;
     const prev = homeworkByKey.get(key);
     if (!prev) { homeworkByKey.set(key, row); continue; }
@@ -465,6 +491,12 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
 const homeworkRows = [...homeworkByKey.values()];
 if (homeworkDupes) {
   console.log(`ℹ️  과제 중복 제출 ${homeworkDupes}건 → 최신 제출만 반영`);
+}
+if (homeworkStale) {
+  console.log(`ℹ️  ${homeworkCutoff} 이전 제출 ${homeworkStale}건 제외 (지난 기수 응답)`);
+}
+if (homeworkNoDate) {
+  console.warn(`⚠️  제출 시각이 없는 과제 ${homeworkNoDate}건 — 기수 판별 불가로 그대로 반영합니다.`);
 }
 
 console.log('📊 변환 결과');
@@ -591,7 +623,9 @@ if (kimbapRows.length) {
     })
     .filter(Boolean);
   await upsert('kimbap_signups', kb, 'member_id,session_label');
-  console.log(`   ${kb.length}건`);
+  console.log(`   ${kb.length}건` +
+    (kimbapRows.length > kb.length
+      ? ` (명단에 없는 인원 ${kimbapRows.length - kb.length}건 무시)` : ''));
 }
 
 if (homeworkRows.length) {
@@ -603,7 +637,9 @@ if (homeworkRows.length) {
     })
     .filter(Boolean);
   await upsert('homework_submissions', hw, 'member_id,session_label,type');
-  console.log(`   ${hw.length}건`);
+  console.log(`   ${hw.length}건` +
+    (homeworkRows.length > hw.length
+      ? ` (명단에 없는 인원 ${homeworkRows.length - hw.length}건 무시)` : ''));
 }
 
 if (gas.locationMap && Object.keys(gas.locationMap).length) {
