@@ -44,40 +44,6 @@ const sb = SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
-// 기수 결정: 인자 > DB의 활성 기수 > 2기
-let COHORT_ID = COHORT_ARG;
-if (!COHORT_ID) {
-  if (sb) {
-    const { data } = await sb.from('cohorts')
-      .select('id').eq('is_active', true)
-      .order('started_at', { ascending: false }).limit(1).maybeSingle();
-    if (data?.id) {
-      COHORT_ID = data.id;
-      console.log(`ℹ️  기수 자동 결정: ${COHORT_ID} (cohorts.is_active)`);
-    }
-  }
-  if (!COHORT_ID) {
-    COHORT_ID = '2기';
-    console.log('ℹ️  활성 기수를 찾지 못해 기본값 사용: 2기');
-  }
-}
-
-// 기수 시작 연도 결정: 인자 > DB의 cohorts.started_at > 현재 연도
-let START_YEAR;
-if (START_YEAR_ARG) {
-  START_YEAR = parseInt(START_YEAR_ARG, 10);
-} else {
-  let fromDb = null;
-  if (sb) {
-    const { data } = await sb.from('cohorts').select('started_at').eq('id', COHORT_ID).maybeSingle();
-    if (data?.started_at) fromDb = new Date(data.started_at).getFullYear();
-  }
-  START_YEAR = fromDb ?? new Date().getFullYear();
-  console.log(`ℹ️  기준 연도 자동 결정: ${START_YEAR} (${fromDb ? 'cohorts.started_at' : '현재 연도'})`);
-}
-
-console.log(`🏷️  cohort: ${COHORT_ID} / 기준 연도 ${START_YEAR}`);
-console.log(`🔧 mode:   ${dryRun ? 'DRY RUN' : 'LIVE'}${ACTIVATE ? ' · 활성 기수로 지정' : ''}\n`);
 
 // ---------------------------------------------------------------- helpers
 const trim   = (v) => (v == null ? null : String(v).trim() || null);
@@ -171,27 +137,77 @@ const kimbapIn   = gas.kimbap   || {};
 const homeworkIn = gas.homework || {};
 console.log(`   GAS v${gas.version} · ${rows.length}명 · kimbap ${Object.keys(kimbapIn).length} · homework ${Object.keys(homeworkIn).length}\n`);
 
-// 시트가 스스로 밝힌 기수와 대상 기수가 다르면 멈춘다.
-//
-// 기수 전환 중에 가장 위험한 순간이 여기다. 시트는 이미 새 기수인데
-// 동기화가 지난 기수로 돌면, 새 명단이 지난 기수로 들어가고
-// 지난 기수 인원은 "시트에서 사라졌다"고 판단돼 전부 inactive 가 된다.
-// 되돌리기 어려우므로 아예 쓰지 않는다.
-if (gas.cohortHint && gas.cohortHint !== COHORT_ID) {
+// ---------------------------------------------------------------- 기수 결정
+// 우선순위
+//   1) 명시한 값 (워크플로우 입력 · --cohort · COHORT_ID)
+//   2) 시트가 스스로 밝힌 기수 (출석부 상단의 'N기' 표식)
+//      읽어온 데이터가 그 기수 것이므로 거기에 쓰는 게 언제나 맞다
+//   3) DB의 활성 기수
+//   4) 2기
+let COHORT_ID = COHORT_ARG;
+
+if (COHORT_ID && gas.cohortHint && gas.cohortHint !== COHORT_ID) {
+  // 명시했는데 시트와 다르다 — 엉뚱한 기수에 명단을 밀어넣기 직전이다.
+  // 새 명단이 지난 기수로 들어가고 지난 기수 인원은 전부 inactive 가 된다.
   console.error(`❌ 시트는 ${gas.cohortHint} 인데 ${COHORT_ID} 로 동기화하려 합니다. 중단합니다.`);
   console.error('');
   console.error(`   그대로 진행하면 ${gas.cohortHint} 명단이 ${COHORT_ID} 로 들어가고,`);
   console.error(`   기존 ${COHORT_ID} 인원은 전부 inactive 로 내려갑니다.`);
   console.error('');
-  console.error(`   의도한 것이라면 기수 ID 를 ${gas.cohortHint} 로 지정해 다시 실행하세요.`);
-  console.error(`   (새 기수 첫 실행이라면 "이 기수를 활성 기수로 지정" 도 함께 체크)`);
+  console.error(`   시트대로 넣으시려면 기수 ID 를 비우거나 ${gas.cohortHint} 로 지정하세요.`);
   process.exit(1);
 }
-if (!gas.cohortHint) {
-  console.warn('⚠️  시트에 기수 표식이 없습니다.');
-  console.warn(`    출석부(DB) 상단 아무 칸에 '${COHORT_ID}' 라고 적어 두시면,`);
-  console.warn('    엉뚱한 기수로 동기화되는 사고를 자동으로 막습니다.\n');
+
+if (!COHORT_ID) {
+  if (gas.cohortHint) {
+    COHORT_ID = gas.cohortHint;
+    console.log(`ℹ️  기수 자동 결정: ${COHORT_ID} (시트의 기수 표식)`);
+  } else {
+    console.warn('⚠️  시트에 기수 표식이 없습니다.');
+    console.warn("    출석부(DB) 상단 아무 칸에 '3기' 처럼 적어 두시면");
+    console.warn('    엉뚱한 기수로 동기화되는 사고를 자동으로 막습니다.');
+    if (sb) {
+      const { data } = await sb.from('cohorts')
+        .select('id').eq('is_active', true)
+        .order('started_at', { ascending: false }).limit(1).maybeSingle();
+      if (data?.id) {
+        COHORT_ID = data.id;
+        console.log(`ℹ️  기수 자동 결정: ${COHORT_ID} (cohorts.is_active)`);
+      }
+    }
+    if (!COHORT_ID) {
+      COHORT_ID = '2기';
+      console.log('ℹ️  활성 기수를 찾지 못해 기본값 사용: 2기');
+    }
+  }
 }
+
+// 아직 활성 기수가 아니면 앱에 안 보인다. 조용히 넘어가면 "왜 안 바뀌지" 가 된다.
+if (!ACTIVATE && sb) {
+  const { data } = await sb.from('cohorts')
+    .select('id').eq('is_active', true).limit(1).maybeSingle();
+  if (data?.id && data.id !== COHORT_ID) {
+    console.log(`ℹ️  활성 기수는 아직 ${data.id} 입니다 — 앱에는 ${COHORT_ID} 가 보이지 않습니다.`);
+    console.log('    전환하려면 "이 기수를 활성 기수로 지정" 을 체크하고 다시 실행하세요.');
+  }
+}
+
+// 기수 시작 연도 결정: 인자 > DB의 cohorts.started_at > 현재 연도
+let START_YEAR;
+if (START_YEAR_ARG) {
+  START_YEAR = parseInt(START_YEAR_ARG, 10);
+} else {
+  let fromDb = null;
+  if (sb) {
+    const { data } = await sb.from('cohorts').select('started_at').eq('id', COHORT_ID).maybeSingle();
+    if (data?.started_at) fromDb = new Date(data.started_at).getFullYear();
+  }
+  START_YEAR = fromDb ?? new Date().getFullYear();
+  console.log(`\u2139\uFE0F  기준 연도 자동 결정: ${START_YEAR} (${fromDb ? 'cohorts.started_at' : '현재 연도'})`);
+}
+
+console.log(`\n\uD83C\uDFF7\uFE0F  cohort: ${COHORT_ID} / 기준 연도 ${START_YEAR}`);
+console.log(`\uD83D\uDD27 mode:   ${dryRun ? 'DRY RUN' : 'LIVE'}${ACTIVATE ? ' \u00B7 활성 기수로 지정' : ''}\n`);
 
 if (gas.version < 21) {
   console.warn(`⚠️  GAS 버전이 ${gas.version}입니다. v21 이상 권장 (김밥·과제 필드 포함).\n`);
