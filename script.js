@@ -21,7 +21,7 @@ import {
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v33 (기수 전환 대응)';
+const SCRIPT_VERSION = 'script.js v34 (기수 이름도 DB에서)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
@@ -571,6 +571,10 @@ function renderStatusDetail(member) {
     const container = document.getElementById('statusDetailContainer');
     if (!container) return;
     container.style.display = 'block';
+
+    // 기수 이름은 DB가 정한다. 화면에 박아 두면 기수가 바뀌어도 옛 이름이 남는다.
+    const cohortTab = document.getElementById('cohortTabCurrent');
+    if (cohortTab) cohortTab.textContent = getCohortId() || '현재 기수';
 
     const memberId = member.id || (String(member.name || '') + String(member.phone || ''));
     const kimbapDetail = getKimbapDetail(memberId);
