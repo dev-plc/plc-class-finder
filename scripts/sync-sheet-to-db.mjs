@@ -171,6 +171,28 @@ const kimbapIn   = gas.kimbap   || {};
 const homeworkIn = gas.homework || {};
 console.log(`   GAS v${gas.version} · ${rows.length}명 · kimbap ${Object.keys(kimbapIn).length} · homework ${Object.keys(homeworkIn).length}\n`);
 
+// 시트가 스스로 밝힌 기수와 대상 기수가 다르면 멈춘다.
+//
+// 기수 전환 중에 가장 위험한 순간이 여기다. 시트는 이미 새 기수인데
+// 동기화가 지난 기수로 돌면, 새 명단이 지난 기수로 들어가고
+// 지난 기수 인원은 "시트에서 사라졌다"고 판단돼 전부 inactive 가 된다.
+// 되돌리기 어려우므로 아예 쓰지 않는다.
+if (gas.cohortHint && gas.cohortHint !== COHORT_ID) {
+  console.error(`❌ 시트는 ${gas.cohortHint} 인데 ${COHORT_ID} 로 동기화하려 합니다. 중단합니다.`);
+  console.error('');
+  console.error(`   그대로 진행하면 ${gas.cohortHint} 명단이 ${COHORT_ID} 로 들어가고,`);
+  console.error(`   기존 ${COHORT_ID} 인원은 전부 inactive 로 내려갑니다.`);
+  console.error('');
+  console.error(`   의도한 것이라면 기수 ID 를 ${gas.cohortHint} 로 지정해 다시 실행하세요.`);
+  console.error(`   (새 기수 첫 실행이라면 "이 기수를 활성 기수로 지정" 도 함께 체크)`);
+  process.exit(1);
+}
+if (!gas.cohortHint) {
+  console.warn('⚠️  시트에 기수 표식이 없습니다.');
+  console.warn(`    출석부(DB) 상단 아무 칸에 '${COHORT_ID}' 라고 적어 두시면,`);
+  console.warn('    엉뚱한 기수로 동기화되는 사고를 자동으로 막습니다.\n');
+}
+
 if (gas.version < 21) {
   console.warn(`⚠️  GAS 버전이 ${gas.version}입니다. v21 이상 권장 (김밥·과제 필드 포함).\n`);
 }

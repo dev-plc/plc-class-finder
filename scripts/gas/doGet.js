@@ -1,6 +1,10 @@
 // Google Apps Script — doGet + doPost 확장 버전
 // 기존 doGet · doPost 함수 전체를 이 코드로 교체.
 //
+// 핵심 변경 (v24):
+//   - 출석부 상단의 '기수 표식'(예: 3기)을 cohortHint 로 반환
+//     동기화가 엉뚱한 기수에 시트 내용을 밀어넣지 못하게 막는 안전장치
+//
 // 핵심 변경 (v23):
 //   - 출석부(DB) 의 날짜 헤더 바로 윗줄을 '강의명 행'으로 읽어 sessionLabels 로 반환
 //     (김밥 탭이 빈 새 기수에서도 교제·나눔 주차를 정확히 알 수 있다)
@@ -80,7 +84,7 @@ function findRecentPastSessionCol_(headers, todayNorm) {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 23;
+  var currentVersion = 24;
 
   try {
     var postData = JSON.parse(e.postData.contents);
@@ -179,14 +183,14 @@ function doPost(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 23, message: e.message
+      success: false, version: 24, message: e.message
     }));
   }
 }
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 23; // + 출석부 강의명 행 · 날짜 헤더 MM/DD 통일
+  var currentVersion = 24; // + 강의명 행 · 날짜 헤더 MM/DD · 기수 표식
 
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -449,6 +453,20 @@ function doGet(e) {
     // 새 기수에서는 교제·나눔 주차를 알 수 없어 라벨이 밀린다.
     // 출석부에 직접 적는 쪽이 명확하고 기수마다 안전하다.
     // ---------------------------------------------------------
+    // ---------------------------------------------------------
+    // 기수 표식 — 출석부 상단 아무 칸에 '3기' 처럼 적어 두면 그 값을 넘긴다.
+    // 동기화 쪽에서 대상 기수와 다르면 멈춘다.
+    // (시트는 3기로 갈아엎었는데 동기화가 2기로 돌아 명단을 엉뚱한 기수에
+    //  밀어넣는 사고를 구조적으로 막는다)
+    // ---------------------------------------------------------
+    var cohortHint = "";
+    for (var cr = 0; cr < Math.min(6, data.length) && !cohortHint; cr++) {
+      for (var cc = 0; cc < Math.min(12, data[cr].length); cc++) {
+        var cv = String(data[cr][cc] || '').trim();
+        if (/^\d+\s*기$/.test(cv)) { cohortHint = cv.replace(/\s+/g, ''); break; }
+      }
+    }
+
     var sessionLabels = {};
     var looksLikeSessionName = function(v) {
       var t = String(v || '').trim();
@@ -512,11 +530,12 @@ function doGet(e) {
       teamLinks: telegramMap,
       kimbap: kimbapDetail,     // 신규
       homework: homeworkMap,    // 신규
-      sessionLabels: sessionLabels  // { "03/15": "교리1", ... } 출석부의 강의명 행
+      sessionLabels: sessionLabels, // { "03/15": "교리1", ... } 출석부의 강의명 행
+      cohortHint: cohortHint        // '3기' — 시트가 어느 기수인지
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 23, message: e.message
+      success: false, version: 24, message: e.message
     }));
   }
 }
