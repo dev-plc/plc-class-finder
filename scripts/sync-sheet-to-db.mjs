@@ -88,7 +88,9 @@ const toBool = (v) => {
   if (['false','x','0','n'].includes(s)) return false;
   return null;
 };
-const SESSION_KEY_RE = /^\d{2}\/\d{2}$/;
+// 시트에 '9/6' 로 적혀 있을 수도, 진짜 날짜값이라 '9/6' 으로 넘어올 수도 있다.
+// 두 자리로만 받으면 그 세션을 통째로 놓친다.
+const SESSION_KEY_RE = /^(\d{1,2})\/(\d{1,2})$/;
 
 // 세션명 정규화: '3강 예수...' → '교리3', '성경적대화1' → '성경적대화1'
 function normalizeSession(raw) {
@@ -174,14 +176,35 @@ if (gas.version < 21) {
 }
 
 // ---------------------------------------------------------------- transform
-// 세션 목록 (출석부 MM/DD 컬럼)
-const mmddKeys = [...new Set(rows.flatMap(r => Object.keys(r).filter(k => SESSION_KEY_RE.test(k))))]
-  .sort((a, b) => {
-    const [am, ad] = a.split('/').map(Number);
-    const [bm, bd] = b.split('/').map(Number);
-    return am === bm ? ad - bd : am - bm;
-  });
+// 세션 목록 (출석부 날짜 컬럼).
+// GAS 가 넘긴 원본 키('9/6' 또는 '09/06')를 MM/DD 로 모으고,
+// 값을 읽을 때 쓸 원본 키는 따로 기억해 둔다.
+const mmddToRawKeys = new Map();
+for (const r of rows) {
+  for (const k of Object.keys(r)) {
+    const m = k.match(SESSION_KEY_RE);
+    if (!m) continue;
+    const norm = `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}`;
+    const list = mmddToRawKeys.get(norm) || [];
+    if (!list.includes(k)) list.push(k);
+    mmddToRawKeys.set(norm, list);
+  }
+}
+const mmddKeys = [...mmddToRawKeys.keys()].sort((a, b) => {
+  const [am, ad] = a.split('/').map(Number);
+  const [bm, bd] = b.split('/').map(Number);
+  return am === bm ? ad - bd : am - bm;
+});
 const dateOf = buildSessionDates(mmddKeys, START_YEAR);
+
+// 한 세션의 출결 값. 표기가 섞여 원본 키가 둘일 수 있어 채워진 쪽을 택한다.
+function attendanceValue(row, mmdd) {
+  for (const raw of mmddToRawKeys.get(mmdd) || []) {
+    const v = row[raw];
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
 
 // 'M/d' · 'MM/dd' · '3/22' 등 표기 차이를 흡수하는 정규 키
 function mmddKey(v) {
@@ -194,7 +217,16 @@ function mmddKey(v) {
 const isCurriculumLabel = (norm) =>
   /^교리\d+$/.test(norm) || /^성경적대화\d+$/.test(norm) || norm === '교제' || norm === '나눔';
 
-// 김밥 데이터에서 MM/DD → 세션명 매핑.
+// 세션명의 1순위는 출석부(DB) 의 '강의명 행' (GAS v23+).
+// 김밥 탭은 인원 데이터에서 유추하는 방식이라 새 기수처럼 탭이 비면 아무것도 못 준다.
+const explicitLabels = new Map();
+for (const [rawKey, rawName] of Object.entries(gas.sessionLabels || {})) {
+  const key = mmddKey(rawKey);
+  const norm = normalizeSession(rawName);
+  if (key && norm) explicitLabels.set(key, norm);
+}
+
+// 2순위: 김밥 데이터에서 MM/DD → 세션명 매핑.
 // 인원마다 비어 있는 칸이 있을 수 있으므로 전원을 훑어 채운다.
 const mmddToLabel = new Map();
 for (const detail of Object.values(kimbapIn)) {
@@ -234,11 +266,29 @@ const nonClassKeys = new Set(
   [...mmddToLabel].filter(([, v]) => v === '교제' || v === '나눔').map(([k]) => k)
 );
 
+if (explicitLabels.size) {
+  console.log(`ℹ️  세션명 출처: 출석부(DB) 강의명 행 ${explicitLabels.size}개`);
+} else if (mmddToLabel.size) {
+  console.log(`ℹ️  세션명 출처: 김밥 탭 ${mmddToLabel.size}개 (출석부에 강의명 행이 없음)`);
+} else {
+  console.warn('⚠️  세션명 정보가 없습니다 — 출석부 강의명 행도, 김밥 탭 데이터도 없습니다.');
+  console.warn('    커리큘럼 순서대로만 배정하므로, 교제·나눔 주가 끼어 있으면 라벨이 밀립니다.');
+  console.warn('    출석부(DB) 의 날짜 헤더 바로 윗줄에 교리1, 교리2, 교제 … 를 적어 주세요.');
+  if ((gas.version || 0) < 23) {
+    console.warn(`    (강의명 행을 읽으려면 GAS v23 이상이 필요합니다. 지금 v${gas.version})`);
+  }
+  console.warn('');
+}
+
 const sessions = [];
 let curriculumIdx = 0;
 mmddKeys.forEach((k, i) => {
   let norm;
-  if (nonClassKeys.has(k)) {
+  if (explicitLabels.has(k)) {
+    norm = explicitLabels.get(k);                    // 시트에 적힌 값이 최우선
+    const at = CURRICULUM.indexOf(norm);
+    if (at !== -1) curriculumIdx = at + 1;           // 순서 포인터를 그 다음으로 맞춘다
+  } else if (nonClassKeys.has(k)) {
     norm = mmddToLabel.get(k);                       // 교제 / 나눔
   } else if (curriculumIdx < CURRICULUM.length) {
     norm = CURRICULUM[curriculumIdx++];              // 강의 순서대로 배정
@@ -257,6 +307,7 @@ mmddKeys.forEach((k, i) => {
 
 // 김밥 탭 매핑과 어긋나는 곳이 있으면 알린다 (시트 구조 변경 감지)
 const conflicts = sessions.filter(s => {
+  if (explicitLabels.has(s.label)) return false;     // 시트에 적힌 값이 우선이므로 비교 불필요
   const fromKimbap = mmddToLabel.get(s.label);
   return fromKimbap && s.label_norm && fromKimbap !== s.label_norm;
 });
@@ -320,7 +371,7 @@ for (const r of rows) {
     attendance.push({
       _key: key,
       session_date: dateOf.get(k),
-      status: r[k] == null ? '' : String(r[k]).trim(),
+      status: attendanceValue(r, k),
     });
   }
 }

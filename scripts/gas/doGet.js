@@ -1,6 +1,11 @@
 // Google Apps Script — doGet + doPost 확장 버전
 // 기존 doGet · doPost 함수 전체를 이 코드로 교체.
 //
+// 핵심 변경 (v23):
+//   - 출석부(DB) 의 날짜 헤더 바로 윗줄을 '강의명 행'으로 읽어 sessionLabels 로 반환
+//     (김밥 탭이 빈 새 기수에서도 교제·나눔 주차를 정확히 알 수 있다)
+//   - 날짜 헤더를 항상 MM/DD 로 정규화 ('9/6' 도 '09/06' 으로)
+//
 // 핵심 변경 (v22): 시트 ID·탭 이름을 상단 상수로 분리 (기수 전환 시 한 줄만 수정)
 //
 // 핵심 변경 (v21):
@@ -75,7 +80,7 @@ function findRecentPastSessionCol_(headers, todayNorm) {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 22;
+  var currentVersion = 23;
 
   try {
     var postData = JSON.parse(e.postData.contents);
@@ -174,14 +179,14 @@ function doPost(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 22, message: e.message
+      success: false, version: 23, message: e.message
     }));
   }
 }
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 22; // 최근 지난 강의 기준 + 김밥/과제 + 배치 출석
+  var currentVersion = 23; // + 출석부 강의명 행 · 날짜 헤더 MM/DD 통일
 
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -423,10 +428,49 @@ function doGet(e) {
     if (headerRowIdx === -1) throw new Error("'ID' 열을 찾을 수 없습니다.");
 
     var originalHeadersRaw = data[headerRowIdx];
+    // 날짜 헤더는 항상 MM/DD 로 통일한다.
+    // 시트에 '9/6' 로 적혀 있든 진짜 날짜값이든 같은 키가 나오게 해야
+    // 동기화 쪽에서 세션을 놓치지 않는다.
     var headers = originalHeadersRaw.map(function(h){
-      return (h instanceof Date ? Utilities.formatDate(h, tz, "M/d") : String(h)).trim().toLowerCase();
+      var v = (h instanceof Date ? Utilities.formatDate(h, tz, "MM/dd") : String(h)).trim();
+      var m = v.match(/^(\d{1,2})[\/\.\-](\d{1,2})$/);
+      if (m) {
+        return ("0" + m[1]).slice(-2) + "/" + ("0" + m[2]).slice(-2);
+      }
+      return v.toLowerCase();
     });
     var idIdx = headers.indexOf("id");
+
+    // ---------------------------------------------------------
+    // 강의명 행 — 날짜 헤더 바로 위에 '교리1, 교리2, 교제, …' 를 적어 두면
+    // 그 값을 그대로 쓴다.
+    //
+    // 예전에는 김밥 탭에서 세션명을 유추했는데, 김밥 탭이 비어 있는
+    // 새 기수에서는 교제·나눔 주차를 알 수 없어 라벨이 밀린다.
+    // 출석부에 직접 적는 쪽이 명확하고 기수마다 안전하다.
+    // ---------------------------------------------------------
+    var sessionLabels = {};
+    var looksLikeSessionName = function(v) {
+      var t = String(v || '').trim();
+      return /^교리\s*\d+/.test(t) || /^성경적대화\s*\d+/.test(t) || /^대화\s*\d+/.test(t)
+          || /^교제/.test(t) || /^교재/.test(t) || /^나눔/.test(t);
+    };
+    for (var nr = headerRowIdx - 1; nr >= 0; nr--) {
+      var nameRow = data[nr];
+      var hits = 0;
+      for (var nc = 0; nc < headers.length; nc++) {
+        if (/^\d{2}\/\d{2}$/.test(headers[nc]) && looksLikeSessionName(nameRow[nc])) hits++;
+      }
+      if (hits >= 2) {
+        for (var nc2 = 0; nc2 < headers.length; nc2++) {
+          if (/^\d{2}\/\d{2}$/.test(headers[nc2])) {
+            var nm = String(nameRow[nc2] || '').trim();
+            if (nm) sessionLabels[headers[nc2]] = nm;
+          }
+        }
+        break;
+      }
+    }
 
     // '가장 최근 지난 강의' 컬럼 (출석부(DB) 헤더 기준)
     var todayIdx = findRecentPastSessionCol_(originalHeadersRaw, todayNorm);
@@ -466,12 +510,13 @@ function doGet(e) {
       data: jsonData,
       locationMap: locationMap,
       teamLinks: telegramMap,
-      kimbap: kimbapDetail,   // 신규
-      homework: homeworkMap   // 신규
+      kimbap: kimbapDetail,     // 신규
+      homework: homeworkMap,    // 신규
+      sessionLabels: sessionLabels  // { "03/15": "교리1", ... } 출석부의 강의명 행
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 22, message: e.message
+      success: false, version: 23, message: e.message
     }));
   }
 }
