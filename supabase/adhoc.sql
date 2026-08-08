@@ -1,23 +1,13 @@
--- 이월 미리보기에서 걸리는 두 가지를 확인한다.
---
--- (1) 8명에게 15~16개 주차를 찍으려 한다. 16개면 3기 첫 강의도 하기 전에
---     '수료' 로 잡힌다. 2기를 다 이수한 사람이 3기에 왜 있는지(튜터인지)
---     역할을 봐야 판단할 수 있다.
---
--- (2) 2기 과제 보충이 30건인데 새로 찍힌 것은 0개다.
---     그 주차가 3기에서 이미 'X' 로 채워져 있으면 이월이 건드리지 않는다.
---     그러면 "2기에서 과제로 인정받았으니 3기에서도 이수" 규칙이 실제로는
---     적용되지 않는다.
+-- 이월(--apply) 뒤 확인.
 --
 -- 보는 법
---   ① 2기 수료자인데 3기에 있는 사람 — role 이 튜터/서브튜터면 정상
---   ② 2기 과제 보충 주차가 3기에서 지금 무슨 값인가
---        (빈칸) 이면 이월이 채운다 · X 면 막혀서 안 채워진다
---   ③ ② 를 사람별로
+--   ① 3기 판정      튜터 5명이 '수료' 로 잡히는 건 정상 (2기 수료자가 섬기러 옴)
+--   ② 출결 분포      ◎ 가 늘었는지. X 는 보충분만큼 줄었어야 한다
+--   ③ 보충 주차 상태  전부 ◎ 여야 한다. X 가 남아 있으면 이월이 덜 된 것
+--   ④ 카드 대조용    사람별 이수/결석 — 앱 화면 숫자와 맞는지 볼 때 쓴다
 
-with pair as (                  -- 2기·3기 양쪽에 있는 사람
-  select p.id as prev_id, n.id as next_id,
-         n.name, n.phone, n.team, coalesce(n.role, '') as role
+with pair as (
+  select p.id as prev_id, n.id as next_id, n.name, n.phone, n.team
     from members p
     join members n
       on n.cohort_id = '3기'
@@ -25,9 +15,8 @@ with pair as (                  -- 2기·3기 양쪽에 있는 사람
      and coalesce(n.phone, '') = coalesce(p.phone, '')
    where p.cohort_id = '2기'
 ),
-makeup3 as (                    -- 2기 과제 보충 주차가 3기에서 지금 어떤 값인가
-  select pr.next_id, pr.name, pr.phone, pr.team,
-         d.session_label,
+makeup3 as (
+  select pr.name, pr.phone, pr.team, d.session_label,
          coalesce(nullif(btrim(a.status), ''), '(빈칸)') as now3
     from pair pr
     join v_makeup_detail d
@@ -37,24 +26,29 @@ makeup3 as (                    -- 2기 과제 보충 주차가 3기에서 지�
     left join attendance a
       on a.member_id = pr.next_id and a.session_date = s.session_date
 )
-select '① 2기 수료자가 3기에' as 구분,
-       coalesce(pr.team, '-') || ' ' || pr.name || coalesce(pr.phone, '') as 대상,
-       '이수 ' || c.credited::text || ' · 역할 ' ||
-       case when pr.role = '' then '(없음)' else pr.role end as 값
-  from pair pr
-  join v_completion_status c on c.member_id = pr.prev_id
- where c.verdict = '수료'
+select '① 3기 판정' as 구분, coalesce(verdict, '(없음)') as 항목, count(*)::text as 값
+  from v_completion_status where cohort_id = '3기' group by verdict
 
 union all
-select '② 보충 주차의 3기 값', now3, count(*)::text || '주차'
-  from makeup3
- group by now3
+select '② 3기 출결 분포',
+       coalesce(nullif(btrim(a.status), ''), '(빈칸)'),
+       count(*)::text
+  from attendance a
+  join members m on m.id = a.member_id and m.cohort_id = '3기'
+  join sessions s on s.cohort_id = '3기' and s.session_date = a.session_date and s.is_class is true
+ group by 2
 
 union all
-select '③ 보충 주차 사람별',
-       coalesce(team, '-') || ' ' || name || coalesce(phone, ''),
-       string_agg(session_label || '=' || now3, ', ' order by session_label)
-  from makeup3
- group by team, name, phone
+select '③ 보충 주차 상태', now3, count(*)::text || '주차'
+  from makeup3 group by now3
+
+union all
+select '④ 이수 상위',
+       coalesce(m.team, '-') || ' ' || m.name || coalesce(m.phone, ''),
+       '이수 ' || c.credited::text || ' · 결석 ' || c.absent_count::text ||
+       ' · ' || coalesce(c.verdict, '')
+  from v_completion_status c
+  join members m on m.id = c.member_id
+ where c.cohort_id = '3기' and c.credited > 0
 
 order by 1, 2;
