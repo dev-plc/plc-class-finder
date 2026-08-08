@@ -511,15 +511,33 @@ if (homeworkCutoff) {
   console.warn('⚠️  세션이 없어 과제를 제출 시각으로 거르지 않습니다.\n');
 }
 
+// 제출 시각 칸 해석
+//   '2026-08-05 18:39'  → 날짜. 기준일과 비교한다
+//   '3기'                → 기수 표기. 오프라인·사후 제출을 손으로 적을 때 쓴다
+//   빈 값 · 알 수 없는 값 → 판별 불가
+//
+// new Date('3기').toISOString() 은 예외를 던지므로 반드시 여기서 걸러야 한다.
+function readSubmittedAt(raw) {
+  const v = String(raw ?? '').trim();
+  if (!v) return { kind: 'none' };
+  const tag = v.match(/^(\d+)\s*기$/);
+  if (tag) return { kind: 'cohort', cohort: `${tag[1]}기` };
+  const t = Date.parse(v);
+  if (Number.isNaN(t)) return { kind: 'unparsed', raw: v };
+  return { kind: 'date', iso: new Date(t).toISOString() };
+}
+
 const homeworkByKey = new Map();
 let homeworkDupes = 0;
 let homeworkStale = 0;
 let homeworkNoDate = 0;
+let homeworkTagged = 0;
 const homeworkNoDateSample = new Set();
 for (const [gasId, list] of Object.entries(homeworkIn)) {
   for (const h of (list || [])) {
     const norm = normalizeSession(h.session);
     if (!norm) continue;
+    const ts = readSubmittedAt(h.submittedAt);
     const row = {
       _gasId: gasId,
       cohort_id: COHORT_ID,
@@ -527,19 +545,22 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       session_raw: trim(h.session),
       type: trim(h.type),
       url: trim(h.url),
-      submitted_at: h.submittedAt ? new Date(h.submittedAt).toISOString() : null,
+      submitted_at: ts.kind === 'date' ? ts.iso : null,
     };
-    // 제출 시각이 없는 건 = 오프라인·사후 제출을 손으로 적은 것.
-    // 날짜가 없으니 어느 기수인지 가릴 수 없다.
-    // 지금 시트에 남아 있는 것은 전부 지난 기수 것이므로 기본은 제외다.
-    // 이번 기수 오프라인 제출을 반영하려면 시트에 제출일을 적으면 된다.
-    if (!row.submitted_at) {
+    if (ts.kind === 'cohort') {
+      // 기수를 직접 적어 둔 건 — 날짜보다 확실하다
+      if (ts.cohort !== COHORT_ID) { homeworkStale++; continue; }
+      homeworkTagged++;
+    } else if (ts.kind === 'date') {
+      if (homeworkCutoff && ts.iso.slice(0, 10) <= homeworkCutoff) { homeworkStale++; continue; }
+    } else {
+      // 빈 값이거나 해석할 수 없는 값 — 어느 기수인지 가릴 수 없다.
+      // 넣으면 내지도 않은 과제로 보충을 인정받으므로 기본은 제외한다.
       homeworkNoDate++;
-      if (homeworkNoDateSample.size < 5) homeworkNoDateSample.add(`${gasId} ${norm}`);
+      if (homeworkNoDateSample.size < 5) {
+        homeworkNoDateSample.add(`${gasId} ${norm}${ts.raw ? ` ("${ts.raw}")` : ''}`);
+      }
       if (!INCLUDE_UNDATED_HW) continue;
-    } else if (homeworkCutoff && row.submitted_at.slice(0, 10) <= homeworkCutoff) {
-      homeworkStale++;
-      continue;
     }
 
     const key = `${gasId}|${norm}|${row.type ?? ''}`;
@@ -559,6 +580,9 @@ if (homeworkDupes) {
 if (homeworkStale) {
   console.log(`ℹ️  ${homeworkCutoff} 이전 제출 ${homeworkStale}건 제외 (지난 기수 응답)`);
 }
+if (homeworkTagged) {
+  console.log(`ℹ️  제출 시각 칸에 '${COHORT_ID}' 라고 적힌 과제 ${homeworkTagged}건 반영 (오프라인·사후 제출)`);
+}
 if (homeworkNoDate) {
   if (INCLUDE_UNDATED_HW) {
     console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 반영 (--include-undated-homework)`);
@@ -566,7 +590,7 @@ if (homeworkNoDate) {
     console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 제외 (어느 기수인지 가릴 수 없음)`);
   }
   console.log(`    예: ${[...homeworkNoDateSample].join(' / ')}`);
-  console.log('    이번 기수 오프라인 제출이라면 시트 과제 탭의 타임스탬프 칸에 날짜를 적어 주세요.');
+  console.log(`    이번 기수 것이라면 시트 과제 탭의 타임스탬프 칸에 '${COHORT_ID}' 라고 적어 주세요.`);
 }
 
 console.log('📊 변환 결과');
