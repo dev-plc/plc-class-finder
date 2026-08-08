@@ -1,27 +1,58 @@
--- 과제 탭의 '[이름]' 이 명단과 안 맞는 이유를 찾는다.
+-- 2기에서 과제로 보충 인정받은 주차가 3기로 이월되지 않은 범위를 본다.
 --
--- 단서: 폼 응답의 연락처는 010-9080-7730 인데 아이디는 [이름] 다.
---       뒷 4자리가 7730 과 1789 로 다르다.
+-- 이월 스크립트는 2기의 O(출석)·◎(지난 기수 이수) 만 옮긴다.
+-- 2기에 결석(X)했지만 과제로 인정받은 주차는 옮기지 않는다.
+-- 그래서 그 주차가 3기에서 빈칸이 되고, 다시 들어야 하는 것으로 보인다.
 --
--- 짝짓기는 '이름 + 전화 뒷4자리' 가 글자 하나까지 같아야 맺어진다.
--- 출석부에 [이름] 으로 들어 있으면 과제의 [이름] 는 짝을 못 찾는다.
+-- 이 쿼리는 규칙을 바꾸기 전에 '몇 명이 몇 주차나 걸리는지' 를 보여준다.
 --
 -- 보는 법
---   ① 명단의 김동완 이 실제로 어떤 아이디인지
---   ② 과제 탭에서 온 김동완 기록이 DB 에 있는지 (없으면 무시된 것)
+--   ① 합계     영향받는 인원 수와 주차 수
+--   ② 사람별   누가 어느 주차인지 (2기에서 counted=true 인 것만)
+--   ③ 3기 상태 그 주차가 지금 3기에서 어떤 값인지
+--              빈칸이면 다시 들어야 하는 것으로 잡혀 있다
 
-select '① 명단' as 구분,
-       cohort_id || ' · ' || name || coalesce(phone, '') as 아이디,
-       coalesce(team, '-') || ' · ' || status as 비고
-  from members
- where name like '%김동완%'
+with carried as (            -- 2기·3기 양쪽에 있는 사람 (이름+전화 일치)
+  select p.id  as prev_id,
+         n.id  as next_id,
+         n.name, n.phone, n.team
+    from members p
+    join members n
+      on n.cohort_id = '3기'
+     and n.name = p.name
+     and coalesce(n.phone, '') = coalesce(p.phone, '')
+   where p.cohort_id = '2기'
+),
+makeup as (                  -- 2기에서 과제로 인정받은 주차
+  select c.next_id, c.name, c.phone, c.team, d.session_label
+    from carried c
+    join v_makeup_detail d on d.member_id = c.prev_id
+   where d.cohort_id = '2기' and d.counted is true
+),
+now3 as (                    -- 그 주차가 3기에서 지금 어떤 값인가
+  select m.next_id, m.name, m.phone, m.team, m.session_label,
+         coalesce(nullif(btrim(a.status), ''), '(빈칸)') as status_3기
+    from makeup m
+    join sessions s
+      on s.cohort_id = '3기' and s.label_norm = m.session_label and s.is_class is true
+    left join attendance a
+      on a.member_id = m.next_id and a.session_date = s.session_date
+)
+select '① 합계' as 구분,
+       '대상 인원 / 주차 수' as 항목,
+       count(distinct next_id)::text || '명 / ' || count(*)::text || '주차' as 값
+  from now3
 
 union all
-select '② 저장된 과제',
-       m.cohort_id || ' · ' || m.name || coalesce(m.phone, ''),
-       h.session_label || ' · ' || coalesce(h.type, '')
-  from homework_submissions h
-  join members m on m.id = h.member_id
- where m.name like '%김동완%'
+select '② 사람별',
+       coalesce(team, '-') || ' ' || name || coalesce(phone, ''),
+       count(*)::text || '주차: ' || string_agg(session_label, ', ' order by session_label)
+  from now3
+ group by team, name, phone
+
+union all
+select '③ 3기 현재값', status_3기, count(*)::text || '주차'
+  from now3
+ group by status_3기
 
 order by 1, 2;
