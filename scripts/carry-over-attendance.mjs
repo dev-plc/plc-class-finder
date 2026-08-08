@@ -10,7 +10,10 @@
 //
 // 안전장치
 //   - 기본이 dry-run 이다. 실제로 쓰려면 --apply 를 붙인다.
-//   - 새 기수에서 이미 기록이 있는 칸은 절대 덮지 않는다 (빈칸만 채운다).
+//   - 새 기수에서 이미 기록이 있는 칸은 덮지 않는다 (빈칸만 채운다).
+//     딱 하나 예외: 지난 기수에 과제로 인정받은 주차가 X 로 잡혀 있으면 ◎ 로 바꾼다.
+//     이미 인정받은 주차를 다시 들으라는 게 되어 규칙과 어긋나기 때문이다.
+//     O·◎·- 는 어떤 경우에도 건드리지 않는다.
 //   - 지난 기수에 결석했지만 과제로 인정받은 주차도 이수로 친다.
 //     그 기수에서 이미 인정된 것을 새 기수에서 다시 들으라고 할 수는 없다.
 //   - 강의(is_class=true) 주차만 대상으로 한다. 교제·나눔은 건드리지 않는다.
@@ -167,10 +170,12 @@ for (const m of prev.members) {
   }
 }
 
-// 새 기수에서 이미 기록이 있는 칸 (덮지 않기 위해)
-const nextFilled = new Set();
+// 새 기수에 이미 적혀 있는 값. 무엇이 적혀 있는지까지 알아야
+// 'X 인 보충 주차만 덮는다' 를 판단할 수 있다.
+const nextValue = new Map();
 for (const a of next.attendance) {
-  if (String(a.status ?? '').trim() !== '') nextFilled.add(`${a.member_id}|${a.session_date}`);
+  const v = String(a.status ?? '').trim();
+  if (v !== '') nextValue.set(`${a.member_id}|${a.session_date}`, v);
 }
 
 const nextClassSessions = next.sessions.filter(s => s.is_class && s.label_norm);
@@ -189,16 +194,31 @@ for (const m of next.members) {
   const fromMakeup = prevMakeupByKey.get(key(m)) || new Set();
   const marks = [];
   let makeupMarks = 0;
+  let overwrites = 0;
   let collided = 0;
   for (const s of nextClassSessions) {
     if (!passed.has(s.label_norm)) continue;
-    if (nextFilled.has(`${m.id}|${s.session_date}`)) { collided++; continue; }  // 그대로 둔다
+
+    const cur = nextValue.get(`${m.id}|${s.session_date}`) ?? '';
+    const isMakeup = fromMakeup.has(s.label_norm);
+
+    if (cur !== '') {
+      // 이미 값이 있으면 원칙은 그대로 둔다.
+      //
+      // 예외 하나: 지난 기수에 과제로 인정받은 주차가 새 기수에서 X 로 잡혀 있는 경우.
+      // 그 X 는 "새 기수에서 아직 안 들었다"는 뜻으로 찍힌 것인데,
+      // 이미 인정받은 주차를 다시 들으라는 얘기가 되어 규칙과 어긋난다.
+      // 그 좁은 경우에만 ◎ 로 바꾼다. O·◎·- 는 어떤 경우에도 건드리지 않는다.
+      if (!(isMakeup && cur.toUpperCase() === 'X')) { collided++; continue; }
+      overwrites++;
+    }
+
     rows.push({ member_id: m.id, session_date: s.session_date, status: '◎' });
     // 과제로 인정받은 주차는 눈에 띄게 표시한다 (출석해서 이수한 것과 구분)
-    marks.push(fromMakeup.has(s.label_norm) ? `${s.label_norm}*` : s.label_norm);
-    if (fromMakeup.has(s.label_norm)) makeupMarks++;
+    marks.push(isMakeup ? `${s.label_norm}*${cur ? '(X→◎)' : ''}` : s.label_norm);
+    if (isMakeup) makeupMarks++;
   }
-  if (marks.length) report.push({ name: m.name, phone: m.phone, team: m.team, marks, makeupMarks });
+  if (marks.length) report.push({ name: m.name, phone: m.phone, team: m.team, marks, makeupMarks, overwrites });
   else alreadyFilled.push({ name: m.name, phone: m.phone, team: m.team, collided });
 }
 
@@ -220,7 +240,9 @@ if (alreadyFilled.length) {
 
 if (report.length) {
   const totalMakeup = report.reduce((n, r) => n + (r.makeupMarks || 0), 0);
-  console.log(`상세:  (* 는 ${FROM} 에서 과제로 인정받은 주차 — ${totalMakeup}개)`);
+  const totalOver = report.reduce((n, r) => n + (r.overwrites || 0), 0);
+  console.log(`상세:  (* 는 ${FROM} 에서 과제로 인정받은 주차 — ${totalMakeup}개` +
+              (totalOver ? `, 그중 X→◎ 로 바꾼 것 ${totalOver}개` : '') + ')');
   for (const r of report.slice(0, 60)) {
     console.log(`   ${r.team || '-'} ${r.name}${r.phone || ''}  ${r.marks.length}개 · ${r.marks.join(', ')}`);
   }
