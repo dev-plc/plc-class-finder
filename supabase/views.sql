@@ -249,7 +249,10 @@ grant select on v_inactive_members to anon, authenticated, service_role;
 -- ===================================================================
 create or replace view v_makeup_detail as
 with base as (
-  select
+  -- 한 주차에 과제와 소감문을 따로 내면 homework_submissions 에 두 행이 생긴다
+  -- (unique 키가 member_id, session_label, type 이라서).
+  -- 그대로 두면 한 주차가 보충 횟수를 두 번 잡아먹는다. 주차당 한 행으로 줄인다.
+  select distinct on (m.id, s.session_date)
     m.id            as member_id,
     m.cohort_id,
     m.name, m.phone, m.team, m.status,
@@ -267,6 +270,7 @@ with base as (
   join homework_submissions h
     on h.member_id = m.id and h.session_label = s.label_norm
   where upper(trim(coalesce(a.status, ''))) = 'X'
+  order by m.id, s.session_date, h.submitted_at nulls last
 ),
 ranked as (
   select
