@@ -159,3 +159,63 @@ select m.id,
  where m.cohort_id = '2기' and m.name = '강선형'
  group by m.id, m.name, m.team, m.status, m.created_at
  order by 출결기록 desc, 생성일;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 5 — 강선형 중복 정리 + 빈 전화번호 통일
+--
+--   PART 4 에서 7행이 나왔고 전부 출석 0 이었다.
+--   출결기록 5건짜리 중 가장 오래된 행 하나만 남기고 나머지 6개를 지운다.
+--   어느 행을 남겨도 판정은 같다 (출석 0 → 미수료).
+--
+--   그리고 남은 null 전화번호를 빈 문자열로 바꾼다.
+--   unique (cohort_id, name, phone) 은 null 에 걸리지 않아
+--   동기화할 때마다 새 행이 생겼다. 빈 문자열이면 걸린다.
+--   (동기화 코드도 이제 빈 문자열로 넣는다)
+--
+--   BEGIN 부터 COMMIT 까지 선택해서 Run.
+-- ══════════════════════════════════════════════════════════════════
+
+begin;
+
+delete from members
+ where id in (
+   'e0142c37-c997-4a60-96d1-ad377afb78fb',  -- 08-02
+   '3e18afac-9e6e-449e-841e-285ea182ba30',  -- 08-04
+   'f579bdd5-a638-44c0-a3c5-b5b44fa28842',  -- 08-05
+   '2214edbe-700b-43d6-8869-c06daf0c05b0',  -- 08-06
+   '7263d5f2-5b0d-4a6f-a091-8c87c6f647a9',  -- 08-07
+   'ab289e1c-763f-46e9-ac79-b39bf4dadf95'   -- 08-01, 기록 0건
+ );
+-- 남기는 행: 784cf7a0-bf6e-4f8c-8535-cef0dccffbc5 (08-01, 기록 5건)
+
+update members set phone = '' where phone is null;
+
+commit;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 6 — 최종 확인 (선택해서 Run)
+--
+--   ① 전화번호 없음 → 아무 행도 안 나와야 합니다
+--   ② 이름 중복 → 아무 행도 안 나와야 합니다
+--   ③ 2기 인원 · ④ 2기 수료 판정 (강선형 6행이 빠진 최종값)
+-- ══════════════════════════════════════════════════════════════════
+
+select '① 전화번호 없음' as 구분, cohort_id || ' ' || name as 항목, ''::text as 값
+  from members where phone is null
+
+union all
+select '② 같은 기수 이름 중복', cohort_id || ' ' || name, count(*)::text || '행'
+  from members group by cohort_id, name having count(*) > 1
+
+union all
+select '③ 인원', cohort_id || ' ' || case when status = 'active' then '활성' else '비활성' end,
+       count(*)::text
+  from members group by cohort_id, status
+
+union all
+select '④ 2기 수료 판정', coalesce(verdict, '(없음)'), count(*)::text
+  from v_completion_status where cohort_id = '2기' group by verdict
+
+order by 1, 2;
