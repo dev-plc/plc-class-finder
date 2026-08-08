@@ -44,7 +44,18 @@ function pullTargets_() {
 var SUPABASE_URL = "https://wvpqdicsqjozhxtxsnin.supabase.co";
 var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2cHFkaWNzcWpvemh4dHhzbmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2OTA3OTMsImV4cCI6MjEwMDI2Njc5M30.-_vV9lQYoWMZMqEahveSz4fT5psTbF3feKfBZ28qG0w";
 
-function onOpen() {
+// 메뉴 달기.
+//
+// onOpen 은 한 프로젝트에 하나만 산다. 두 개면 하나가 조용히 진다 —
+// 기존 메뉴가 사라지거나 PLC 메뉴가 안 뜨거나, 어느 쪽인지도 알기 어렵다.
+// 그래서 메뉴 만드는 일 자체는 plcAddMenu 로 떼어 놓았다.
+//
+//   · 프로젝트에 onOpen 이 없다  → 아래 onOpen 을 그대로 둔다
+//   · 이미 onOpen 이 있다        → 아래 onOpen 을 지우고,
+//                                  기존 onOpen 안에 plcAddMenu(); 한 줄만 넣는다
+//
+// 메뉴 없이 편집기에서 pullAttendanceFromDb 를 골라 ▶ 실행해도 똑같이 된다.
+function plcAddMenu() {
   try {
     SpreadsheetApp.getUi()
       .createMenu('PLC')
@@ -53,6 +64,10 @@ function onOpen() {
   } catch (e) {
     // 시트에 붙어 있지 않은 스크립트면 메뉴를 달 수 없다. 무시.
   }
+}
+
+function onOpen() {
+  plcAddMenu();
 }
 
 function sbGet_(path) {
