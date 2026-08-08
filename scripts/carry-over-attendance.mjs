@@ -129,6 +129,7 @@ const nextClassSessions = next.sessions.filter(s => s.is_class && s.label_norm);
 const rows = [];
 const report = [];
 let matched = 0;
+const alreadyFilled = [];   // 이수 이력은 있는데 그 주차에 이미 기록이 있는 사람
 
 for (const m of next.members) {
   const passed = prevPassedByKey.get(key(m));
@@ -136,17 +137,32 @@ for (const m of next.members) {
   matched++;
 
   const marks = [];
+  let collided = 0;
   for (const s of nextClassSessions) {
     if (!passed.has(s.label_norm)) continue;
-    if (nextFilled.has(`${m.id}|${s.session_date}`)) continue;   // 이미 뭔가 적혀 있으면 그대로 둔다
+    if (nextFilled.has(`${m.id}|${s.session_date}`)) { collided++; continue; }  // 그대로 둔다
     rows.push({ member_id: m.id, session_date: s.session_date, status: '◎' });
     marks.push(s.label_norm);
   }
   if (marks.length) report.push({ name: m.name, phone: m.phone, team: m.team, marks });
+  else alreadyFilled.push({ name: m.name, phone: m.phone, team: m.team, collided });
 }
 
 console.log(`👥 ${TO} 인원 중 ${FROM} 이수 이력이 있는 사람: ${matched}명`);
-console.log(`◎  새로 찍을 칸: ${rows.length}개 (이미 기록된 칸은 건너뜀)\n`);
+console.log(`◎  새로 찍을 칸: ${rows.length}개 · 대상 ${report.length}명\n`);
+
+// matched 와 report.length 가 다르면 왜 다른지 밝힌다.
+// 조용히 넘어가면 '왜 23명 중 10명만 찍히지?' 하고 헤매게 된다.
+if (alreadyFilled.length) {
+  console.log(`ℹ️  나머지 ${alreadyFilled.length}명은 찍을 칸이 없습니다:`);
+  for (const r of alreadyFilled.slice(0, 30)) {
+    console.log(r.collided > 0
+      ? `   ${r.team || '-'} ${r.name}${r.phone || ''}  이미 그 ${r.collided}개 주차에 기록이 있음`
+      : `   ${r.team || '-'} ${r.name}${r.phone || ''}  ${TO} 커리큘럼과 겹치는 주차 없음`);
+  }
+  if (alreadyFilled.length > 30) console.log(`   … 외 ${alreadyFilled.length - 30}명`);
+  console.log('');
+}
 
 if (report.length) {
   console.log('상세:');
