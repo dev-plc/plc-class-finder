@@ -404,7 +404,10 @@ for (const r of rows) {
     _key: key,
     _id: r.id,
     cohort_id: COHORT_ID,
-    name, phone,
+    name,
+    // unique (cohort_id, name, phone) 은 phone 이 null 이면 걸리지 않는다.
+    // null 로 두면 동기화할 때마다 같은 사람의 새 행이 생긴다.
+    phone: phone ?? '',
     full_phone: trim(r['연락처']),
     team: trim(r.team),
     team_no: toInt(r['no.']),
@@ -624,6 +627,24 @@ const savedMembers = await upsert(
   members.map(({ _key, _id, ...m }) => m).map(m => ({ ...m, status: 'active' })),
   'cohort_id,name,phone'
 );
+
+// 시트에 없는데 DB 에만 남아 있는 세션
+//
+// 기수 일정이 바뀌거나 다른 기수 시트가 잘못 들어오면 세션이 쌓인다.
+// 지우면 그 날짜의 출결도 함께 사라지므로 자동으로 처리하지 않고 알리기만 한다.
+{
+  const sheetDates = new Set(sessions.map(s => s.session_date));
+  const { data: dbSessions } = await sb
+    .from('sessions').select('session_date,label_norm')
+    .eq('cohort_id', COHORT_ID);
+  const orphan = (dbSessions || []).filter(s => !sheetDates.has(s.session_date));
+  if (orphan.length) {
+    console.warn(`⚠️  시트에 없는 세션이 DB 에 ${orphan.length}개 남아 있습니다:`);
+    console.warn('    ' + orphan.map(s => `${s.session_date}(${s.label_norm || '?'})`).join(', '));
+    console.warn('    일정이 바뀐 것이면 그대로 두시고,');
+    console.warn('    다른 기수가 잘못 들어온 것이면 SQL 로 정리해야 합니다.\n');
+  }
+}
 
 // 시트에서 사라진 인원 처리
 // 매주 수료·하차가 발생하므로 DB에만 남은 사람을 표시해야 한다.
