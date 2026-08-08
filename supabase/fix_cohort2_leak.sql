@@ -353,3 +353,35 @@ select k.session_label as 라벨,
  group by k.session_label, s.session_date
 having count(*) filter (where k.applied) > 0
  order by s.session_date nulls first;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 12 — 시트에서 지난 기수 행을 지운 뒤, DB 를 시트에 맞춘다
+--
+--   왜 필요한가
+--     동기화는 upsert 만 하고 삭제는 하지 않는다.
+--     시트에서 지운 행은 DB 에 그대로 남는다.
+--     지금 3기에 남아 있는 '교제' 김밥 20건이 그런 잔여다
+--     (김밥 탭에서는 이미 교제가 빠졌는데 DB 에는 남아 있다).
+--
+--   순서
+--     1) 시트 정리 — 김밥·과제 탭에서 지난 기수 행 삭제
+--     2) 아래 블록 실행 — 3기의 김밥·과제를 비운다
+--     3) Actions 에서 동기화 다시 — 시트 그대로 정확히 채워진다
+--
+--   출석·명단은 건드리지 않는다. 앱에서 찍은 출석이 사라지면 안 되기 때문이다.
+--   (김밥·과제는 시트가 원본이라 다시 채우면 그만이다)
+-- ══════════════════════════════════════════════════════════════════
+
+-- 실행 전 확인
+select '김밥' as 구분, count(*) as 건수, count(*) filter (where applied) as 신청
+  from kimbap_signups where cohort_id = '3기'
+union all
+select '과제', count(*), null
+  from homework_submissions where cohort_id = '3기';
+
+-- 확인 후 실행. 그다음 동기화를 돌리면 시트 그대로 채워진다.
+begin;
+delete from kimbap_signups       where cohort_id = '3기';
+delete from homework_submissions where cohort_id = '3기';
+commit;
