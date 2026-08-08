@@ -219,3 +219,35 @@ select '④ 2기 수료 판정', coalesce(verdict, '(없음)'), count(*)::text
   from v_completion_status where cohort_id = '2기' group by verdict
 
 order by 1, 2;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 7 — 이름 중복 5건 확인 (선택해서 Run)
+--
+--   PART 6 ② 에 5건이 나왔다. 둘 중 하나다.
+--
+--   (가) 진짜 동명이인 — 전화번호가 다르다. 정상이니 그대로 둔다.
+--   (나) 같은 사람이 두 번 — 한쪽 전화번호가 비어 있다.
+--        시트 ID 에 전화번호가 없던 시절에 들어간 행이 남은 것이다.
+--        출결·과제가 없는 쪽을 지우면 된다.
+--
+--   전화번호 칸이 비어 있는 행이 있으면 (나) 다.
+-- ══════════════════════════════════════════════════════════════════
+
+select m.cohort_id as 기수,
+       m.name as 이름,
+       case when btrim(coalesce(m.phone, '')) = '' then '(비어있음)' else m.phone end as 전화,
+       coalesce(m.team, '-') as 조,
+       m.status as 상태,
+       m.created_at::date as 생성일,
+       count(a.*) filter (where nullif(btrim(a.status), '') is not null) as 출결기록,
+       count(distinct h.id) as 과제,
+       m.id
+  from members m
+  left join attendance a on a.member_id = m.id
+  left join homework_submissions h on h.member_id = m.id
+ where (m.cohort_id, m.name) in (
+   select cohort_id, name from members group by cohort_id, name having count(*) > 1
+ )
+ group by m.id, m.cohort_id, m.name, m.phone, m.team, m.status, m.created_at
+ order by m.cohort_id, m.name, 출결기록 desc;
