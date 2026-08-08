@@ -71,6 +71,12 @@ const toBool = (v) => {
 };
 // 시트에 '9/6' 로 적혀 있을 수도, 진짜 날짜값이라 '9/6' 으로 넘어올 수도 있다.
 // 두 자리로만 받으면 그 세션을 통째로 놓친다.
+// 'YYYY-MM-DD' → 'MM/DD' (로그 표시용)
+function toMMDD(iso) {
+  const m = String(iso || '').match(/^\d{4}-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+
 const SESSION_KEY_RE = /^(\d{1,2})\/(\d{1,2})$/;
 
 // 커리큘럼 구성. 수료 분모(16강)의 정의이기도 하다.
@@ -735,15 +741,38 @@ function namesOf(set, limit = 12) {
 }
 
 console.log('▶ attendance');
+const todayIso = new Date().toISOString().slice(0, 10);
+let futureMarks = 0;
+const futureSample = new Set();
+
 const attRows = attendance
   .map(a => {
     const uuid = keyToUuid.get(a._key);
-    return uuid ? { member_id: uuid, session_date: a.session_date, status: a.status } : null;
+    if (!uuid) return null;
+    const st = String(a.status ?? '').trim();
+
+    // 아직 하지 않은 강의에 O/X 가 있을 수는 없다.
+    // 지난 기수 결석을 X 로 적어 둔 것이 새 기수로 넘어오면
+    // 결석 수가 부풀려지고, 열리지도 않은 강의의 과제를 내라고 안내하게 된다.
+    // ◎(지난 기수 이수)와 -(집계 제외)는 미래 주차에도 정당하므로 통과시킨다.
+    if (a.session_date > todayIso && (st.toUpperCase() === 'O' || st.toUpperCase() === 'X')) {
+      futureMarks++;
+      if (futureSample.size < 5) futureSample.add(`${a._key.split('|')[0]} ${toMMDD(a.session_date) || a.session_date}=${st}`);
+      return { member_id: uuid, session_date: a.session_date, status: '' };
+    }
+    return { member_id: uuid, session_date: a.session_date, status: st };
   })
   .filter(Boolean);
+
 if (IMPORT_ATTENDANCE) {
   await upsert('attendance', attRows, 'member_id,session_date');
   console.log(`   ${attRows.length}건 (시트 값으로 덮어씀)`);
+  if (futureMarks) {
+    console.log(`   ℹ️ 아직 하지 않은 강의의 O/X ${futureMarks}개는 빈칸으로 넣었습니다.`);
+    console.log(`      예: ${[...futureSample].join(' / ')}`);
+    console.log('      지난 기수 결석 표시가 남아 있으면 결석 수가 부풀려지고');
+    console.log('      열리지도 않은 강의의 과제를 내라고 안내하게 됩니다.');
+  }
 } else {
   const filled = attRows.filter(a => String(a.status ?? '').trim() !== '').length;
   console.log(`   건너뜀 — 출석은 DB 가 원본입니다 (앱에서 기록)`);
