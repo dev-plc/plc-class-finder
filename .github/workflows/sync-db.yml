@@ -16,6 +16,11 @@ on:
         description: '과제 기준일 YYYY-MM-DD (비우면 지난 기수 마지막 강의). 이 날짜 뒤 제출만 이 기수 것으로 본다'
         required: false
         default: ''
+      include_undated_homework:
+        description: '제출 시각 없는 과제도 반영 (오프라인 제출에 날짜를 적기 시작하면 불필요)'
+        type: boolean
+        required: false
+        default: false
       dry_run:
         description: 'dry-run (쓰기 없이 확인만)'
         type: boolean
@@ -60,6 +65,9 @@ jobs:
           fi
           if [ "${{ github.event.inputs.activate }}" = "true" ]; then
             FLAGS="$FLAGS --activate"
+          fi
+          if [ "${{ github.event.inputs.include_undated_homework }}" = "true" ]; then
+            FLAGS="$FLAGS --include-undated-homework"
           fi
           echo "flags:${FLAGS:-(없음)}"
           node scripts/sync-sheet-to-db.mjs $FLAGS
