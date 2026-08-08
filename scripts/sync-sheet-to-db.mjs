@@ -482,32 +482,29 @@ if (kimbapExtraLabels.size) {
 // 이 기수 첫 강의보다 먼저 제출된 건은 지난 기수 것으로 보고 뺀다.
 const cohortStart = sessions[0]?.session_date || null;
 
-// 어느 기수 응답인지 가르는 기준은 '지난 기수의 마지막 강의' 다.
+// 어느 기수 응답인지 가르는 기준은 '이 기수가 시작하는 달의 1일' 이다.
 //
 // 과제는 강의 전에 미리 내는 것이 기본이고 사후 제출도 된다.
 // 그래서 '이 기수 첫 강의' 나 '아직 안 한 강의' 로는 가를 수 없다.
-// 기수와 기수 사이에는 빈 기간이 있으므로,
-// 지난 기수 마지막 강의 뒤에 온 것은 전부 이번 기수 것으로 봐도 된다.
+// 기수와 기수 사이에는 빈 달이 있으므로, 시작 달 1일부터 들어온 것은
+// 전부 이번 기수 것으로 본다.
+//   3기 첫 강의 08/09 → 기준일 2026-07-31 → 8월 이후 제출은 전부 3기
 //
-// 기수 사이에 지난 기수 사후 제출이 있었다면 --homework-since 로 조정한다.
-// 자동 판별이 안 되거나 기준을 다르게 잡고 싶을 때 직접 지정할 수 있다.
-let homeworkCutoff = getArg('homework-since') || null;
-if (!homeworkCutoff && sb && cohortStart) {
-  const { data } = await sb.from('sessions')
-    .select('session_date')
-    .neq('cohort_id', COHORT_ID)
-    .lt('session_date', cohortStart)
-    .order('session_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  homeworkCutoff = data?.session_date ?? null;
+// 달 경계와 다르게 잡아야 하면 --homework-since 로 지정한다.
+function prevMonthEnd(isoDate) {
+  const d = new Date(isoDate + 'T00:00:00Z');
+  d.setUTCDate(1);   // 그 달 1일
+  d.setUTCDate(0);   // 전월 말일
+  return d.toISOString().slice(0, 10);
 }
+const homeworkCutoff = getArg('homework-since')
+  || (cohortStart ? prevMonthEnd(cohortStart) : null);
+
 if (homeworkCutoff) {
-  const src = getArg('homework-since') ? '직접 지정' : '지난 기수 마지막 강의';
+  const src = getArg('homework-since') ? '직접 지정' : '기수 시작 달의 1일 기준';
   console.log(`ℹ️  과제 기준일: ${homeworkCutoff} (${src}). 그 뒤 제출만 이 기수 것으로 본다`);
 } else {
-  console.warn('⚠️  지난 기수를 찾지 못해 제출 시각으로 거르지 않습니다.');
-  console.warn('    지난 기수 응답이 시트에 남아 있으면 섞여 들어옵니다.\n');
+  console.warn('⚠️  세션이 없어 과제를 제출 시각으로 거르지 않습니다.\n');
 }
 
 const homeworkByKey = new Map();
