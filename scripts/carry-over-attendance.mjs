@@ -11,6 +11,8 @@
 // 안전장치
 //   - 기본이 dry-run 이다. 실제로 쓰려면 --apply 를 붙인다.
 //   - 새 기수에서 이미 기록이 있는 칸은 절대 덮지 않는다 (빈칸만 채운다).
+//   - 지난 기수에 결석했지만 과제로 인정받은 주차도 이수로 친다.
+//     그 기수에서 이미 인정된 것을 새 기수에서 다시 들으라고 할 수는 없다.
 //   - 강의(is_class=true) 주차만 대상으로 한다. 교제·나눔은 건드리지 않는다.
 //   - 짝은 (이름 + 전화 뒷4자리) 가 모두 같을 때만 맺는다.
 //
@@ -53,31 +55,58 @@ console.log(`🔧 mode: ${APPLY ? 'APPLY (실제 기록)' : 'DRY RUN (쓰기 없
 // ---------------------------------------------------------------- load
 const key = (m) => `${String(m.name).trim()}|${String(m.phone ?? '').trim()}`;
 
-async function loadCohort(cohortId, { activeOnly }) {
-  let q = sb.from('members').select('id,name,phone,team,status').eq('cohort_id', cohortId);
-  if (activeOnly) q = q.eq('status', 'active');
-  const { data: members, error: e1 } = await q;
-  if (e1) throw new Error(`${cohortId} members: ${e1.message}`);
-
-  const { data: sessions, error: e2 } = await sb
-    .from('sessions').select('session_date,label,label_norm,is_class')
-    .eq('cohort_id', cohortId).order('session_date');
-  if (e2) throw new Error(`${cohortId} sessions: ${e2.message}`);
-
-  const ids = members.map(m => m.id);
-  const attendance = [];
-  for (let i = 0; i < ids.length; i += 200) {
-    const { data, error } = await sb
-      .from('attendance').select('member_id,session_date,status')
-      .in('member_id', ids.slice(i, i + 200));
-    if (error) throw new Error(`${cohortId} attendance: ${error.message}`);
-    attendance.push(...(data || []));
+// PostgREST 는 한 번에 돌려주는 행 수에 상한이 있다 (Supabase 기본 1000).
+// 출석은 인원 × 주차라 금방 넘는다 — 2기만 해도 142명 × 18주차 = 2556행이다.
+// 넘으면 오류 없이 조용히 잘려서, 이월 대상이 실제보다 적게 잡힌다.
+// range 로 나눠 받는다. 페이지 순서가 흔들리지 않도록 order 는 필수다.
+async function selectAll(build, label) {
+  const out = [];
+  const step = 1000;
+  for (let from = 0; from < 500000; from += step) {
+    const { data, error } = await build().range(from, from + step - 1);
+    if (error) throw new Error(`${label}: ${error.message}`);
+    out.push(...(data || []));
+    if (!data || data.length < step) break;
   }
+  return out;
+}
+
+async function loadCohort(cohortId, { activeOnly }) {
+  const members = await selectAll(() => {
+    let q = sb.from('members').select('id,name,phone,team,status')
+      .eq('cohort_id', cohortId).order('id');
+    if (activeOnly) q = q.eq('status', 'active');
+    return q;
+  }, `${cohortId} members`);
+
+  const sessions = await selectAll(() => sb
+    .from('sessions').select('session_date,label,label_norm,is_class')
+    .eq('cohort_id', cohortId).order('session_date'), `${cohortId} sessions`);
+
+  const ids = new Set(members.map(m => m.id));
+  const dates = sessions.map(s => s.session_date);
+  // 세션 날짜로 걸러야 다른 기수 출결까지 끌어오지 않는다
+  const attendance = (await selectAll(() => sb
+    .from('attendance').select('member_id,session_date,status')
+    .in('session_date', dates)
+    .order('member_id').order('session_date'), `${cohortId} attendance`))
+    .filter(a => ids.has(a.member_id));
+
   return { members, sessions, attendance };
+}
+
+// 지난 기수에서 과제로 보충 인정받은 주차 (결석했지만 이수로 처리된 것).
+// 규칙: 그 기수에서 이미 인정받았으므로 새 기수에서도 이수로 본다.
+async function loadMakeupPassed(cohortId) {
+  return selectAll(() => sb
+    .from('v_makeup_detail').select('member_id,session_label')
+    .eq('cohort_id', cohortId).eq('counted', true)
+    .order('member_id').order('session_label'), `${cohortId} makeup`);
 }
 
 const prev = await loadCohort(FROM, { activeOnly: false });   // 지난 기수는 하차자도 본다
 const next = await loadCohort(TO,   { activeOnly: true });
+const prevMakeup = await loadMakeupPassed(FROM);
 
 console.log(`   ${FROM}: ${prev.members.length}명 · 강의 ${prev.sessions.filter(s => s.is_class).length}개`);
 console.log(`   ${TO}:   ${next.members.length}명 · 강의 ${next.sessions.filter(s => s.is_class).length}개\n`);
@@ -99,22 +128,43 @@ const prevDateToLabel = new Map(
   prev.sessions.filter(s => s.is_class && s.label_norm).map(s => [s.session_date, s.label_norm]));
 
 const prevAttByMember = new Map();
+const addPassed = (memberId, label) => {
+  if (!prevAttByMember.has(memberId)) prevAttByMember.set(memberId, new Set());
+  prevAttByMember.get(memberId).add(label);
+};
+
 for (const a of prev.attendance) {
   const label = prevDateToLabel.get(a.session_date);
   if (!label) continue;                                   // 교제·나눔·미매핑은 제외
   if (!PASSED.has(String(a.status ?? '').trim().toUpperCase())) continue;
-  if (!prevAttByMember.has(a.member_id)) prevAttByMember.set(a.member_id, new Set());
-  prevAttByMember.get(a.member_id).add(label);
+  addPassed(a.member_id, label);
 }
+
+// 결석했지만 과제로 인정받은 주차도 이수로 친다.
+// 그 기수에서 이미 인정된 것을 새 기수에서 다시 들으라고 할 수는 없다.
+const makeupLabels = new Set();
+for (const d of prevMakeup) {
+  if (!d.session_label) continue;
+  addPassed(d.member_id, d.session_label);
+  makeupLabels.add(`${d.member_id}|${d.session_label}`);
+}
+console.log(`   ${FROM} 과제 보충 인정: ${prevMakeup.length}건 (출석과 같이 이수로 친다)\n`);
 
 // 같은 사람이 지난 기수에 두 번 등장할 수 있다(재등록). 이수 주차를 합친다.
 const prevPassedByKey = new Map();
+const prevMakeupByKey = new Map();   // 그중 과제로 인정받은 주차 (보고용)
 for (const m of prev.members) {
   const passed = prevAttByMember.get(m.id);
   if (!passed?.size) continue;
   const k = key(m);
   if (!prevPassedByKey.has(k)) prevPassedByKey.set(k, new Set());
-  for (const label of passed) prevPassedByKey.get(k).add(label);
+  for (const label of passed) {
+    prevPassedByKey.get(k).add(label);
+    if (makeupLabels.has(`${m.id}|${label}`)) {
+      if (!prevMakeupByKey.has(k)) prevMakeupByKey.set(k, new Set());
+      prevMakeupByKey.get(k).add(label);
+    }
+  }
 }
 
 // 새 기수에서 이미 기록이 있는 칸 (덮지 않기 위해)
@@ -136,15 +186,19 @@ for (const m of next.members) {
   if (!passed?.size) continue;
   matched++;
 
+  const fromMakeup = prevMakeupByKey.get(key(m)) || new Set();
   const marks = [];
+  let makeupMarks = 0;
   let collided = 0;
   for (const s of nextClassSessions) {
     if (!passed.has(s.label_norm)) continue;
     if (nextFilled.has(`${m.id}|${s.session_date}`)) { collided++; continue; }  // 그대로 둔다
     rows.push({ member_id: m.id, session_date: s.session_date, status: '◎' });
-    marks.push(s.label_norm);
+    // 과제로 인정받은 주차는 눈에 띄게 표시한다 (출석해서 이수한 것과 구분)
+    marks.push(fromMakeup.has(s.label_norm) ? `${s.label_norm}*` : s.label_norm);
+    if (fromMakeup.has(s.label_norm)) makeupMarks++;
   }
-  if (marks.length) report.push({ name: m.name, phone: m.phone, team: m.team, marks });
+  if (marks.length) report.push({ name: m.name, phone: m.phone, team: m.team, marks, makeupMarks });
   else alreadyFilled.push({ name: m.name, phone: m.phone, team: m.team, collided });
 }
 
@@ -165,7 +219,8 @@ if (alreadyFilled.length) {
 }
 
 if (report.length) {
-  console.log('상세:');
+  const totalMakeup = report.reduce((n, r) => n + (r.makeupMarks || 0), 0);
+  console.log(`상세:  (* 는 ${FROM} 에서 과제로 인정받은 주차 — ${totalMakeup}개)`);
   for (const r of report.slice(0, 60)) {
     console.log(`   ${r.team || '-'} ${r.name}${r.phone || ''}  ${r.marks.length}개 · ${r.marks.join(', ')}`);
   }
