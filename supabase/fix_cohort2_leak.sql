@@ -234,20 +234,74 @@ order by 1, 2;
 --   전화번호 칸이 비어 있는 행이 있으면 (나) 다.
 -- ══════════════════════════════════════════════════════════════════
 
+-- ⚠️ attendance 와 homework 를 한꺼번에 left join 하면 곱집합이 된다.
+--    (출결 18건 × 과제 17건 = 306 처럼 부풀려진다)
+--    각각 서브쿼리로 세야 한다.
 select m.cohort_id as 기수,
        m.name as 이름,
        case when btrim(coalesce(m.phone, '')) = '' then '(비어있음)' else m.phone end as 전화,
        coalesce(m.team, '-') as 조,
        m.status as 상태,
        m.created_at::date as 생성일,
-       count(a.*) filter (where nullif(btrim(a.status), '') is not null) as 출결기록,
-       count(distinct h.id) as 과제,
+       (select count(*) from attendance a
+         where a.member_id = m.id
+           and nullif(btrim(a.status), '') is not null) as 출결기록,
+       (select count(*) from homework_submissions h
+         where h.member_id = m.id) as 과제,
        m.id
   from members m
-  left join attendance a on a.member_id = m.id
-  left join homework_submissions h on h.member_id = m.id
  where (m.cohort_id, m.name) in (
    select cohort_id, name from members group by cohort_id, name having count(*) > 1
  )
- group by m.id, m.cohort_id, m.name, m.phone, m.team, m.status, m.created_at
  order by m.cohort_id, m.name, 출결기록 desc;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 8 — 3기 잔여 행 정리 (BEGIN 부터 COMMIT 까지 선택해서 Run)
+--
+--   PART 7 결과
+--     2기 김강민·이진아·이현주 → 전화번호도 조도 다르다. 진짜 동명이인이니 둔다.
+--     3기 박민수·이수민       → 한쪽 전화번호가 비어 있다. 같은 사람이 두 번이다.
+--                              시트 ID 에 번호가 없던 시절 행이 남은 것.
+--                              inactive 이고 출결·과제 모두 0건이라 지워도 잃을 게 없다.
+-- ══════════════════════════════════════════════════════════════════
+
+begin;
+
+delete from members
+ where id in (
+   '825640c1-d940-4560-aad7-f9cbe6908839',  -- 3기 박민수 (전화 비어있음, inactive)
+   'c04a0eca-565c-4cff-bb74-00f40e4a6d2f'   -- 3기 이수민 (전화 비어있음, inactive)
+ )
+   and btrim(coalesce(phone, '')) = ''      -- 안전장치: 번호 있는 행은 절대 안 지운다
+   and status = 'inactive'
+   and not exists (select 1 from attendance a
+                    where a.member_id = members.id
+                      and nullif(btrim(a.status), '') is not null);
+
+commit;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 9 — 마무리 확인 (선택해서 Run)
+--
+--   전화번호가 비어 있는 행이 더 없는지, 기수별 인원이 맞는지.
+--   2기 142 (활성 103) · 3기 80 (활성 78) 이면 정리 끝입니다.
+-- ══════════════════════════════════════════════════════════════════
+
+select '① 전화 비어있음' as 구분,
+       cohort_id || ' ' || name || ' (' || status || ')' as 항목,
+       ''::text as 값
+  from members where btrim(coalesce(phone, '')) = ''
+
+union all
+select '② 인원',
+       cohort_id || ' ' || case when status = 'active' then '활성' else '비활성' end,
+       count(*)::text
+  from members group by cohort_id, status
+
+union all
+select '③ 2기 수료 판정', coalesce(verdict, '(없음)'), count(*)::text
+  from v_completion_status where cohort_id = '2기' group by verdict
+
+order by 1, 2;
