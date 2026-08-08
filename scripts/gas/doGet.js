@@ -560,7 +560,23 @@ function doGet(e) {
 //   시트 상단 [PLC] 메뉴 → 'DB에서 출석 가져오기'
 //   메뉴가 안 보이면 이 스크립트가 시트에 붙어 있지 않은 것이다.
 //   그 경우 Apps Script 편집기에서 pullAttendanceFromDb 를 골라 ▶ 실행.
+//
+// 이 블록은 혼자서도 돈다. doGet 코드와 같은 프로젝트에 있어도 되고,
+// 시트에 붙인 새 프로젝트에 이것만 넣어도 된다.
 // ═══════════════════════════════════════════════════════════════════════════
+
+// 이 블록만 따로 떼어 다른 파일·새 프로젝트에 붙여넣어도 돌아가야 한다.
+// 위쪽 doGet 코드가 같이 있으면 그쪽 SHEET_ID / TAB_ROSTER 를 쓰고,
+// 없으면 아래 값을 쓴다.
+var PULL_SHEET_ID   = "12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM";
+var PULL_TAB_ROSTER = "출석부(DB)";
+
+function pullTargets_() {
+  return {
+    sheetId: (typeof SHEET_ID   !== "undefined" && SHEET_ID)   ? SHEET_ID   : PULL_SHEET_ID,
+    roster:  (typeof TAB_ROSTER !== "undefined" && TAB_ROSTER) ? TAB_ROSTER : PULL_TAB_ROSTER
+  };
+}
 
 // anon 키는 공개돼도 안전하다. 읽기만 열려 있고 쓰기는 RLS 로 막혀 있다.
 var SUPABASE_URL = "https://wvpqdicsqjozhxtxsnin.supabase.co";
@@ -618,9 +634,15 @@ function toMMDD_(raw, tz) {
 }
 
 function pullAttendanceFromDb() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = ss.getSheetByName(TAB_ROSTER);
-  if (!sheet) throw new Error("'" + TAB_ROSTER + "' 시트를 찾을 수 없습니다.");
+  var t = pullTargets_();
+
+  // 시트에 붙어 있는 스크립트면 그 시트를, 아니면 ID 로 연다.
+  var ss = null;
+  try { ss = SpreadsheetApp.getActive(); } catch (e) { /* 독립 스크립트 */ }
+  if (!ss) ss = SpreadsheetApp.openById(t.sheetId);
+
+  var sheet = ss.getSheetByName(t.roster);
+  if (!sheet) throw new Error("'" + t.roster + "' 시트를 찾을 수 없습니다.");
   var tz = Session.getScriptTimeZone();
 
   // ---- 활성 기수
