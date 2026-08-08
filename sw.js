@@ -5,15 +5,14 @@
 //   아이콘·이미지는 잘 안 바뀌고 용량이 크니 캐시를 먼저 쓴다.
 //   Supabase·Google 같은 외부 API 는 캐시하지 않는다 (실시간성).
 //
-// 왜 앱 코드가 네트워크 우선인가
-//   예전에는 전부 캐시 우선이었다. 그런데 scripts/*.js 는 URL 에 버전이 없어서
-//   (script.js?v=35 와 달리) 새로 배포해도 캐시된 옛 파일이 계속 나왔다.
+// 새 코드가 반영되지 않던 문제를 두 겹으로 막는다
+//   (1) 앱 코드는 네트워크 우선. 캐시는 오프라인일 때만 쓴다.
+//   (2) 모든 모듈 import 에 ?v=NN 을 붙였다. 버전이 바뀌면 URL 이 바뀌므로
+//       어떤 캐시도 옛 파일을 내줄 수 없다.
+//   한 겹만으로는 새지 않는다는 보장이 없어 둘 다 둔다.
 //   실제로 members-data 가 v33 에서 안 올라가는 일이 있었다.
-//   버전 쿼리를 파일마다 붙이는 방법도 있지만, import 경로를 여러 곳에서
-//   같이 고쳐야 해서 한 곳만 빠뜨려도 같은 일이 반복된다.
-//   네트워크를 먼저 보게 하면 이 문제가 구조적으로 사라진다.
 
-const CACHE_VERSION = 'plc-v20';
+const CACHE_VERSION = 'plc-v21';
 
 const PRECACHE_URLS = [
   './',
@@ -21,11 +20,11 @@ const PRECACHE_URLS = [
   './admin.html',
   './style.css?v=32',
   './admin.css?v=2',
-  './script.js?v=35',
-  './admin.js?v=8',
-  './scripts/members-data.js',
-  './scripts/supabase-config.js',
-  './scripts/hangul.js',
+  './script.js?v=36',
+  './admin.js?v=36',
+  './scripts/members-data.js?v=36',
+  './scripts/supabase-config.js?v=36',
+  './scripts/hangul.js?v=36',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

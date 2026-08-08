@@ -7,8 +7,8 @@
 //   출석            DB 가 원본. 앱에서 RPC 로 기록한다.
 //   그 외(편성·명단·과제·김밥)  시트가 원본. 일 1회 동기화로 DB에 들어온다.
 
-import { matches as hangulMatches } from './hangul.js';
-import { sbSelect, sbSelectAll, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js';
+import { matches as hangulMatches } from './hangul.js?v=36';
+import { sbSelect, sbSelectAll, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=36';
 
 export const MODULE_VERSION = 'members-data v34 (행 수 상한 대응)';
 
