@@ -12,6 +12,10 @@ on:
         type: boolean
         required: false
         default: false
+      homework_since:
+        description: '과제 기준일 YYYY-MM-DD (비우면 지난 기수 마지막 강의). 이 날짜 뒤 제출만 이 기수 것으로 본다'
+        required: false
+        default: ''
       dry_run:
         description: 'dry-run (쓰기 없이 확인만)'
         type: boolean
@@ -45,8 +49,12 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GAS_API_URL: ${{ secrets.GAS_API_URL }}
           COHORT_ID: ${{ github.event.inputs.cohort }}
+          HOMEWORK_SINCE: ${{ github.event.inputs.homework_since }}
         run: |
           FLAGS=""
+          if [ -n "$HOMEWORK_SINCE" ]; then
+            FLAGS="$FLAGS --homework-since=$HOMEWORK_SINCE"
+          fi
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             FLAGS="$FLAGS --dry-run"
           fi

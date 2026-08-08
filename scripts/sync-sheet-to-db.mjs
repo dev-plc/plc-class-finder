@@ -7,6 +7,7 @@
 //   node scripts/sync-sheet-to-db.mjs                    (활성 기수 자동)
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기 --activate   (기수 전환)
+//   node scripts/sync-sheet-to-db.mjs --homework-since=2026-07-12  (과제 기준일 직접 지정)
 //
 // 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GAS_API_URL(선택)
 
@@ -479,27 +480,41 @@ if (kimbapExtraLabels.size) {
 // 지난 기수에서 이월된 사람은 ID(이름+전화)가 같아 그대로 붙어 버린다.
 // 그러면 내지도 않은 과제로 결석 보충을 인정받는다.
 // 이 기수 첫 강의보다 먼저 제출된 건은 지난 기수 것으로 보고 뺀다.
-function minusDays(isoDate, n) {
-  const d = new Date(isoDate + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
-}
 const cohortStart = sessions[0]?.session_date || null;
-// 시간대 차이로 첫 강의 당일 제출이 걸리지 않도록 하루 여유를 둔다
-const homeworkCutoff = cohortStart ? minusDays(cohortStart, 1) : null;
 
-// 제출 시각이 아예 없는 행이 있다 (관리자가 손으로 적은 '오프라인제출' 등).
-// 그건 날짜로 못 거르지만, 다른 신호가 있다:
-//   아직 하지 않은 강의의 과제는 이 기수 것일 수 없다.
-// 결석 보충 과제는 그 강의를 하고 난 뒤에 내는 것이므로 선제출이 없다.
-const todayIso = new Date().toISOString().slice(0, 10);
+// 어느 기수 응답인지 가르는 기준은 '지난 기수의 마지막 강의' 다.
+//
+// 과제는 강의 전에 미리 내는 것이 기본이고 사후 제출도 된다.
+// 그래서 '이 기수 첫 강의' 나 '아직 안 한 강의' 로는 가를 수 없다.
+// 기수와 기수 사이에는 빈 기간이 있으므로,
+// 지난 기수 마지막 강의 뒤에 온 것은 전부 이번 기수 것으로 봐도 된다.
+//
+// 기수 사이에 지난 기수 사후 제출이 있었다면 --homework-since 로 조정한다.
+// 자동 판별이 안 되거나 기준을 다르게 잡고 싶을 때 직접 지정할 수 있다.
+let homeworkCutoff = getArg('homework-since') || null;
+if (!homeworkCutoff && sb && cohortStart) {
+  const { data } = await sb.from('sessions')
+    .select('session_date')
+    .neq('cohort_id', COHORT_ID)
+    .lt('session_date', cohortStart)
+    .order('session_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  homeworkCutoff = data?.session_date ?? null;
+}
+if (homeworkCutoff) {
+  const src = getArg('homework-since') ? '직접 지정' : '지난 기수 마지막 강의';
+  console.log(`ℹ️  과제 기준일: ${homeworkCutoff} (${src}). 그 뒤 제출만 이 기수 것으로 본다`);
+} else {
+  console.warn('⚠️  지난 기수를 찾지 못해 제출 시각으로 거르지 않습니다.');
+  console.warn('    지난 기수 응답이 시트에 남아 있으면 섞여 들어옵니다.\n');
+}
 
 const homeworkByKey = new Map();
 let homeworkDupes = 0;
 let homeworkStale = 0;
-let homeworkFuture = 0;
 let homeworkNoDate = 0;
-const homeworkFutureSample = new Set();
+const homeworkNoDateSample = new Set();
 for (const [gasId, list] of Object.entries(homeworkIn)) {
   for (const h of (list || [])) {
     const norm = normalizeSession(h.session);
@@ -513,21 +528,15 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       url: trim(h.url),
       submitted_at: h.submittedAt ? new Date(h.submittedAt).toISOString() : null,
     };
-    // 아직 하지 않은 강의의 과제 → 이 기수 것이 아니다 (제출 시각이 없어도 걸러진다)
-    const sessionDate = labelToDate.get(norm);
-    if (sessionDate && sessionDate > todayIso) {
-      homeworkFuture++;
-      if (homeworkFutureSample.size < 5) homeworkFutureSample.add(`${gasId} ${norm}`);
+    // 제출 시각이 없는 건 = 오프라인 제출이나 사후 제출을 손으로 적은 것.
+    // 날짜로 가릴 수 없지만 유효한 제출이므로 넣는다.
+    // (지난 기수 응답이 시트에 남아 있으면 섞일 수 있어 건수를 로그에 남긴다)
+    if (!row.submitted_at) {
+      homeworkNoDate++;
+      if (homeworkNoDateSample.size < 5) homeworkNoDateSample.add(`${gasId} ${norm}`);
+    } else if (homeworkCutoff && row.submitted_at.slice(0, 10) <= homeworkCutoff) {
+      homeworkStale++;
       continue;
-    }
-
-    if (homeworkCutoff) {
-      if (!row.submitted_at) {
-        homeworkNoDate++;                         // 시각이 없으면 날짜로는 판단 불가
-      } else if (row.submitted_at.slice(0, 10) < homeworkCutoff) {
-        homeworkStale++;
-        continue;
-      }
     }
 
     const key = `${gasId}|${norm}|${row.type ?? ''}`;
@@ -547,13 +556,10 @@ if (homeworkDupes) {
 if (homeworkStale) {
   console.log(`ℹ️  ${homeworkCutoff} 이전 제출 ${homeworkStale}건 제외 (지난 기수 응답)`);
 }
-if (homeworkFuture) {
-  console.log(`ℹ️  아직 하지 않은 강의의 과제 ${homeworkFuture}건 제외 (지난 기수 응답)`);
-  console.log(`    예: ${[...homeworkFutureSample].join(' / ')}`);
-}
 if (homeworkNoDate) {
-  console.warn(`⚠️  제출 시각이 없는 과제 ${homeworkNoDate}건 — 이미 지난 강의라 그대로 반영합니다.`);
-  console.warn('    지난 기수 응답이 섞여 있다면 과제 탭에서 그 행들을 지우세요.');
+  console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 반영 (오프라인·사후 제출을 손으로 적은 것)`);
+  console.log(`    예: ${[...homeworkNoDateSample].join(' / ')}`);
+  console.log('    날짜로 가릴 수 없으니, 지난 기수 응답은 과제 탭에서 지워 두세요.');
 }
 
 console.log('📊 변환 결과');
