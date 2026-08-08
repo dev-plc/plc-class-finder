@@ -21,6 +21,11 @@ on:
         type: boolean
         required: false
         default: false
+      import_attendance:
+        description: '시트 출석으로 DB 덮어쓰기 — 기수를 처음 만들 때만. 평소 켜면 앱에서 찍은 출석이 지워집니다'
+        type: boolean
+        required: false
+        default: false
       dry_run:
         description: 'dry-run (쓰기 없이 확인만)'
         type: boolean
@@ -68,6 +73,9 @@ jobs:
           fi
           if [ "${{ github.event.inputs.include_undated_homework }}" = "true" ]; then
             FLAGS="$FLAGS --include-undated-homework"
+          fi
+          if [ "${{ github.event.inputs.import_attendance }}" = "true" ]; then
+            FLAGS="$FLAGS --import-attendance"
           fi
           echo "flags:${FLAGS:-(없음)}"
           node scripts/sync-sheet-to-db.mjs $FLAGS
