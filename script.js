@@ -19,10 +19,12 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js';
+} from './scripts/members-data.js?v=36';
 
-const SCRIPT_VERSION = 'script.js v35 (행 수 상한 대응)';
-console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
+const SCRIPT_VERSION = 'script.js v36';
+// 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
+console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
+            'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');
 
 // ============================================================================
 // 1. 내 정보 기억 (localStorage) — UX #2
