@@ -204,15 +204,17 @@ function pullAttendanceFromDb() {
     byKey[key][off] = String(a.status == null ? "" : a.status).trim();
   }
 
-  // ---- 컬럼별로 쓴다.
-  //      한 덩어리로 읽고 쓰면 사이에 낀 수식 칸까지 값으로 굳어버린다.
+  // ---- 무엇이 바뀔지 먼저 다 계산한다.
+  //      시트를 덮어쓰는 일이라, 몇 칸이 어떻게 바뀌는지 보고 나서 쓴다.
+  var plan = [];        // [{col, values, changed}]
   var changed = 0;
+  var samples = [];
   for (var dj = 0; dj < dateCols.length; dj++) {
     var dc = dateCols[dj];
     var range = sheet.getRange(headerRowIdx + 2, dc.col + 1, rowCount, 1);
     var cur = range.getValues();
     var next = [];
-    var colChanged = false;
+    var colChanged = 0;
     var fill = byKey[dc.key] || {};
     for (var ri = 0; ri < rowCount; ri++) {
       var before = String(cur[ri][0] == null ? "" : cur[ri][0]).trim();
@@ -224,10 +226,45 @@ function pullAttendanceFromDb() {
       } else {
         after = before;                         // 시트에만 있는 행 — 건드리지 않는다
       }
-      if (after !== before) { colChanged = true; changed++; }
+      if (after !== before) {
+        colChanged++;
+        changed++;
+        if (samples.length < 5) {
+          samples.push(dc.key + " " +
+            String(data[headerRowIdx + 1 + ri][idCol] || "").replace(/\s/g, "") + " " +
+            (before === "" ? "(빈칸)" : before) + " → " + (after === "" ? "(빈칸)" : after));
+        }
+      }
       next.push([after]);
     }
-    if (colChanged) range.setValues(next);
+    if (colChanged) plan.push({ range: range, values: next });
+  }
+
+  if (!changed) {
+    var same = cohortId + " — 시트가 이미 DB 와 같습니다. 바꾼 것이 없습니다.";
+    Logger.log(same);
+    try { SpreadsheetApp.getUi().alert(same); } catch (e) {}
+    return same;
+  }
+
+  // ---- 쓰기 전에 묻는다 (메뉴에서 실행할 때만. 트리거 실행이면 그냥 진행)
+  var ask =
+    cohortId + " 출석을 DB 에서 가져옵니다.\n\n" +
+    "인원 " + members.length + "명 · 주차 " + dateCols.length + "개\n" +
+    "바뀔 칸 " + changed + "개\n\n" +
+    samples.join("\n") + (changed > samples.length ? "\n…" : "") +
+    "\n\n시트의 출석 칸을 DB 값으로 덮어씁니다. 진행할까요?";
+  try {
+    var ui = SpreadsheetApp.getUi();
+    if (ui.alert("DB에서 출석 가져오기", ask, ui.ButtonSet.OK_CANCEL) !== ui.Button.OK) {
+      return "취소했습니다.";
+    }
+  } catch (e) { /* UI 없는 실행 — 그대로 진행 */ }
+
+  // ---- 쓴다. 컬럼별로 나눠 쓴다.
+  //      한 덩어리로 읽고 쓰면 사이에 낀 수식 칸까지 값으로 굳어버린다.
+  for (var pi = 0; pi < plan.length; pi++) {
+    plan[pi].range.setValues(plan[pi].values);
   }
 
   var msg =
