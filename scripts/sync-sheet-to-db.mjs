@@ -9,6 +9,7 @@
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기 --activate   (기수 전환)
 //   node scripts/sync-sheet-to-db.mjs --homework-since=2026-07-31  (과제 기준일 직접 지정)
 //   node scripts/sync-sheet-to-db.mjs --include-undated-homework   (제출 시각 없는 과제도 반영)
+//   node scripts/sync-sheet-to-db.mjs --import-attendance          (시트 출석으로 DB 덮어쓰기, 기수 첫 구축용)
 //
 // 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GAS_API_URL(선택)
 
@@ -31,6 +32,15 @@ const ACTIVATE = args.includes('--activate');
 // 제출 시각이 없는 과제(오프라인·사후 제출 수기 입력)를 넣을지.
 // 기본은 제외 — 지금 시트에 남은 것은 전부 지난 기수 것이다.
 const INCLUDE_UNDATED_HW = args.includes('--include-undated-homework');
+// 출석을 시트에서 가져올지.
+//
+// 출석은 DB 가 원본이다. 앱에서 찍고 시트는 비워 둔다.
+// 그런데 시트 값을 그대로 upsert 하면 빈칸이 DB 를 덮어써서
+// 앱에서 찍은 출석이 다음 동기화 때 통째로 지워진다.
+// 그래서 기본은 가져오지 않는다.
+//
+// 기수를 처음 만들 때(시트에 과거 출석이 들어 있을 때)만 켠다.
+const IMPORT_ATTENDANCE = args.includes('--import-attendance');
 // 기수 시작 연도. 명시하지 않으면 DB의 cohorts.started_at 에서 읽고,
 // 그것도 없으면 현재 연도를 쓴다.
 // (하드코딩하면 기수가 바뀔 때 세션이 두 연도로 갈라져 집계가 깨진다)
@@ -731,8 +741,18 @@ const attRows = attendance
     return uuid ? { member_id: uuid, session_date: a.session_date, status: a.status } : null;
   })
   .filter(Boolean);
-await upsert('attendance', attRows, 'member_id,session_date');
-console.log(`   ${attRows.length}건`);
+if (IMPORT_ATTENDANCE) {
+  await upsert('attendance', attRows, 'member_id,session_date');
+  console.log(`   ${attRows.length}건 (시트 값으로 덮어씀)`);
+} else {
+  const filled = attRows.filter(a => String(a.status ?? '').trim() !== '').length;
+  console.log(`   건너뜀 — 출석은 DB 가 원본입니다 (앱에서 기록)`);
+  if (filled) {
+    console.log(`   ℹ️ 시트에 채워진 출석 ${filled}칸이 있지만 반영하지 않았습니다.`);
+    console.log('      시트 값으로 DB 를 덮어쓰려면 "시트 출석 가져오기" 를 체크하세요.');
+    console.log('      (기수를 처음 만들 때만 씁니다. 평소에 켜면 앱 기록이 지워집니다)');
+  }
+}
 
 if (kimbapRows.length) {
   console.log('▶ kimbap_signups');
