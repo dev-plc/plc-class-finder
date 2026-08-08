@@ -58,13 +58,30 @@ const toBool = (v) => {
 // 두 자리로만 받으면 그 세션을 통째로 놓친다.
 const SESSION_KEY_RE = /^(\d{1,2})\/(\d{1,2})$/;
 
-// 세션명 정규화: '3강 예수...' → '교리3', '성경적대화1' → '성경적대화1'
+// 커리큘럼 구성. 수료 분모(16강)의 정의이기도 하다.
+const DOCTRINE_COUNT = 12;   // 교리1~12
+const DIALOG_COUNT   = 4;    // 성경적대화1~4
+
+// 과제 폼은 '13강' 처럼 1~16 통합 번호를 쓰는데,
+// 시트·DB 는 교리N / 성경적대화N 으로 쓴다.
+// 13강은 교리13(없는 강의)이 아니라 성경적대화1 이다.
+function labelFromSerial(n) {
+  if (!Number.isFinite(n) || n < 1) return null;
+  if (n <= DOCTRINE_COUNT) return `교리${n}`;
+  if (n <= DOCTRINE_COUNT + DIALOG_COUNT) return `성경적대화${n - DOCTRINE_COUNT}`;
+  return null;
+}
+
+// 세션명 정규화: '3강 예수...' → '교리3', '13강 ...' → '성경적대화1'
 function normalizeSession(raw) {
   const s = String(raw || '').trim();
   let m = s.match(/^성경적대화\s*(\d+)/) || s.match(/^대화\s*(\d+)/);
   if (m) return '성경적대화' + m[1];
-  m = s.match(/^교리\s*(\d+)/) || s.match(/^(\d+)\s*강/);
-  if (m) return '교리' + m[1];
+  m = s.match(/^(\d+)\s*강/) || s.match(/^교리\s*(\d+)/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    return labelFromSerial(n) || ('교리' + n);   // 범위 밖은 그대로 두고 상위에서 경고
+  }
   if (/^교제/.test(s) || /^교재/.test(s)) return '교제';
   if (/^나눔/.test(s)) return '나눔';
   return s;
@@ -295,8 +312,8 @@ function sessionOrder(norm) {
 //
 // 커리큘럼: 교리1~12 → (중간에 교제·나눔이 낀 주가 있음) → 성경적대화1~4
 const CURRICULUM = [
-  ...Array.from({ length: 12 }, (_, i) => `교리${i + 1}`),
-  ...Array.from({ length: 4 },  (_, i) => `성경적대화${i + 1}`),
+  ...Array.from({ length: DOCTRINE_COUNT }, (_, i) => `교리${i + 1}`),
+  ...Array.from({ length: DIALOG_COUNT },  (_, i) => `성경적대화${i + 1}`),
 ];
 
 // 김밥 탭에서 확인된 비강의 주차 (교제·나눔)
