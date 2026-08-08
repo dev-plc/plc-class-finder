@@ -716,6 +716,14 @@ for (const m of savedMembers) {
 }
 console.log(`   ${savedMembers.length}명`);
 
+// 무시된 인원을 보여줄 때 목록이 너무 길어지지 않게
+function namesOf(set, limit = 12) {
+  const list = [...set];
+  return list.length <= limit
+    ? list.join(', ')
+    : `${list.slice(0, limit).join(', ')} 외 ${list.length - limit}명`;
+}
+
 console.log('▶ attendance');
 const attRows = attendance
   .map(a => {
@@ -728,30 +736,37 @@ console.log(`   ${attRows.length}건`);
 
 if (kimbapRows.length) {
   console.log('▶ kimbap_signups');
+  const kbSkipped = new Set();
   const kb = kimbapRows
     .map(({ _gasId, ...k }) => {
       const uuid = gasIdToUuid.get(String(_gasId).replace(/\s/g, ''));
-      return uuid ? { ...k, member_id: uuid } : null;
+      if (!uuid) { kbSkipped.add(_gasId); return null; }
+      return { ...k, member_id: uuid };
     })
     .filter(Boolean);
   await upsert('kimbap_signups', kb, 'member_id,session_label');
-  console.log(`   ${kb.length}건` +
-    (kimbapRows.length > kb.length
-      ? ` (명단에 없는 인원 ${kimbapRows.length - kb.length}건 무시)` : ''));
+  console.log(`   ${kb.length}건`);
+  if (kbSkipped.size) {
+    console.warn(`   ⚠️ 명단에 없는 ${kbSkipped.size}명 무시: ${namesOf(kbSkipped)}`);
+  }
 }
 
 if (homeworkRows.length) {
   console.log('▶ homework_submissions');
+  const hwSkipped = new Set();
   const hw = homeworkRows
     .map(({ _gasId, ...h }) => {
       const uuid = gasIdToUuid.get(String(_gasId).replace(/\s/g, ''));
-      return uuid ? { ...h, member_id: uuid } : null;
+      if (!uuid) { hwSkipped.add(_gasId); return null; }
+      return { ...h, member_id: uuid };
     })
     .filter(Boolean);
   await upsert('homework_submissions', hw, 'member_id,session_label,type');
-  console.log(`   ${hw.length}건` +
-    (homeworkRows.length > hw.length
-      ? ` (명단에 없는 인원 ${homeworkRows.length - hw.length}건 무시)` : ''));
+  console.log(`   ${hw.length}건`);
+  if (hwSkipped.size) {
+    console.warn(`   ⚠️ 명단에 없는 ${hwSkipped.size}명 무시: ${namesOf(hwSkipped)}`);
+    console.warn('      3기 인원이 맞다면 출석부(DB) 탭에 넣고 다시 동기화하세요.');
+  }
 }
 
 if (gas.locationMap && Object.keys(gas.locationMap).length) {
