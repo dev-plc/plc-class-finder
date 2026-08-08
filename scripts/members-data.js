@@ -8,9 +8,9 @@
 //   그 외(편성·명단·과제·김밥)  시트가 원본. 일 1회 동기화로 DB에 들어온다.
 
 import { matches as hangulMatches } from './hangul.js';
-import { sbSelect, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js';
+import { sbSelect, sbSelectAll, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js';
 
-export const MODULE_VERSION = 'members-data v33 (Supabase + 기수 자동 추적)';
+export const MODULE_VERSION = 'members-data v34 (행 수 상한 대응)';
 
 // 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
 export const MAKEUP_LIMIT = 3;
@@ -18,7 +18,7 @@ export const MAKEUP_LIMIT = 3;
 // ============================================================================
 // 캐시 설정
 // ============================================================================
-const CACHE_VERSION = 33;
+const CACHE_VERSION = 34;
 const CK = {
   members:     `plc_members_v${CACHE_VERSION}`,
   locationMap: `plc_location_map_v${CACHE_VERSION}`,
@@ -186,17 +186,20 @@ async function fetchFromServer(cohortId) {
   const [members, sessions, attendance, kimbap, homework, teamLinks, locationMaps,
          progress, needHomework] =
     await Promise.all([
-      sbSelect(`members?select=*&cohort_id=eq.${enc}&status=eq.active&order=team,team_no`),
-      sbSelect(`sessions?select=*&cohort_id=eq.${enc}&order=session_date`),
-      sbSelect(`attendance?select=member_id,session_date,status,members!inner(cohort_id)` +
-               `&members.cohort_id=eq.${enc}`),
-      sbSelect(`kimbap_signups?select=member_id,session_label,session_date,applied&cohort_id=eq.${enc}`),
-      sbSelect(`homework_submissions?select=member_id,session_label,session_raw,type,url,submitted_at&cohort_id=eq.${enc}`),
+      // 행 수가 늘어나는 것은 전부 나눠 받는다 (아래 order 는 페이징에 필수)
+      sbSelectAll(`members?select=*&cohort_id=eq.${enc}&status=eq.active&order=team,team_no,id`),
+      sbSelectAll(`sessions?select=*&cohort_id=eq.${enc}&order=session_date`),
+      sbSelectAll(`attendance?select=member_id,session_date,status,members!inner(cohort_id)` +
+                  `&members.cohort_id=eq.${enc}&order=member_id,session_date`),
+      sbSelectAll(`kimbap_signups?select=member_id,session_label,session_date,applied` +
+                  `&cohort_id=eq.${enc}&order=member_id,session_label`),
+      sbSelectAll(`homework_submissions?select=member_id,session_label,session_raw,type,url,submitted_at` +
+                  `&cohort_id=eq.${enc}&order=member_id,session_label,type`),
       sbSelect(`team_links?select=team,chat_url&cohort_id=eq.${enc}`),
       sbSelect(`location_maps?select=location,image_url,detail_url`),
       // 판정 결과는 DB 뷰에서 그대로 읽는다 (규칙이 views.sql 한 곳에만 있도록)
-      sbSelect(PROGRESS_QUERY + enc),
-      sbSelect(NEED_HW_QUERY + enc),
+      sbSelectAll(PROGRESS_QUERY + enc + '&order=member_id'),
+      sbSelectAll(NEED_HW_QUERY + enc + '&order=member_id,session_date'),
     ]);
 
   // 출결을 member_id → (session_date → status) 로 정리
@@ -303,8 +306,8 @@ export async function ensureLoaded({ forceRefresh = false, onBackgroundRefreshEr
 export async function refreshProgress() {
   const enc = encodeURIComponent(state.cohortId || await getActiveCohortId());
   const [progress, needHomework] = await Promise.all([
-    sbSelect(PROGRESS_QUERY + enc),
-    sbSelect(NEED_HW_QUERY + enc),
+    sbSelectAll(PROGRESS_QUERY + enc + '&order=member_id'),
+    sbSelectAll(NEED_HW_QUERY + enc + '&order=member_id,session_date'),
   ]);
   Object.assign(state, indexProgress(progress, needHomework));
   writeCacheSync();

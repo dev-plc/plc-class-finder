@@ -33,6 +33,28 @@ export async function sbSelect(path) {
 }
 
 /**
+ * 나눠서 전부 가져온다.
+ *
+ * PostgREST 는 한 번에 돌려주는 행 수에 상한이 있다 (Supabase 기본 1000).
+ * 출석은 인원 × 주차라 금방 넘어간다 — 83명 × 19주차면 벌써 1577행이다.
+ * 상한에 걸리면 조용히 잘려서, 화면에는 "출석 0" 인데 DB 뷰는 10 이라고 하는
+ * 앞뒤가 안 맞는 상태가 된다.
+ *
+ * path 에 order 를 반드시 넣을 것. 정렬이 없으면 페이지마다 순서가 흔들려
+ * 빠지거나 겹치는 행이 생긴다.
+ */
+export async function sbSelectAll(path, pageSize = 1000) {
+  const out = [];
+  for (let offset = 0; offset < 500000; offset += pageSize) {
+    const sep = path.includes('?') ? '&' : '?';
+    const page = await sbSelect(`${path}${sep}limit=${pageSize}&offset=${offset}`);
+    out.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return out;
+}
+
+/**
  * RPC 호출 (쓰기는 전부 이 경로를 통한다).
  */
 export async function sbRpc(fn, args) {
