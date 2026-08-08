@@ -747,7 +747,7 @@ if (kimbapRows.length) {
   await upsert('kimbap_signups', kb, 'member_id,session_label');
   console.log(`   ${kb.length}건`);
   if (kbSkipped.size) {
-    console.warn(`   ⚠️ 명단에 없는 ${kbSkipped.size}명 무시: ${namesOf(kbSkipped)}`);
+    console.log(`   ⚠️ 명단에 없는 ${kbSkipped.size}명 무시: ${namesOf(kbSkipped)}`);
   }
 }
 
@@ -764,8 +764,9 @@ if (homeworkRows.length) {
   await upsert('homework_submissions', hw, 'member_id,session_label,type');
   console.log(`   ${hw.length}건`);
   if (hwSkipped.size) {
-    console.warn(`   ⚠️ 명단에 없는 ${hwSkipped.size}명 무시: ${namesOf(hwSkipped)}`);
-    console.warn('      3기 인원이 맞다면 출석부(DB) 탭에 넣고 다시 동기화하세요.');
+    console.log(`   ⚠️ 명단에 없는 ${hwSkipped.size}명 무시: ${namesOf(hwSkipped)}`);
+    console.log('      과제 탭의 아이디가 출석부(DB) 의 아이디와 글자 하나까지 같아야 합니다.');
+    console.log('      (이름+전화 뒷4자리. 폼에 다른 번호를 적으면 짝이 안 맞습니다)');
   }
 }
 

@@ -1,50 +1,27 @@
--- 3기 명단이 2기로 샌 흔적을 확인한다.
+-- 과제 탭의 '김동완1789' 이 명단과 안 맞는 이유를 찾는다.
 --
--- 정황
---   3기 활성 78명이 전원 2기에도 있다 (③ 결과).
---   2기 인원이 142 → 165 로 늘었고, 08-06 에 18명 · 08-07 에 1명이 생겼다.
---   기수 표식 가드가 머지되기 전에 동기화가 3기 시트를 2기로 밀어넣었을 가능성.
+-- 단서: 폼 응답의 연락처는 010-9080-7730 인데 아이디는 김동완1789 다.
+--       뒷 4자리가 7730 과 1789 로 다르다.
 --
---   (08-01 의 143명은 착시다. members.created_at 컬럼을 schema_v2 로 추가한 날이라
---    그 전에 있던 행 전부가 같은 시각을 갖는다. 실제 생성일이 아니다.)
+-- 짝짓기는 '이름 + 전화 뒷4자리' 가 글자 하나까지 같아야 맺어진다.
+-- 출석부에 김동완7730 으로 들어 있으면 과제의 김동완1789 는 짝을 못 찾는다.
 --
 -- 보는 법
---   ① 2기 세션    08/09 이후 날짜가 있으면 3기 일정이 2기로 샌 것이다
---   ② 늦게 생긴 2기 인원  출석 기록이 0건이면 2기를 들은 적 없는 사람 = 샌 것
---   ③ 2기 세션 수  원래 2기 강의는 16개였다. 그보다 많으면 샌 것
---   ④ 라벨 중복    같은 label_norm 이 2기에 두 번 있으면 3기 일정이 겹쳐 들어온 것
+--   ① 명단의 김동완 이 실제로 어떤 아이디인지
+--   ② 과제 탭에서 온 김동완 기록이 DB 에 있는지 (없으면 무시된 것)
 
-select '① 2기 세션' as 구분,
-       session_date::text || ' · ' || coalesce(label_norm, '(없음)') as 항목,
-       case when is_class then '강의' else '비강의' end as 값
-  from sessions
- where cohort_id = '2기'
+select '① 명단' as 구분,
+       cohort_id || ' · ' || name || coalesce(phone, '') as 아이디,
+       coalesce(team, '-') || ' · ' || status as 비고
+  from members
+ where name like '%김동완%'
 
 union all
-select '② 늦게 생긴 2기 인원',
-       m.name || coalesce(m.phone, '') || ' · ' || m.created_at::date::text,
-       count(a.*) filter (where nullif(btrim(a.status), '') is not null)::text || '건 기록'
-  from members m
-  left join attendance a on a.member_id = m.id
- where m.cohort_id = '2기'
-   and m.created_at >= date '2026-08-02'
- group by m.name, m.phone, m.created_at
+select '② 저장된 과제',
+       m.cohort_id || ' · ' || m.name || coalesce(m.phone, ''),
+       h.session_label || ' · ' || coalesce(h.type, '')
+  from homework_submissions h
+  join members m on m.id = h.member_id
+ where m.name like '%김동완%'
 
-union all
-select '③ 2기 세션 수',
-       case when is_class then '강의' else '비강의' end,
-       count(*)::text
-  from sessions
- where cohort_id = '2기'
- group by is_class
-
-union all
-select '④ 2기 라벨 중복',
-       label_norm,
-       count(*)::text || '번'
-  from sessions
- where cohort_id = '2기' and label_norm is not null
- group by label_norm
-having count(*) > 1
-
-order by 1, 2
+order by 1, 2;
