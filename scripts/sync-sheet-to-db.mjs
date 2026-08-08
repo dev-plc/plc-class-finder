@@ -7,7 +7,8 @@
 //   node scripts/sync-sheet-to-db.mjs                    (활성 기수 자동)
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기 --activate   (기수 전환)
-//   node scripts/sync-sheet-to-db.mjs --homework-since=2026-07-12  (과제 기준일 직접 지정)
+//   node scripts/sync-sheet-to-db.mjs --homework-since=2026-07-31  (과제 기준일 직접 지정)
+//   node scripts/sync-sheet-to-db.mjs --include-undated-homework   (제출 시각 없는 과제도 반영)
 //
 // 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GAS_API_URL(선택)
 
@@ -27,6 +28,9 @@ const COHORT_ARG = getArg('cohort') || (process.env.COHORT_ID || '').trim();
 // --activate: 이 기수를 활성 기수로 지정하고 나머지를 비활성으로 내린다.
 // 기수 전환 때만 쓴다. 매일 도는 동기화가 활성 기수를 건드리면 안 된다.
 const ACTIVATE = args.includes('--activate');
+// 제출 시각이 없는 과제(오프라인·사후 제출 수기 입력)를 넣을지.
+// 기본은 제외 — 지금 시트에 남은 것은 전부 지난 기수 것이다.
+const INCLUDE_UNDATED_HW = args.includes('--include-undated-homework');
 // 기수 시작 연도. 명시하지 않으면 DB의 cohorts.started_at 에서 읽고,
 // 그것도 없으면 현재 연도를 쓴다.
 // (하드코딩하면 기수가 바뀔 때 세션이 두 연도로 갈라져 집계가 깨진다)
@@ -525,12 +529,14 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       url: trim(h.url),
       submitted_at: h.submittedAt ? new Date(h.submittedAt).toISOString() : null,
     };
-    // 제출 시각이 없는 건 = 오프라인 제출이나 사후 제출을 손으로 적은 것.
-    // 날짜로 가릴 수 없지만 유효한 제출이므로 넣는다.
-    // (지난 기수 응답이 시트에 남아 있으면 섞일 수 있어 건수를 로그에 남긴다)
+    // 제출 시각이 없는 건 = 오프라인·사후 제출을 손으로 적은 것.
+    // 날짜가 없으니 어느 기수인지 가릴 수 없다.
+    // 지금 시트에 남아 있는 것은 전부 지난 기수 것이므로 기본은 제외다.
+    // 이번 기수 오프라인 제출을 반영하려면 시트에 제출일을 적으면 된다.
     if (!row.submitted_at) {
       homeworkNoDate++;
       if (homeworkNoDateSample.size < 5) homeworkNoDateSample.add(`${gasId} ${norm}`);
+      if (!INCLUDE_UNDATED_HW) continue;
     } else if (homeworkCutoff && row.submitted_at.slice(0, 10) <= homeworkCutoff) {
       homeworkStale++;
       continue;
@@ -554,9 +560,13 @@ if (homeworkStale) {
   console.log(`ℹ️  ${homeworkCutoff} 이전 제출 ${homeworkStale}건 제외 (지난 기수 응답)`);
 }
 if (homeworkNoDate) {
-  console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 반영 (오프라인·사후 제출을 손으로 적은 것)`);
+  if (INCLUDE_UNDATED_HW) {
+    console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 반영 (--include-undated-homework)`);
+  } else {
+    console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 제외 (어느 기수인지 가릴 수 없음)`);
+  }
   console.log(`    예: ${[...homeworkNoDateSample].join(' / ')}`);
-  console.log('    날짜로 가릴 수 없으니, 지난 기수 응답은 과제 탭에서 지워 두세요.');
+  console.log('    이번 기수 오프라인 제출이라면 시트 과제 탭의 타임스탬프 칸에 날짜를 적어 주세요.');
 }
 
 console.log('📊 변환 결과');
