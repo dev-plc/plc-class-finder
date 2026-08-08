@@ -305,3 +305,55 @@ select '③ 2기 수료 판정', coalesce(verdict, '(없음)'), count(*)::text
   from v_completion_status where cohort_id = '2기' group by verdict
 
 order by 1, 2;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 10 — 3기에 남은 지난 기수 과제 정리
+--
+--   3기 첫 강의는 08/09 다. 그 전에는 3기 과제가 존재할 수 없다.
+--   그런데 homework_submissions 에 3기 행이 남아 있다.
+--   가드가 생기기 전 동기화가 지난 기수 응답을 3기로 넣은 것이다.
+--   (fix_homework_labels.sql 로 교리13~16 이 성경적대화1~4 가 되면서
+--    3기의 실제 강의 라벨과 겹쳐 더 눈에 안 띄게 됐다)
+--
+--   그대로 두면 내지도 않은 과제로 결석 보충을 인정받는다.
+--   3기가 아직 시작 전이므로 통째로 지우는 게 맞다.
+--   앞으로 들어올 3기 응답은 동기화가 다시 채운다.
+--
+--   ⚠️ 3기 첫 강의가 이미 지났다면 이 블록을 실행하지 마세요.
+--      진짜 3기 제출까지 지워집니다.
+-- ══════════════════════════════════════════════════════════════════
+
+-- 먼저 확인
+select session_label, count(*) as 건수, min(submitted_at)::date as 가장이른제출
+  from homework_submissions
+ where cohort_id = '3기'
+ group by session_label
+ order by 1;
+
+-- 확인 후 실행
+delete from homework_submissions where cohort_id = '3기';
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 11 — 3기 김밥 신청 확인 (선택해서 Run)
+--
+--   김밥은 사전 신청이라 '아직 안 한 강의' 로는 거를 수 없다.
+--   교리1~4 에 46~47명씩 균일하면 3기 신규 신청일 가능성이 크고,
+--   산발적인 수(2~13명)나 3기 일정에 없는 라벨(교제 등)은 지난 기수 잔여다.
+--
+--   지우려면:  delete from kimbap_signups
+--               where cohort_id = '3기' and session_label = '교제';
+-- ══════════════════════════════════════════════════════════════════
+
+select k.session_label as 라벨,
+       count(*) filter (where k.applied) as 신청,
+       case when s.session_date is null then '⚠️ 3기 일정에 없음'
+            else s.session_date::text end as 강의일
+  from kimbap_signups k
+  left join sessions s
+    on s.cohort_id = k.cohort_id and s.label_norm = k.session_label
+ where k.cohort_id = '3기'
+ group by k.session_label, s.session_date
+having count(*) filter (where k.applied) > 0
+ order by s.session_date nulls first;
