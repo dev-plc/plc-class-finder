@@ -21,7 +21,7 @@ import {
     MODULE_VERSION,
 } from './scripts/members-data.js';
 
-const SCRIPT_VERSION = 'script.js v34 (기수 이름도 DB에서)';
+const SCRIPT_VERSION = 'script.js v35 (행 수 상한 대응)';
 console.log('🔖 로드됨:', SCRIPT_VERSION, '/', MODULE_VERSION);
 
 // ============================================================================
