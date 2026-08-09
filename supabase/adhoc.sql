@@ -1,47 +1,107 @@
--- 3기에 결석(X)이 49개나 있다. 첫 강의가 08/09 인데 결석 9 인 사람도 있다.
--- 아직 하지도 않은 강의에 X 가 찍혀 있는 것으로 보인다.
+-- 최민서8596 의 ◎ 가 X 로 바뀐 경로를 찾는다.
 --
--- 그대로 두면 두 가지가 틀어진다
---   · absent_count 가 부풀려진다
---   · v_homework_required 가 "결석했으니 과제를 내라" 고 안내한다
---     — 아직 열리지도 않은 강의의 과제를
+-- 내려받기(GAS)는 DB 값을 시트로 옮기기만 한다. ◎ → X 로 바꾸는 경로가 없다.
+-- 그러므로 DB 가 이미 X 를 갖고 있다. 언제 그렇게 됐는지가 관건이다.
 --
--- 아마 시트에서 이월자에게 '2기에 안 들었음' 표시로 X 를 쓰셨고,
--- 그게 초기 동기화 때 들어온 것 같다.
--- 아직 안 한 강의는 X 가 아니라 빈칸이어야 한다.
+-- 후보는 셋이고, updated_at 이 셋을 갈라 준다.
+--   · 이월 스크립트가 애초에 ◎ 를 못 넣었다   → updated_at 이 이월 시각
+--   · 시트 동기화가 덮었다 (--import-attendance) → updated_at 이 동기화 시각
+--   · 앱에서 튜터가 출석을 찍었다               → updated_at 이 오늘, 그것도 제각각
 --
--- 보는 법
---   ① 주차별 X   session_date 가 오늘보다 뒤면 아직 안 한 강의다
---   ② 사람별     누가 몇 개인지
---   ③ 과제 안내  지금 "제출 필요" 로 잡혀 있는 건수 (미래 주차면 잘못된 안내)
+-- Supabase SQL Editor 에서 PART 씩 선택해 실행.
 
-select '① 주차별 X' as 구분,
-       s.session_date::text || ' ' || coalesce(s.label_norm, '') ||
-       case when s.session_date > current_date then '  ← 아직 안 한 강의' else '' end as 항목,
-       count(*)::text || '개' as 값
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 1 — 최민서8596 의 전 주차 기록과 기록 시각
+--
+--   ◎ 인 주차와 X 인 주차의 updated_at 이 다르면,
+--   나중에 무언가가 이 사람의 특정 주차만 건드린 것이다.
+-- ══════════════════════════════════════════════════════════════════
+
+select s.session_date::text || ' ' || coalesce(s.label_norm, '') as 주차,
+       s.is_class as 수료반영,
+       coalesce(nullif(btrim(a.status), ''), '(빈칸)') as 값,
+       a.updated_at
+  from members m
+  join sessions s on s.cohort_id = m.cohort_id
+  left join attendance a
+    on a.member_id = m.id and a.session_date = s.session_date
+ where m.cohort_id = '3기'
+   and m.name || coalesce(m.phone, '') = '최민서8596'
+ order by s.session_date;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 2 — 3기 전체에 X 가 몇 개나 있고, 언제 찍혔나
+--
+--   ① 값별 개수와 기록 시각 범위
+--   ② X 가 찍힌 시각을 분 단위로 묶어서 — 한 번에 우르르 들어왔는지 본다
+--      (한 시각에 몰려 있으면 스크립트·동기화, 흩어져 있으면 앱에서 사람이 찍은 것)
+-- ══════════════════════════════════════════════════════════════════
+
+select '① 값별' as 구분,
+       coalesce(nullif(btrim(a.status), ''), '(빈칸)') as 값,
+       count(*)::text as 개수,
+       min(a.updated_at)::text as 가장_이른,
+       max(a.updated_at)::text as 가장_늦은
   from attendance a
   join members m on m.id = a.member_id and m.cohort_id = '3기'
-  join sessions s on s.cohort_id = '3기' and s.session_date = a.session_date and s.is_class is true
- where upper(btrim(coalesce(a.status, ''))) = 'X'
- group by s.session_date, s.label_norm
+ group by 2
 
 union all
-select '② 사람별 X',
-       coalesce(m.team, '-') || ' ' || m.name || coalesce(m.phone, ''),
-       count(*)::text || '개 · ' || string_agg(coalesce(s.label_norm, ''), ', ' order by s.session_date)
+
+select '② X 가 찍힌 시각',
+       date_trunc('minute', a.updated_at)::text,
+       count(*)::text,
+       '', ''
   from attendance a
   join members m on m.id = a.member_id and m.cohort_id = '3기'
-  join sessions s on s.cohort_id = '3기' and s.session_date = a.session_date and s.is_class is true
  where upper(btrim(coalesce(a.status, ''))) = 'X'
- group by m.team, m.name, m.phone
+ group by 2
 
-union all
-select '③ 과제 안내 중',
-       coalesce(m.team, '-') || ' ' || m.name || coalesce(m.phone, ''),
-       count(*)::text || '건 · ' || string_agg(h.session_label, ', ' order by h.session_date)
-  from v_homework_required h
-  join members m on m.id = h.member_id
- where h.cohort_id = '3기'
- group by m.team, m.name, m.phone
+ order by 1, 2;
 
-order by 1, 2;
+
+-- ══════════════════════════════════════════════════════════════════
+-- PART 3 — X 를 갖고 있는 사람이 지난 기수에 그 주차를 이수했나
+--
+--   여기 행이 나오면 "지난 기수에 이수했는데 이번 기수에 결석 처리된" 사람이다.
+--   최민서8596 만의 일인지, 여러 명인지가 여기서 갈린다.
+-- ══════════════════════════════════════════════════════════════════
+
+with x3 as (
+  select m.id as member_id,
+         m.name || coalesce(m.phone, '') as 대상,
+         m.team,
+         s.label_norm,
+         s.session_date,
+         a.updated_at
+    from attendance a
+    join members m on m.id = a.member_id and m.cohort_id = '3기'
+    join sessions s
+      on s.cohort_id = '3기' and s.session_date = a.session_date and s.is_class is true
+   where upper(btrim(coalesce(a.status, ''))) = 'X'
+),
+done2 as (
+  -- 2기에 출석(O·◎)했거나 과제로 인정받은 주차
+  select m.name || coalesce(m.phone, '') as 대상, s.label_norm
+    from attendance a
+    join members m on m.id = a.member_id and m.cohort_id = '2기'
+    join sessions s
+      on s.cohort_id = '2기' and s.session_date = a.session_date and s.is_class is true
+   where btrim(coalesce(a.status, '')) in ('O', 'o', '◎')
+  union
+  select m.name || coalesce(m.phone, ''), v.session_label
+    from v_makeup_detail v
+    join members m on m.id = v.member_id
+   where v.cohort_id = '2기' and v.counted is true
+)
+select x3.team as 조,
+       x3.대상,
+       x3.session_date::text || ' ' || coalesce(x3.label_norm, '') as 주차,
+       x3.updated_at,
+       case when done2.대상 is null then '2기에도 안 함' else '⚠️ 2기에 이수함 (◎ 여야 함)' end as 판정
+  from x3
+  left join done2
+    on done2.대상 = x3.대상 and done2.label_norm = x3.label_norm
+ order by 판정 desc, x3.team, x3.대상, x3.session_date;
