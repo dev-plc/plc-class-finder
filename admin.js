@@ -10,8 +10,8 @@ import {
     updateAttendanceBatch,
     getCohortId,
     subscribe,
-} from './scripts/members-data.js?v=39';
-import { matches as hangulMatches } from './scripts/hangul.js?v=39';
+} from './scripts/members-data.js?v=40';
+import { matches as hangulMatches } from './scripts/hangul.js?v=40';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -69,12 +69,32 @@ async function loadData() {
 
 // 기수 전환 감지 — 배경 갱신 중에 새 기수가 들어오면 화면 전체를 다시 그린다
 subscribe((event) => {
-    if (event.type !== 'cohort-changed') return;
-    console.log(`기수 전환: ${event.from} → ${event.to}`);
+    if (event.type === 'cohort-changed') {
+        console.log(`기수 전환: ${event.from} → ${event.to}`);
+        renderTeamsView();
+        renderMembersView();
+        initAttendanceTab();
+        alert(`${event.to} 명단으로 갱신되었습니다.`);
+        return;
+    }
+    if (event.type !== 'refresh') return;
+
+    // 배경 갱신이 끝났다. 화면은 캐시로 먼저 그려졌으니 여기서 새 값으로 바꾼다.
+    //
+    // 출석 화면은 반드시 같이 갱신해야 한다. 이 화면만 값을 attBaseline/attDraft 에
+    // 스냅숏으로 떠 놓기 때문에, 갱신하지 않으면 옛 값이 화면에 남는다.
+    // 실제로 ◎ 인 사람이 빈칸으로 보였고, 그 상태에서 '빈칸 → 결석' 을 누르는 바람에
+    // 지난 기수 이수자가 결석으로 저장된 일이 있었다.
     renderTeamsView();
     renderMembersView();
-    initAttendanceTab();
-    alert(`${event.to} 명단으로 갱신되었습니다.`);
+
+    if (attChanges().length === 0) {
+        initAttendanceTab();
+    } else {
+        // 편집 중이면 덮지 않는다 (입력하던 것이 날아간다). 대신 옛 값임을 알린다.
+        attStale = true;
+        updateAttSummary();
+    }
 });
 
 // ============================================================================
@@ -370,6 +390,9 @@ let attTeamName = TEAM_ALL;
 let attBaseline = new Map();   // uuid → 저장돼 있는 상태
 let attDraft = new Map();      // uuid → 화면에서 고른 상태
 let attSaving = false;
+// 배경 갱신이 왔는데 편집 중이라 반영하지 못한 상태.
+// 이때 저장하면 옛 값 기준으로 차이를 계산하므로 사용자에게 알려야 한다.
+let attStale = false;
 
 function normStatus(v) {
     const s = String(v ?? '').trim();
@@ -441,6 +464,7 @@ function initAttendanceTab() {
 
 // 화면의 선택 상태를 저장돼 있는 값으로 되돌린다.
 function resetAttDraft() {
+    attStale = false;
     attBaseline = new Map();
     attDraft = new Map();
     if (!attSessionDate) return;
@@ -539,6 +563,14 @@ function updateAttSummary() {
 
     const changes = attChanges();
     if (!attSaveInfo || !attSaveBtn) return;
+    if (attStale) {
+        attSaveInfo.textContent = changes.length
+            ? `${changes.length}명 변경됨 · ⚠️ 새 데이터가 도착했습니다. 저장 후 새로고침하세요`
+            : '⚠️ 새 데이터가 도착했습니다. 새로고침하세요';
+        attSaveBtn.disabled = changes.length === 0;
+        attSaveBtn.textContent = changes.length ? `${changes.length}명 저장` : '저장';
+        return;
+    }
     if (attSaving) {
         attSaveInfo.textContent = '저장 중…';
         attSaveBtn.disabled = true;
