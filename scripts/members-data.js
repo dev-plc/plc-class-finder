@@ -7,10 +7,10 @@
 //   출석            DB 가 원본. 앱에서 RPC 로 기록한다.
 //   그 외(편성·명단·과제·김밥)  시트가 원본. 일 1회 동기화로 DB에 들어온다.
 
-import { matches as hangulMatches } from './hangul.js?v=36';
-import { sbSelect, sbSelectAll, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=36';
+import { matches as hangulMatches } from './hangul.js?v=37';
+import { sbSelect, sbSelectAll, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=37';
 
-export const MODULE_VERSION = 'members-data v34 (행 수 상한 대응)';
+export const MODULE_VERSION = 'members-data v37 (김밥 대상자 필드 복구)';
 
 // 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
 export const MAKEUP_LIMIT = 3;
@@ -18,7 +18,9 @@ export const MAKEUP_LIMIT = 3;
 // ============================================================================
 // 캐시 설정
 // ============================================================================
-const CACHE_VERSION = 34;
+// localStorage 키 버전. 저장하는 데이터의 모양이 바뀌면 올린다.
+// (올리지 않으면 옛 모양이 캐시에서 그대로 나와 화면이 안 바뀐다)
+const CACHE_VERSION = 37;
 const CK = {
   members:     `plc_members_v${CACHE_VERSION}`,
   locationMap: `plc_location_map_v${CACHE_VERSION}`,
@@ -222,6 +224,22 @@ async function fetchFromServer(cohortId) {
       applied: k.applied ? 1 : 0,
       date: toMMDD(k.session_date) || '',
     };
+  }
+
+  // 김밥 대상자 여부.
+  //
+  // 신청 내역(kimbap_signups)이 원본이다. 아직 내역이 없는 기수라면
+  // 시트 명단의 1·2차 칸으로 대신한다 — 상세 요약(script.js)이 쓰는
+  // 순서와 같아야 위아래가 어긋나지 않는다.
+  //
+  // GAS → Supabase 로 옮길 때 이 필드가 통째로 빠져서,
+  // 모달 상단 김밥 칸·조원 목록 🍙·통계 인원이 모두 조용히 죽어 있었다.
+  for (const row of rows) {
+    const detail = kimbapMap[row.id];
+    const applied = detail
+      ? Object.values(detail).some(v => v.applied === 1)
+      : ['김밥1차', '김밥2차'].some(k => String(row[k]).trim().toUpperCase() === 'O');
+    row.lunch = applied ? 'O' : 'X';
   }
 
   const homeworkMap = {};
