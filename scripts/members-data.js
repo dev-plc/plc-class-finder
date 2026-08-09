@@ -7,10 +7,10 @@
 //   출석            DB 가 원본. 앱에서 RPC 로 기록한다.
 //   그 외(편성·명단·과제·김밥)  시트가 원본. 일 1회 동기화로 DB에 들어온다.
 
-import { matches as hangulMatches } from './hangul.js?v=37';
-import { sbSelect, sbSelectAll, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=37';
+import { matches as hangulMatches } from './hangul.js?v=38';
+import { sbSelect, sbSelectAll, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=38';
 
-export const MODULE_VERSION = 'members-data v37 (김밥 대상자 필드 복구)';
+export const MODULE_VERSION = 'members-data v38 (일괄 처리 확인 추가)';
 
 // 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
 export const MAKEUP_LIMIT = 3;

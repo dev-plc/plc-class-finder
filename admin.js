@@ -10,8 +10,8 @@ import {
     updateAttendanceBatch,
     getCohortId,
     subscribe,
-} from './scripts/members-data.js?v=37';
-import { matches as hangulMatches } from './scripts/hangul.js?v=37';
+} from './scripts/members-data.js?v=38';
+import { matches as hangulMatches } from './scripts/hangul.js?v=38';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -586,7 +586,23 @@ attList?.addEventListener('click', (e) => {
     renderAttList();
 });
 
+// 이름을 몇 개만 뽑아 보여준다 (확인 창이 길어지지 않게)
+function attNamesOf(uuids, limit = 8) {
+    const byUuid = new Map(attTargets().map(m => [m._uuid, m]));
+    const names = uuids.map(u => {
+        const m = byUuid.get(u);
+        return m ? `${m.name}${m.phone}` : '';
+    }).filter(Boolean);
+    const head = names.slice(0, limit).join(', ');
+    return names.length > limit ? `${head} 외 ${names.length - limit}명` : head;
+}
+
 // 일괄 처리
+//
+// '빈칸 → 결석' 은 모르는 것을 결석으로 바꾸는 동작이라 위험하다.
+// 지난 기수에 이수해 안 나와도 되는 사람도 화면에는 빈칸으로 보이는데,
+// 그 사람까지 결석으로 찍히면 수료 판정이 틀어지고 과제 안내까지 잘못 나간다.
+// 실제로 그렇게 ◎ 대상자가 X 로 저장된 일이 있었다. 몇 명인지 보여주고 묻는다.
 document.querySelectorAll('.att-bulk-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         if (attSaving) return;
@@ -594,10 +610,26 @@ document.querySelectorAll('.att-bulk-btn').forEach(btn => {
         if (mode === 'reset') {
             for (const [uuid, v] of attBaseline) attDraft.set(uuid, v);
         } else if (mode === 'clear') {
+            const marked = [...attDraft].filter(([, v]) => v !== '').map(([u]) => u);
+            if (marked.length && !confirm(
+                `${marked.length}명의 기록을 지웁니다.\n\n` +
+                `${attNamesOf(marked)}\n\n` +
+                `지난 기수 이수(◎)까지 함께 지워집니다. 진행할까요?`)) return;
             for (const uuid of attDraft.keys()) attDraft.set(uuid, '');
         } else if (mode === 'fillX') {
-            for (const [uuid, v] of attDraft) if (v === '') attDraft.set(uuid, 'X');
+            const blanks = [...attDraft].filter(([, v]) => v === '').map(([u]) => u);
+            if (!blanks.length) return;
+            if (!confirm(
+                `미기록 ${blanks.length}명을 결석으로 처리합니다.\n\n` +
+                `${attNamesOf(blanks)}\n\n` +
+                `지난 기수에 이수해 안 나와도 되는 분이 섞여 있으면\n` +
+                `취소하고 그분들을 ◎ 로 먼저 표시하세요.`)) return;
+            for (const uuid of blanks) attDraft.set(uuid, 'X');
         } else {
+            const others = [...attDraft].filter(([, v]) => v !== '' && v !== mode).map(([u]) => u);
+            if (others.length && !confirm(
+                `전원을 '${mode}' 로 바꿉니다.\n\n` +
+                `이미 다른 값이 있는 ${others.length}명도 덮어씁니다:\n${attNamesOf(others)}\n\n진행할까요?`)) return;
             for (const uuid of attDraft.keys()) attDraft.set(uuid, mode);
         }
         renderAttList();
@@ -607,6 +639,17 @@ document.querySelectorAll('.att-bulk-btn').forEach(btn => {
 attSaveBtn?.addEventListener('click', async () => {
     const changes = attChanges();
     if (changes.length === 0 || attSaving) return;
+
+    // ◎ 를 X 로 바꾸는 저장은 한 번 더 묻는다.
+    // ◎ 는 지난 기수에 이수해 안 나와도 되는 사람이다. 그 사람이 결석으로 바뀌면
+    // 수료 판정이 틀어지고, 그 주차 과제를 내라는 안내까지 잘못 나간다.
+    // 되돌리려면 손으로 다시 ◎ 를 눌러야 해서, 쓰기 전에 잡는 편이 싸다.
+    const demoted = changes.filter(c =>
+        attBaseline.get(c.memberUuid) === '◎' && c.status === 'X');
+    if (demoted.length && !confirm(
+        `지난 기수 이수(◎) ${demoted.length}명을 결석으로 바꿉니다.\n\n` +
+        `${attNamesOf(demoted.map(c => c.memberUuid))}\n\n` +
+        `이분들은 안 나와도 되는 분입니다. 정말 결석으로 기록할까요?`)) return;
 
     attSaving = true;
     updateAttSummary();
