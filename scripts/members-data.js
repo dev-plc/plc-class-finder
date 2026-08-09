@@ -3,14 +3,18 @@
 // 데이터 접근 계층. UI는 이 파일의 함수만 쓰고 백엔드를 알지 못한다.
 // Phase C: 백엔드를 GAS → Supabase 로 교체했다. 외부 인터페이스는 그대로.
 //
-// 원본 분담
-//   출석            DB 가 원본. 앱에서 RPC 로 기록한다.
-//   그 외(편성·명단·과제·김밥)  시트가 원본. 일 1회 동기화로 DB에 들어온다.
+// 원본 분담 — 전부 시트가 원본이다. DB 는 조회를 빠르게 하려고 두는 사본이다.
+//   출석    앱에서 찍으면 GAS 가 시트에 쓰고 DB 에 밀어넣는다.
+//           시트에 직접 쳐도 되고, 10분마다 트리거가 DB 를 맞춘다.
+//   그 외   일 1회 동기화로 DB 에 들어온다.
+//
+// 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
+// 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=38';
-import { sbSelect, sbSelectAll, sbRpc, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=38';
+import { matches as hangulMatches } from './hangul.js?v=39';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=39';
 
-export const MODULE_VERSION = 'members-data v38 (일괄 처리 확인 추가)';
+export const MODULE_VERSION = 'members-data v39 (쓰기를 GAS 경유로)';
 
 // 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
 export const MAKEUP_LIMIT = 3;
@@ -116,7 +120,7 @@ function toMMDD(isoDate) {
 function buildMemberRow(m, sessions, attByMember) {
   const row = {
     id: `${m.name}${m.phone || ''}`,
-    _uuid: m.id,                       // RPC 호출에 필요
+    _uuid: m.id,                       // DB 조회·대조에 쓴다
     name: m.name,
     phone: m.phone || '',
     team: m.team || '',
@@ -499,7 +503,8 @@ export async function updateAttendanceBatch(entries, sessionDate) {
       status = e.status ?? (e.present ? 'O' : 'X');
     }
     if (!row?._uuid) continue;
-    payload.push({ member_id: row._uuid, status });
+    // GAS 는 시트의 ID(이름+전화 뒷자리)로 행을 찾는다. uuid 는 DB 쪽에서만 쓴다.
+    payload.push({ member_id: row._uuid, name: row.name, phone: row.phone, status });
     previous.push({ row, mmdd, value: row[mmdd] ?? '' });
     row[mmdd] = status;                       // optimistic
   }
@@ -512,10 +517,16 @@ export async function updateAttendanceBatch(entries, sessionDate) {
   notify({ type: 'attendance-batch-optimistic', count: payload.length });
 
   try {
-    const result = await sbRpc('set_attendance_batch', {
-      p_session_date: target,
-      p_entries: payload,
+    // 출결의 원본은 시트다. DB 를 직접 쓰지 않고 GAS 를 거친다 —
+    // GAS 가 시트에 먼저 쓰고, 같은 값을 DB 에 밀어넣는다.
+    // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
+    const result = await sbPostGas({
+      session: target,
+      batch: payload.map(p => ({ name: p.name, phone: p.phone, status: p.status })),
     });
+    // GAS 는 시트에 썼지만 DB 반영에 실패할 수 있다. 그래도 저장은 성공이다 —
+    // 원본에 들어갔고, 10분 트리거(pushAttendanceToDb)가 곧 맞춰 준다.
+    if (result.dbError) console.warn('DB 반영은 잠시 뒤에 됩니다:', result.dbError);
     notify({ type: 'attendance-batch-confirmed', count: result?.updated ?? payload.length });
     // 수료 진행률·과제 대상은 출석에서 파생된다. 저장을 막지 않도록 배경에서 갱신.
     refreshProgress().catch(err => console.warn('진행상황 갱신 실패:', err));

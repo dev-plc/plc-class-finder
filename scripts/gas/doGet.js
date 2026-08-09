@@ -82,30 +82,140 @@ function findRecentPastSessionCol_(headers, todayNorm) {
   return bestIdx;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 출석 쓰기 (앱 → 시트 → DB)
+//
+// 출결의 원본은 시트다. 앱은 DB 를 직접 쓰지 않고 이 함수를 부른다.
+// 그래야 앱과 시트 양쪽에서 입력해도 저장소가 하나로 유지된다 —
+// 두 곳에서 같은 값을 쓰면 어느 쪽이 최신인지 판단할 근거가 없어 반드시 어긋난다.
+//
+// 순서가 중요하다.
+//   1) 시트에 쓴다        ← 원본. 여기까지 됐으면 데이터는 안전하다.
+//   2) DB 에 밀어넣는다   ← 사본. 실패해도 잃는 것이 없다.
+// 2 가 실패하면 pushAttendanceToDb 트리거가 다음 차례에 맞춰 준다.
+// 그래서 2 의 실패는 저장 실패로 치지 않는다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// pullAttendance.js 와 같은 값이어야 한다.
+// 두 파일이 한 프로젝트에 있으면 var 가 겹치는데, 값이 같으면 어느 쪽이 이기든 같다.
+var PLC_SUPABASE_URL = "https://wvpqdicsqjozhxtxsnin.supabase.co";
+var PLC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2cHFkaWNzcWpvemh4dHhzbmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2OTA3OTMsImV4cCI6MjEwMDI2Njc5M30.-_vV9lQYoWMZMqEahveSz4fT5psTbF3feKfBZ28qG0w";
+
+// DB(set_attendance_batch)가 받는 값과 같아야 한다.
+var PLC_ALLOWED_STATUS = { "O": 1, "X": 1, "\u25ce": 1, "-": 1, "": 1 };
+
+function plcSbHeaders_() {
+  return {
+    apikey: PLC_SUPABASE_ANON_KEY,
+    Authorization: "Bearer " + PLC_SUPABASE_ANON_KEY
+  };
+}
+
+function plcSbGet_(path) {
+  var res = UrlFetchApp.fetch(PLC_SUPABASE_URL + "/rest/v1/" + path, {
+    headers: plcSbHeaders_(), muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) {
+    throw new Error("Supabase " + res.getResponseCode() + ": " + res.getContentText().slice(0, 200));
+  }
+  return JSON.parse(res.getContentText());
+}
+
+function plcSbRpc_(fn, args) {
+  var res = UrlFetchApp.fetch(PLC_SUPABASE_URL + "/rest/v1/rpc/" + fn, {
+    method: "post",
+    contentType: "application/json",
+    headers: plcSbHeaders_(),
+    payload: JSON.stringify(args),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  if (code !== 200 && code !== 204) {
+    throw new Error("Supabase RPC " + code + ": " + res.getContentText().slice(0, 200));
+  }
+  var body = res.getContentText();
+  return body ? JSON.parse(body) : null;
+}
+
+// 기수·인원·세션. 저장할 때마다 받으면 왕복이 늘어 느려지므로 10분 캐시한다.
+// 명단이 바뀌어도 10분이면 따라잡는다.
+function plcRefs_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get("plc_refs");
+  if (hit) return JSON.parse(hit);
+
+  var cohorts = plcSbGet_("cohorts?select=id&is_active=is.true&order=started_at.desc.nullslast&limit=1");
+  if (!cohorts.length) throw new Error("활성 기수가 지정돼 있지 않습니다 (cohorts.is_active).");
+  var cohortId = cohorts[0].id;
+  var enc = encodeURIComponent(cohortId);
+
+  var members  = plcSbGet_("members?select=id,name,phone&cohort_id=eq." + enc + "&limit=2000");
+  var sessions = plcSbGet_("sessions?select=session_date&cohort_id=eq." + enc + "&limit=2000");
+
+  var byId = {};
+  for (var i = 0; i < members.length; i++) {
+    var k = (String(members[i].name || "") + String(members[i].phone || "")).replace(/\s/g, "");
+    if (k) byId[k] = members[i].id;
+  }
+  var dates = {};   // MM/DD → YYYY-MM-DD
+  for (var j = 0; j < sessions.length; j++) {
+    var d = String(sessions[j].session_date || "");
+    var m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) dates[m[2] + "/" + m[3]] = d;
+  }
+
+  var refs = { cohortId: cohortId, byId: byId, dates: dates };
+  cache.put("plc_refs", JSON.stringify(refs), 600);
+  return refs;
+}
+
+// 헤더 칸을 MM/DD 로 통일한다.
+function plcHeaderKey_(raw, tz) {
+  var v = (raw instanceof Date ? Utilities.formatDate(raw, tz, "MM/dd") : String(raw || "")).trim();
+  var pad = function (n) { return ("0" + n).slice(-2); };
+  var m = v.match(/^(\d{1,2})[\/\.\-](\d{1,2})$/);
+  if (m) return pad(m[1]) + "/" + pad(m[2]);
+  var m3 = v.match(/^(\d{4})[.\/\-]\s*(\d{1,2})[.\/\-]\s*(\d{1,2})\.?$/);
+  if (m3) return pad(m3[2]) + "/" + pad(m3[3]);
+  return null;
+}
+
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 24;
+  var currentVersion = 25;
+  var fail = function (msg) {
+    return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
+  };
+
+  // 컬럼을 통째로 읽어 메모리에서 고치고 다시 쓴다.
+  // 두 튜터가 같은 시각에 저장하면 나중 사람이 먼저 사람의 변경을 덮어쓰고,
+  // 오류도 나지 않아 사라진 줄도 모른다. 그래서 잠근다.
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    return fail("다른 저장이 진행 중입니다. 잠시 뒤 다시 시도해 주세요.");
+  }
 
   try {
     var postData = JSON.parse(e.postData.contents);
 
-    // 단건 { name, phone, status } 또는
-    // 배치 { batch: [{ name, phone, status }, ...] } 모두 지원
-    var entries = [];
-    if (Array.isArray(postData.batch)) {
-      entries = postData.batch;
-    } else {
-      entries = [{ name: postData.name, phone: postData.phone, status: postData.status }];
-    }
-    if (entries.length === 0) {
-      return output.setContent(JSON.stringify({
-        success: false, version: currentVersion, message: "변경할 항목이 없습니다."
-      }));
+    var entries = Array.isArray(postData.batch)
+      ? postData.batch
+      : [{ name: postData.name, phone: postData.phone, status: postData.status }];
+    if (!entries.length) return fail("변경할 항목이 없습니다.");
+
+    // 값 검증. 배포 URL 은 공개돼 있으므로 아무 문자열이나 시트에 들어가면 안 된다.
+    for (var v = 0; v < entries.length; v++) {
+      var st = String((entries[v] || {}).status == null ? "" : entries[v].status).trim().toUpperCase();
+      if (!PLC_ALLOWED_STATUS.hasOwnProperty(st)) {
+        return fail("허용되지 않는 출석 값입니다: " + st);
+      }
+      entries[v].status = st;
     }
 
     var ss = SpreadsheetApp.openById(SHEET_ID);
     var sheet = ss.getSheetByName(TAB_ROSTER);
-    if (!sheet) throw new Error("'출석부(DB)' 시트를 찾을 수 없습니다.");
+    if (!sheet) throw new Error("'" + TAB_ROSTER + "' 시트를 찾을 수 없습니다.");
+    var tz = Session.getScriptTimeZone();
 
     var idCell = sheet.getRange(1, 1, 5, 26).createTextFinder("id").matchCase(false).matchEntireCell(true).findNext();
     if (!idCell) throw new Error("'id' 열을 찾을 수 없습니다.");
@@ -115,27 +225,31 @@ function doPost(e) {
     var lastCol = Math.max(sheet.getLastColumn(), 1);
     var originalHeaders = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
 
-    var today = new Date();
-    var todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-    // 출석부(DB) 헤더 기준으로 가장 최근 지난 강의 컬럼 찾기
-    var attendanceCol = findRecentPastSessionCol_(originalHeaders, todayNorm);
-    if (attendanceCol === -1) {
-      return output.setContent(JSON.stringify({
-        success: false, version: currentVersion,
-        message: "출석 대상 강의를 찾지 못했습니다."
-      }));
+    // 어느 주차에 쓸지. 앱이 session(YYYY-MM-DD) 을 보내면 그 주차,
+    // 없으면 예전처럼 '가장 최근 지난 강의' 로 떨어진다.
+    var wantIso = String(postData.session || "").trim();
+    var attendanceCol = -1;
+    if (wantIso) {
+      var wm = wantIso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!wm) return fail("session 은 YYYY-MM-DD 형식이어야 합니다: " + wantIso);
+      var wantKey = wm[2] + "/" + wm[3];
+      for (var c = 0; c < originalHeaders.length; c++) {
+        if (plcHeaderKey_(originalHeaders[c], tz) === wantKey) { attendanceCol = c; break; }
+      }
+      if (attendanceCol === -1) return fail("시트에서 " + wantKey + " 컬럼을 찾지 못했습니다.");
+    } else {
+      var today = new Date();
+      attendanceCol = findRecentPastSessionCol_(
+        originalHeaders, new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+      if (attendanceCol === -1) return fail("출석 대상 강의를 찾지 못했습니다.");
     }
+    var sessionKey = plcHeaderKey_(originalHeaders[attendanceCol], tz);
     attendanceCol = attendanceCol + 1; // 1-based
 
     var lastRow = sheet.getLastRow();
-    if (lastRow <= headerRow) {
-      return output.setContent(JSON.stringify({
-        success: false, version: currentVersion, message: "데이터 행이 없습니다."
-      }));
-    }
+    if (lastRow <= headerRow) return fail("데이터 행이 없습니다.");
 
-    // ID → 행 번호 인덱스를 한 번만 구축 (배치 성능)
+    // ── 1) 시트에 쓴다 (원본)
     var rowCount = lastRow - headerRow;
     var idValues = sheet.getRange(headerRow + 1, idCol, rowCount, 1).getValues();
     var idToRow = {};
@@ -144,18 +258,18 @@ function doPost(e) {
       if (key) idToRow[key] = headerRow + 1 + i;
     }
 
-    // 대상 컬럼 전체를 한 번에 읽어 메모리에서 수정 후 한 번에 쓰기
     var colValues = sheet.getRange(headerRow + 1, attendanceCol, rowCount, 1).getValues();
     var updated = 0;
     var notFound = [];
+    var wrote = [];       // DB 로 넘길 목록
     for (var j = 0; j < entries.length; j++) {
       var en = entries[j] || {};
-      var nm = String(en.name || "").replace(/\s/g, '');
-      var ph = String(en.phone || "").replace(/[^0-9]/g, '');
-      var targetId = nm + ph;
+      var targetId = String(en.name || "").replace(/\s/g, '') +
+                     String(en.phone || "").replace(/[^0-9]/g, '');
       var rowNum = idToRow[targetId];
       if (!rowNum) { notFound.push(targetId); continue; }
       colValues[rowNum - (headerRow + 1)][0] = en.status;
+      wrote.push({ id: targetId, status: en.status });
       updated++;
     }
 
@@ -163,11 +277,26 @@ function doPost(e) {
       sheet.getRange(headerRow + 1, attendanceCol, rowCount, 1).setValues(colValues);
     }
 
-    var sessionLabel = originalHeaders[attendanceCol - 1];
-    if (sessionLabel instanceof Date) {
-      sessionLabel = Utilities.formatDate(sessionLabel, Session.getScriptTimeZone(), "M/d");
-    } else {
-      sessionLabel = String(sessionLabel || "").trim();
+    // ── 2) DB 에 밀어넣는다 (사본). 실패해도 저장 자체는 성공이다.
+    var dbSynced = 0;
+    var dbError = "";
+    if (updated > 0) {
+      try {
+        var refs = plcRefs_();
+        var iso = wantIso || refs.dates[sessionKey];
+        if (!iso) throw new Error(sessionKey + " 에 해당하는 세션이 DB 에 없습니다.");
+        var payload = [];
+        for (var w = 0; w < wrote.length; w++) {
+          var uuid = refs.byId[wrote[w].id];
+          if (uuid) payload.push({ member_id: uuid, status: wrote[w].status });
+        }
+        if (payload.length) {
+          var r = plcSbRpc_("set_attendance_batch", { p_session_date: iso, p_entries: payload });
+          dbSynced = (r && r.updated) || payload.length;
+        }
+      } catch (dbErr) {
+        dbError = dbErr.message;   // 트리거가 다음 차례에 맞춰 준다
+      }
     }
 
     return output.setContent(JSON.stringify({
@@ -176,21 +305,24 @@ function doPost(e) {
       updated: updated,
       total: entries.length,
       notFound: notFound,
-      session: sessionLabel,
+      session: sessionKey,
+      sessionDate: wantIso || sessionKey,
+      dbSynced: dbSynced,
+      dbError: dbError,
       message: updated > 0
-        ? (sessionLabel + " 출석 " + updated + "건 저장")
+        ? (sessionKey + " 출석 " + updated + "건 저장" + (dbError ? " (DB 반영은 잠시 뒤)" : ""))
         : "일치하는 ID가 없습니다."
     }));
-  } catch (e) {
-    return output.setContent(JSON.stringify({
-      success: false, version: 24, message: e.message
-    }));
+  } catch (err) {
+    return fail(err.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 24; // + 강의명 행 · 날짜 헤더 MM/DD · 기수 표식
+  var currentVersion = 25; // + 강의명 행 · 날짜 헤더 MM/DD · 기수 표식
 
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -538,7 +670,7 @@ function doGet(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 24, message: e.message
+      success: false, version: 25, message: e.message
     }));
   }
 }

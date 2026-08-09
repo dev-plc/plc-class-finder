@@ -6,14 +6,19 @@
 //
 // 웹 앱 프로젝트(scripts/gas/doGet.js)는 건드리지 않는다.
 
+// ⚠️ 출결의 원본은 시트다. DB 는 조회를 빠르게 하려고 두는 사본이다.
+//    평소 흐름은 시트 → DB (pushAttendanceToDb, 10분마다 자동).
+//
 // ═══════════════════════════════════════════════════════════════════════════
-// DB → 시트 : 출석 내려받기 (v25)
+// DB → 시트 : 출석 내려받기 — 기수 시작 때만 (v25)
 //
-// 출석은 DB 가 원본이다. 앱에서 찍고 시트는 그것을 비춰 보기만 한다.
-// 이 함수는 Supabase 를 읽어 '출석부(DB)' 탭의 출석 칸을 채운다.
+// ⚠️ 평소에 돌리지 마세요. 시트를 DB 값으로 덮어씁니다.
+//    원본을 사본으로 덮는 일이라, 시트에만 있는 입력이 사라집니다.
 //
-// 방향이 언제나 DB → 시트 하나뿐이라 양쪽이 어긋날 일이 없다.
-// 시트에서 손으로 고쳐도 다음 실행에 덮어써진다 — 그게 의도한 동작이다.
+// 쓰임은 하나뿐이다: 기수를 시작할 때 이월한 ◎ 를 빈 시트에 심는 부트스트랩.
+//   1) carry-over 스크립트가 지난 기수 이수분을 DB 에 ◎ 로 넣는다
+//   2) 이 함수로 그 ◎ 를 시트에 내려받는다
+//   3) 이후로는 시트가 원본. 앱과 시트에서 입력하고 push 로 DB 에 민다
 //
 // 쓰는 값: O(출석) ◎(지난 기수 이수) X(결석) −(집계 제외) 그리고 빈칸
 // 범위:   출석부 헤더의 모든 날짜 컬럼 (지난 주차·앞으로의 주차 모두)
@@ -97,9 +102,13 @@ function plcAddMenu() {
   try {
     SpreadsheetApp.getUi()
       .createMenu('PLC')
-      .addItem('DB에서 출석 가져오기', 'pullAttendanceFromDb')
+      .addItem('지금 DB로 올리기', 'pushAttendanceToDb')
+      .addSeparator()
+      .addItem('자동 올리기 켜기 (10분마다)', 'plcInstallPushTrigger')
+      .addItem('자동 올리기 끄기', 'plcRemovePushTrigger')
       .addSeparator()
       .addItem('연결 점검', 'plcCheckKey')
+      .addItem('⚠️ DB에서 출석 가져오기 (기수 시작 때만)', 'pullAttendanceFromDb')
       .addToUi();
   } catch (e) {
     // 시트에 붙어 있지 않은 스크립트면 메뉴를 달 수 없다. 무시.
@@ -385,4 +394,210 @@ function pullAttendanceFromDb() {
   Logger.log(msg);
   try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* 트리거 실행이면 UI 없음 */ }
   return msg;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 시트 → DB 밀어넣기 (자가 치유)
+//
+// 출결의 원본은 시트다. DB 는 조회를 빠르게 하려고 두는 사본일 뿐이다.
+// 앱에서 저장하면 doPost 가 시트와 DB 를 함께 갱신하지만,
+//   · 시트에 사람이 직접 친 값
+//   · doPost 의 DB 갱신이 실패한 경우
+// 이 둘은 DB 에 반영되지 않는다. 이 함수가 그 차이를 메운다.
+//
+// 방향이 시트 → DB 하나뿐이라 충돌이 없다.
+// 시트가 맞고 DB 가 틀렸다고 언제나 가정한다.
+//
+// 10 분마다 자동으로 돈다 (plcInstallPushTrigger 로 설치).
+// 트리거 실행이라 UI 가 없고, 결과는 실행 로그에 남는다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function sbRpc_(fn, args) {
+  var res = UrlFetchApp.fetch(PLC_SUPABASE_URL + "/rest/v1/rpc/" + fn, {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      apikey: PLC_SUPABASE_ANON_KEY,
+      Authorization: "Bearer " + PLC_SUPABASE_ANON_KEY
+    },
+    payload: JSON.stringify(args),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  if (code !== 200 && code !== 204) {
+    throw new Error("Supabase RPC " + code + ": " + res.getContentText().slice(0, 300));
+  }
+  var body = res.getContentText();
+  return body ? JSON.parse(body) : null;
+}
+
+var PLC_PUSH_ALLOWED = { "O": 1, "X": 1, "\u25ce": 1, "-": 1, "": 1 };
+
+function pushAttendanceToDb() {
+  // doPost 와 같은 잠금을 쓴다. 저장이 진행 중일 때 끼어들어
+  // 반쯤 써진 컬럼을 읽지 않도록.
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) {
+    plcLog_("다른 작업이 진행 중이라 이번 차례는 건너뜁니다.");
+    return "건너뜀";
+  }
+
+  try {
+    var t = pullTargets_();
+    var ss = null;
+    try { ss = SpreadsheetApp.getActive(); } catch (e) {}
+    if (!ss) ss = SpreadsheetApp.openById(t.sheetId);
+
+    var sheet = ss.getSheetByName(t.roster);
+    if (!sheet) throw new Error("'" + t.roster + "' 시트를 찾을 수 없습니다.");
+    var tz = Session.getScriptTimeZone();
+
+    var cohorts = sbGet_("cohorts?select=id&is_active=is.true&order=started_at.desc.nullslast&limit=1");
+    if (!cohorts.length) throw new Error("활성 기수가 지정돼 있지 않습니다.");
+    var cohortId = cohorts[0].id;
+    var enc = encodeURIComponent(cohortId);
+
+    var data = sheet.getDataRange().getValues();
+
+    // 헤더 행
+    var headerRowIdx = -1;
+    for (var i = 0; i < Math.min(5, data.length); i++) {
+      var lowered = data[i].map(function (h) { return String(h).trim().toLowerCase(); });
+      if (lowered.indexOf("id") !== -1) { headerRowIdx = i; break; }
+    }
+    if (headerRowIdx === -1) throw new Error("'ID' 열을 찾을 수 없습니다.");
+
+    // 기수 표식 대조 — 다른 기수 시트를 이 기수 DB 로 밀어넣지 않도록
+    var hint = "";
+    for (var cr = 0; cr < Math.min(6, data.length) && !hint; cr++) {
+      for (var cc = 0; cc < Math.min(12, data[cr].length); cc++) {
+        var cv = String(data[cr][cc] || "").trim();
+        if (/^\d+\s*기$/.test(cv)) { hint = cv.replace(/\s+/g, ""); break; }
+      }
+    }
+    if (hint && hint !== cohortId) {
+      throw new Error("시트는 " + hint + " 인데 활성 기수는 " + cohortId +
+                      " 입니다. 다른 기수 출결을 밀어넣지 않도록 중단합니다.");
+    }
+
+    var headerRaw = data[headerRowIdx];
+    var idCol = -1;
+    var dateCols = [];
+    for (var c = 0; c < headerRaw.length; c++) {
+      if (String(headerRaw[c]).trim().toLowerCase() === "id") { idCol = c; continue; }
+      var key = toMMDD_(headerRaw[c], tz);
+      if (key) dateCols.push({ col: c, key: key });
+    }
+    if (idCol === -1) throw new Error("'ID' 열을 찾을 수 없습니다.");
+    if (!dateCols.length) throw new Error("날짜 컬럼(MM/DD)을 찾을 수 없습니다.");
+
+    // DB 쪽 현재 상태
+    var members = sbGetAll_("members?select=id,name,phone&cohort_id=eq." + enc + "&order=name");
+    var sessions = sbGetAll_("sessions?select=session_date&cohort_id=eq." + enc + "&order=session_date");
+    var attendance = sbGetAll_(
+      "attendance?select=member_id,session_date,status,members!inner(cohort_id)" +
+      "&members.cohort_id=eq." + enc + "&order=member_id,session_date");
+
+    var idToUuid = {};
+    for (var mi = 0; mi < members.length; mi++) {
+      var k = (String(members[mi].name || "") + String(members[mi].phone || "")).replace(/\s/g, "");
+      if (k) idToUuid[k] = members[mi].id;
+    }
+    var keyToIso = {};   // MM/DD → YYYY-MM-DD
+    for (var si = 0; si < sessions.length; si++) {
+      var sd = String(sessions[si].session_date || "");
+      var sm = sd.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (sm) keyToIso[sm[2] + "/" + sm[3]] = sd;
+    }
+    var dbNow = {};      // uuid|iso → 현재 값
+    for (var ai = 0; ai < attendance.length; ai++) {
+      var a = attendance[ai];
+      dbNow[a.member_id + "|" + a.session_date] =
+        String(a.status == null ? "" : a.status).trim();
+    }
+
+    // 시트와 DB 를 비교해 다른 칸만 모은다
+    var rowCount = data.length - (headerRowIdx + 1);
+    var bySession = {};          // iso → [{member_id, status}]
+    var diffs = 0;
+    var skippedBadValue = 0;
+    var samples = [];
+
+    for (var dj = 0; dj < dateCols.length; dj++) {
+      var dc = dateCols[dj];
+      var iso = keyToIso[dc.key];
+      if (!iso) continue;                       // DB 에 없는 주차는 건드리지 않는다
+      for (var r = 0; r < rowCount; r++) {
+        var row = data[headerRowIdx + 1 + r] || [];
+        var sheetId = String(row[idCol] || "").replace(/\s/g, "");
+        if (!sheetId) continue;
+        var uuid = idToUuid[sheetId];
+        if (!uuid) continue;                    // 시트에만 있는 사람은 건너뛴다
+
+        var want = String(row[dc.col] == null ? "" : row[dc.col]).trim().toUpperCase();
+        if (!PLC_PUSH_ALLOWED.hasOwnProperty(want)) { skippedBadValue++; continue; }
+
+        var have = (dbNow[uuid + "|" + iso] || "").toUpperCase();
+        if (want === have) continue;
+
+        (bySession[iso] || (bySession[iso] = [])).push({ member_id: uuid, status: want });
+        diffs++;
+        if (samples.length < 5) {
+          samples.push(dc.key + " " + sheetId + " " +
+            (have === "" ? "(빈칸)" : have) + " → " + (want === "" ? "(빈칸)" : want));
+        }
+      }
+    }
+
+    if (!diffs) {
+      plcLog_(cohortId + " — DB 가 시트와 같습니다. 밀어넣을 것이 없습니다.");
+      return "차이 없음";
+    }
+
+    var pushed = 0;
+    for (var iso2 in bySession) {
+      if (!bySession.hasOwnProperty(iso2)) continue;
+      var res = sbRpc_("set_attendance_batch", { p_session_date: iso2, p_entries: bySession[iso2] });
+      pushed += (res && res.updated) || bySession[iso2].length;
+    }
+
+    var msg = cohortId + " — 시트에서 DB 로 " + pushed + "칸 밀어넣었습니다.\n" + samples.join("\n");
+    if (skippedBadValue) {
+      msg += "\n⚠️ 허용되지 않는 값이 든 칸 " + skippedBadValue + "개는 건너뛰었습니다 (O ◎ X - 빈칸 만 됩니다).";
+    }
+    plcLog_(msg);
+    return msg;
+
+  } catch (err) {
+    // 트리거 실행이라 화면에 뜨지 않는다. 로그에 남겨 두고 다음 차례에 다시 시도한다.
+    plcLog_("❌ 밀어넣기 실패: " + err.message);
+    throw err;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── 자동 실행 트리거 ────────────────────────────────────────────────────────
+// 편집기에서 plcInstallPushTrigger 를 한 번 실행하면 10 분마다 돈다.
+// 두 번 눌러도 중복 설치되지 않는다 (같은 이름의 기존 트리거를 먼저 지운다).
+
+var PLC_PUSH_FN = "pushAttendanceToDb";
+
+function plcInstallPushTrigger() {
+  plcRemovePushTrigger();
+  ScriptApp.newTrigger(PLC_PUSH_FN).timeBased().everyMinutes(10).create();
+  var msg = "설치했습니다 — 10분마다 시트의 출결을 DB 로 밀어넣습니다.";
+  plcLog_(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) {}
+  return msg;
+}
+
+function plcRemovePushTrigger() {
+  var all = ScriptApp.getProjectTriggers();
+  var n = 0;
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].getHandlerFunction() === PLC_PUSH_FN) { ScriptApp.deleteTrigger(all[i]); n++; }
+  }
+  if (n) plcLog_("기존 트리거 " + n + "개를 지웠습니다.");
+  return n;
 }
