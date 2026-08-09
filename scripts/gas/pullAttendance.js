@@ -106,9 +106,21 @@ function plcAddMenu() {
   }
 }
 
-function onOpen() {
-  plcAddMenu();
-}
+// onOpen 은 일부러 비워 두었다.
+//
+// 이 파일은 이미 다른 코드가 도는 프로젝트에 얹힌다. 여기서 onOpen 을 정의하면
+// 그 프로젝트의 onOpen 과 부딪히고, 둘 중 하나가 조용히 진다 —
+// 기존 메뉴가 통째로 사라져도 아무 오류가 안 난다. 그게 더 위험하다.
+//
+//   · 프로젝트에 이미 onOpen 이 있다 → 그 안에 plcAddMenu(); 한 줄을 넣는다
+//   · onOpen 이 하나도 없다          → 아래 세 줄의 주석을 푼다
+//
+// 메뉴 없이도 편집기에서 pullAttendanceFromDb / plcCheckKey 를 골라
+// ▶ 실행하면 똑같이 동작한다.
+//
+// function onOpen() {
+//   plcAddMenu();
+// }
 
 function sbGet_(path) {
   var res = UrlFetchApp.fetch(PLC_SUPABASE_URL + "/rest/v1/" + path, {
