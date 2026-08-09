@@ -11,6 +11,8 @@ import {
     getKimbapDetail,
     getHomeworkList,
     getSessions,
+    getSessionKey,
+    getCurrentSessionDate,
     getProgress,
     getRequiredHomework,
     MAKEUP_LIMIT,
@@ -19,9 +21,9 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=40';
+} from './scripts/members-data.js?v=41';
 
-const SCRIPT_VERSION = 'script.js v36';
+const SCRIPT_VERSION = 'script.js v41';
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
             'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');
@@ -801,6 +803,20 @@ const rolePriority = {
     "": 6
 };
 
+// 조원 명단·요약 카드가 보는 '이번 주차' 출결.
+//
+// buildMemberRow 는 주차별 값을 MM/DD 키로 펼쳐 둔다. 예전 GAS 응답에는
+// m.attendance 라는 단일 필드가 있었는데 Supabase 로 옮기며 사라졌고,
+// 그걸 모르고 계속 읽는 바람에 조원 전원이 미체크·결석으로 보였다.
+function currentSessionKey() {
+    const d = getCurrentSessionDate();
+    return d ? (getSessionKey(d) || '') : '';
+}
+
+function attendanceOf(m, key) {
+    return key ? String(m[key] || '').trim().toUpperCase() : '';
+}
+
 function renderTeamMembers(members, teamName, role) {
     const listElement = document.getElementById('teamMemberList');
     const titleElement = document.getElementById('teamListTitle');
@@ -827,22 +843,28 @@ function renderTeamMembers(members, teamName, role) {
         return a.name.localeCompare(b.name, 'ko');
     });
 
+    const sessionKey = currentSessionKey();
     listElement.innerHTML = sortedMembers.map((m, index) => {
         const borderStyle = index === 0
             ? "border-top: 1px dashed #ddd;"
             : "border-top: 1px solid #eee;";
         const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? '<span style="margin-left:4px;" title="김밥 대상자">🍙</span>' : '';
-        const attendanceRaw = String(m.attendance || '').trim().toUpperCase();
+        const attendanceRaw = attendanceOf(m, sessionKey);
         const isChecked = (attendanceRaw === 'O' || attendanceRaw === '◎') ? 'checked' : '';
+        // ◎(지난 기수 이수)·−(집계 제외)는 체크만으로 표현이 안 된다.
+        // 원래 값을 실어 두고, 튜터가 손대지 않으면 저장에서 제외한다.
+        const mark = attendanceRaw === '◎' ? ' <span title="지난 기수 이수" style="color:#7c3aed;">◎</span>'
+                   : attendanceRaw === '-' ? ' <span title="집계 제외" style="color:#888;">−</span>' : '';
 
         return `
             <label class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle} cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" ${isChecked} class="attendance-check"
                         data-name="${m.name}" data-phone="${m.phone}" data-initial="${isChecked ? '1' : '0'}"
+                        data-initial-status="${attendanceRaw}"
                         style="width: 18px; height: 18px; cursor: pointer;">
                     <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
-                        ${m.name}(${m.phone}) ${lunchIcon}
+                        ${m.name}(${m.phone}) ${lunchIcon}${mark}
                     </span>
                 </div>
                 <span style="font-size: 11px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">
@@ -899,12 +921,26 @@ async function saveAttendanceBatch() {
     const info = document.getElementById('attendanceSaveInfo');
     if (!btn) return;
 
-    const entries = getAttendanceChecks().map(cb => ({
+    // 바뀐 사람만 보낸다.
+    //
+    // 전원을 보내면 present ? 'O' : 'X' 로 바뀌면서 ◎(지난 기수 이수)와
+    // −(집계 제외)가 통째로 사라진다. 손대지 않은 사람은 건드리지 않는다.
+    const changed = getAttendanceChecks()
+        .filter(cb => (cb.checked ? '1' : '0') !== cb.dataset.initial);
+    if (changed.length === 0) return;
+
+    // ◎ 를 결석으로 바꾸는 것은 언제나 의심스럽다. 안 나와도 되는 사람이기 때문이다.
+    const demoted = changed.filter(cb => !cb.checked && cb.dataset.initialStatus === '◎');
+    if (demoted.length && !confirm(
+        `지난 기수 이수(◎) ${demoted.length}명을 결석으로 바꿉니다.\n\n` +
+        demoted.map(cb => `${cb.dataset.name}(${cb.dataset.phone})`).join(', ') +
+        `\n\n이분들은 안 나와도 되는 분입니다. 정말 결석으로 기록할까요?`)) return;
+
+    const entries = changed.map(cb => ({
         name: cb.dataset.name,
         phone: cb.dataset.phone,
         present: cb.checked,
     }));
-    if (entries.length === 0) return;
 
     const prevText = btn.textContent;
     btn.disabled = true;
@@ -914,7 +950,12 @@ async function saveAttendanceBatch() {
 
     if (success) {
         // 저장 성공 → 현재 체크 상태를 새 기준선으로
-        getAttendanceChecks().forEach(cb => { cb.dataset.initial = cb.checked ? '1' : '0'; });
+        getAttendanceChecks().forEach(cb => {
+            if ((cb.checked ? '1' : '0') !== cb.dataset.initial) {
+                cb.dataset.initialStatus = cb.checked ? 'O' : 'X';
+            }
+            cb.dataset.initial = cb.checked ? '1' : '0';
+        });
         if (info) {
             info.textContent = `✅ ${session ? session + ' ' : ''}${updated ?? entries.length}건 저장 완료`;
         }
@@ -1042,9 +1083,10 @@ let currentRenderedTeam = null; // 현재 표시 중인 조 (요약 카드 갱�
 // 요약 카드만 재렌더 (체크박스 리스트는 그대로 유지)
 function renderTeamSummary(summaryEl, members) {
     const upper = (v) => String(v || '').trim().toUpperCase();
-    // 출석(O·◎) 이외는 모두 결석 취급 (빈 값 포함)
-    const presentCount = members.filter(m => ['O','◎'].includes(upper(m.attendance))).length;
-    const absentCount  = members.length - presentCount;
+    const key = currentSessionKey();
+    const presentCount = members.filter(m => ['O','◎'].includes(attendanceOf(m, key))).length;
+    // 아직 안 찍은 사람을 결석으로 세지 않는다. 결석은 X 로 기록된 것만.
+    const absentCount  = members.filter(m => attendanceOf(m, key) === 'X').length;
     const kimbapCount  = members.filter(m => upper(m.lunch) === 'O').length;
     summaryEl.innerHTML = `
         <div class="stat">
