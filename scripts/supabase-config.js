@@ -8,6 +8,33 @@ export const SUPABASE_URL = 'https://wvpqdicsqjozhxtxsnin.supabase.co';
 export const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2cHFkaWNzcWpvemh4dHhzbmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2OTA3OTMsImV4cCI6MjEwMDI2Njc5M30.-_vV9lQYoWMZMqEahveSz4fT5psTbF3feKfBZ28qG0w';
 
+// 출결 쓰기 창구.
+//
+// 읽기는 Supabase 에서 바로 하지만(빠르다), 쓰기는 이 URL 로만 간다.
+// 출결의 원본이 시트이기 때문이다 — GAS 가 시트에 먼저 쓰고 DB 에 밀어넣는다.
+// 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
+//
+// ⚠️ GAS 웹앱은 application/json 을 받으면 preflight 때문에 CORS 로 막힌다.
+//    반드시 text/plain 으로 보낼 것 (아래 sbPostGas 가 그렇게 한다).
+export const GAS_API_URL =
+  'https://script.google.com/macros/s/AKfycbyTTxRbd9dqwxQvSplUwwrheWoQGt3CbYm7JYHNFsqT45B7JjBjaE-563IOqqkOcgVT/exec';
+
+/**
+ * GAS 웹앱에 POST. 응답은 { success, message, ... } 형태.
+ */
+export async function sbPostGas(body) {
+  const res = await fetch(GAS_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+    redirect: 'follow',
+  });
+  if (!res.ok) throw new Error(`GAS 응답 실패 (${res.status})`);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.message || 'GAS 저장 실패');
+  return json;
+}
+
 // 첫 조회 전(네트워크 실패 포함) 폴백. 평소에는 쓰이지 않는다.
 export const DEFAULT_COHORT_ID = '2기';
 const ACTIVE_COHORT_KEY = 'plc_active_cohort';
