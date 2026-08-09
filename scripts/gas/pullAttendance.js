@@ -41,8 +41,46 @@ function pullTargets_() {
 }
 
 // anon 키는 공개돼도 안전하다. 읽기만 열려 있고 쓰기는 RLS 로 막혀 있다.
-var SUPABASE_URL = "https://wvpqdicsqjozhxtxsnin.supabase.co";
-var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2cHFkaWNzcWpvemh4dHhzbmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2OTA3OTMsImV4cCI6MjEwMDI2Njc5M30.-_vV9lQYoWMZMqEahveSz4fT5psTbF3feKfBZ28qG0w";
+//
+// ⚠️ 이름에 PLC_ 를 붙인 이유
+//    이 파일은 다른 코드가 이미 있는 프로젝트에 얹힌다.
+//    GAS 는 프로젝트 안의 .gs 파일을 한 덩어리로 이어 붙이므로,
+//    다른 파일에 같은 이름의 var 가 있으면 나중에 읽힌 쪽이 조용히 이긴다.
+//    그러면 여기 적은 키가 아니라 그 파일의 키로 요청이 나가서
+//    "Invalid API key" 가 뜬다 — 이 파일만 봐서는 원인을 찾을 수 없다.
+//    PLC_ 접두어를 붙여 그 충돌 자체를 없앤다.
+var PLC_SUPABASE_URL = "https://wvpqdicsqjozhxtxsnin.supabase.co";
+var PLC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2cHFkaWNzcWpvemh4dHhzbmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2OTA3OTMsImV4cCI6MjEwMDI2Njc5M30.-_vV9lQYoWMZMqEahveSz4fT5psTbF3feKfBZ28qG0w";
+
+// 키가 온전한지 먼저 본다. 편집기에서 이 함수를 골라 ▶ 실행하면 된다.
+//
+// 붙여넣다가 키가 잘리는 일이 잦다 (JWT 는 208 자라 화면에서 줄이 접힌다).
+// 잘린 키도 형태는 멀쩡해 보이는데 서버는 "Invalid API key" 만 돌려주므로,
+// 길이를 눈으로 확인하는 게 가장 빠르다.
+function plcCheckKey() {
+  var k = PLC_SUPABASE_ANON_KEY;
+  var parts = k.split(".");
+  var msg =
+    "URL       : " + PLC_SUPABASE_URL + "\n" +
+    "키 길이   : " + k.length + "  (정상은 208)\n" +
+    "키 조각   : " + parts.length + " 개  (JWT 는 3 개여야 한다)\n" +
+    "앞 12 자  : " + k.slice(0, 12) + "\n" +
+    "뒤 10 자  : " + k.slice(-10) + "  (정상은 KfBZ28qG0w)\n";
+
+  try {
+    sbGet_("cohorts?select=id&limit=1");
+    msg += "\n연결 확인 : ✅ 정상입니다. pullAttendanceFromDb 를 실행하세요.";
+  } catch (e) {
+    msg += "\n연결 확인 : ❌ " + e.message +
+           "\n\n길이가 208 이 아니면 키가 잘린 것입니다." +
+           "\n저장소의 scripts/gas/pullAttendance.js 에서 45 번째 줄을 다시 복사하세요." +
+           "\n길이가 208 인데도 실패하면 Supabase 에서 키가 교체된 것입니다.";
+  }
+
+  Logger.log(msg);
+  try { SpreadsheetApp.getUi().alert("PLC 키 점검", msg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) {}
+  return msg;
+}
 
 // 메뉴 달기.
 //
@@ -60,6 +98,8 @@ function plcAddMenu() {
     SpreadsheetApp.getUi()
       .createMenu('PLC')
       .addItem('DB에서 출석 가져오기', 'pullAttendanceFromDb')
+      .addSeparator()
+      .addItem('연결 점검', 'plcCheckKey')
       .addToUi();
   } catch (e) {
     // 시트에 붙어 있지 않은 스크립트면 메뉴를 달 수 없다. 무시.
@@ -71,16 +111,27 @@ function onOpen() {
 }
 
 function sbGet_(path) {
-  var res = UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/" + path, {
+  var res = UrlFetchApp.fetch(PLC_SUPABASE_URL + "/rest/v1/" + path, {
     headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: "Bearer " + SUPABASE_ANON_KEY
+      apikey: PLC_SUPABASE_ANON_KEY,
+      Authorization: "Bearer " + PLC_SUPABASE_ANON_KEY
     },
     muteHttpExceptions: true
   });
   var code = res.getResponseCode();
   if (code !== 200) {
-    throw new Error("Supabase " + code + ": " + res.getContentText().slice(0, 300));
+    var body = res.getContentText().slice(0, 300);
+    // 401 은 열에 아홉이 키가 잘린 것이다. 원인을 메시지에 같이 실어 보낸다.
+    if (code === 401) {
+      throw new Error(
+        "Supabase 401 (키가 거부됐습니다)\n" +
+        "  지금 쓰는 키 길이: " + PLC_SUPABASE_ANON_KEY.length + " (정상은 208)\n" +
+        "  뒤 10 자: " + PLC_SUPABASE_ANON_KEY.slice(-10) + " (정상은 KfBZ28qG0w)\n" +
+        "  → 길이가 다르면 붙여넣을 때 키가 잘린 것입니다.\n" +
+        "  → plcCheckKey 함수를 실행하면 더 자세히 알려줍니다.\n" +
+        "  서버 응답: " + body);
+    }
+    throw new Error("Supabase " + code + ": " + body);
   }
   return JSON.parse(res.getContentText());
 }
