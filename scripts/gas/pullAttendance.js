@@ -162,6 +162,15 @@ function sbGetAll_(path) {
   return out;
 }
 
+// 진행 상황을 로그에 남긴다.
+//
+// 이 함수는 중간에 확인 창에서 멈춰 서고, 그 창은 편집기가 아니라 시트 창에 뜬다.
+// 편집기만 보고 있으면 '실행 중' 말고는 아무 단서가 없다 —
+// 어디까지 갔는지 로그로 남겨 두면 멈춘 자리를 바로 알 수 있다.
+function plcLog_(msg) {
+  Logger.log(msg);
+}
+
 // 날짜 헤더를 MM/DD 로 통일한다 (doGet 과 같은 규칙).
 function toMMDD_(raw, tz) {
   var v = (raw instanceof Date ? Utilities.formatDate(raw, tz, "MM/dd") : String(raw)).trim();
@@ -190,8 +199,10 @@ function pullAttendanceFromDb() {
   if (!cohorts.length) throw new Error("활성 기수가 지정돼 있지 않습니다 (cohorts.is_active).");
   var cohortId = cohorts[0].id;
   var enc = encodeURIComponent(cohortId);
+  plcLog_("활성 기수: " + cohortId + " — 시트를 읽습니다…");
 
   var data = sheet.getDataRange().getValues();
+  plcLog_("시트 읽기 완료 — " + data.length + "행. DB 를 조회합니다…");
 
   // ---- 헤더 행 찾기
   var headerRowIdx = -1;
@@ -282,20 +293,26 @@ function pullAttendanceFromDb() {
     byKey[key][off] = String(a.status == null ? "" : a.status).trim();
   }
 
+  plcLog_("DB 조회 완료 — 인원 " + members.length + "명 · 주차 " + sessions.length +
+          "개 · 출결 " + attendance.length + "행. 바뀔 칸을 계산합니다…");
+
   // ---- 무엇이 바뀔지 먼저 다 계산한다.
   //      시트를 덮어쓰는 일이라, 몇 칸이 어떻게 바뀌는지 보고 나서 쓴다.
-  var plan = [];        // [{col, values, changed}]
+  //
+  //      지금 값은 맨 위에서 읽어 둔 data 에서 꺼낸다. 컬럼마다 getValues() 를
+  //      부르면 주차 수만큼 왕복이 생겨 느려진다 (그동안 화면은 그냥 '실행 중' 이다).
+  var plan = [];        // [{range, values}]
   var changed = 0;
   var samples = [];
   for (var dj = 0; dj < dateCols.length; dj++) {
     var dc = dateCols[dj];
     var range = sheet.getRange(headerRowIdx + 2, dc.col + 1, rowCount, 1);
-    var cur = range.getValues();
     var next = [];
     var colChanged = 0;
     var fill = byKey[dc.key] || {};
     for (var ri = 0; ri < rowCount; ri++) {
-      var before = String(cur[ri][0] == null ? "" : cur[ri][0]).trim();
+      var curRow = data[headerRowIdx + 1 + ri] || [];
+      var before = String(curRow[dc.col] == null ? "" : curRow[dc.col]).trim();
       var after;
       if (fill.hasOwnProperty(ri)) {
         after = fill[ri];                       // DB 기록 그대로 (O ◎ X − 빈칸)
@@ -332,12 +349,24 @@ function pullAttendanceFromDb() {
     "바뀔 칸 " + changed + "개\n\n" +
     samples.join("\n") + (changed > samples.length ? "\n…" : "") +
     "\n\n시트의 출석 칸을 DB 값으로 덮어씁니다. 진행할까요?";
+
+  // 계산 결과를 먼저 로그에 남긴다.
+  // alert 는 사용자가 누를 때까지 스크립트를 멈춰 세우는데, 그 창은 편집기가 아니라
+  // 시트 창에 뜬다. 편집기만 보고 있으면 끝없이 '실행 중' 으로만 보인다.
+  // 로그에 미리 적어 두면 적어도 무엇을 계산했는지는 확인할 수 있다.
+  plcLog_("계산 완료. 확인 창을 띄웁니다 — 스프레드시트 창을 보세요.\n" + ask);
+
   try {
     var ui = SpreadsheetApp.getUi();
     if (ui.alert("DB에서 출석 가져오기", ask, ui.ButtonSet.OK_CANCEL) !== ui.Button.OK) {
+      plcLog_("취소했습니다. 아무것도 쓰지 않았습니다.");
       return "취소했습니다.";
     }
-  } catch (e) { /* UI 없는 실행 — 그대로 진행 */ }
+  } catch (e) {
+    // UI 를 띄울 수 없는 실행(트리거·독립 스크립트)은 묻지 않고 진행한다.
+    plcLog_("확인 창을 띄울 수 없어 그대로 진행합니다: " + e.message);
+  }
+  plcLog_("시트에 씁니다…");
 
   // ---- 쓴다. 컬럼별로 나눠 쓴다.
   //      한 덩어리로 읽고 쓰면 사이에 낀 수식 칸까지 값으로 굳어버린다.
