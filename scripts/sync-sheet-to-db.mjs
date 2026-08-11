@@ -173,6 +173,30 @@ if (!gas.success) { console.error('❌ GAS success=false:', gas.message); proces
 const rows       = Array.isArray(gas.data) ? gas.data : [];
 const kimbapIn   = gas.kimbap   || {};
 const homeworkIn = gas.homework || {};
+// 주민번호가 응답에 섞여 오면 멈춘다.
+//
+// GAS v26 부터 주민번호 컬럼을 응답에서 빼고 성별만 넘긴다.
+// 그런데 doGet 을 고쳐도 웹앱을 재배포하지 않으면 옛 코드가 계속 돈다 —
+// 그 사이 이 URL 은 인증 없이 열려 있으므로 전원의 번호가 공개된다.
+// 조용히 지나가면 알아챌 방법이 없어서, 여기서 크게 실패시킨다.
+{
+  const rrn = /^\s*\d{6}\s*-?\s*\d{7}\s*$/;
+  const hit = [];
+  for (const row of (gas.data || [])) {
+    for (const [k, v] of Object.entries(row)) {
+      if (typeof v === 'string' && rrn.test(v)) { hit.push(k); break; }
+    }
+    if (hit.length) break;
+  }
+  if (hit.length) {
+    console.log('❌ GAS 응답에 주민등록번호가 들어 있습니다 (컬럼: ' + hit.join(', ') + ').');
+    console.log('   이 웹앱 URL 은 인증이 없어 누구나 받아갈 수 있습니다.');
+    console.log('   scripts/gas/doGet.js (v26 이상) 로 갱신하고 웹앱을 재배포하세요.');
+    console.log('   (배포 → 배포 관리 → 연필 → 버전: 새 버전. "새 배포" 는 URL 이 바뀝니다)');
+    process.exit(1);
+  }
+}
+
 console.log(`   GAS v${gas.version} · ${rows.length}명 · kimbap ${Object.keys(kimbapIn).length} · homework ${Object.keys(homeworkIn).length}\n`);
 
 // ---------------------------------------------------------------- 기수 결정
