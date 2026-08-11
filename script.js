@@ -21,9 +21,9 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=43';
+} from './scripts/members-data.js?v=44';
 
-const SCRIPT_VERSION = 'script.js v43';
+const SCRIPT_VERSION = 'script.js v44';
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
             'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');

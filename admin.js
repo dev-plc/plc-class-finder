@@ -10,8 +10,8 @@ import {
     updateAttendanceBatch,
     getCohortId,
     subscribe,
-} from './scripts/members-data.js?v=43';
-import { matches as hangulMatches } from './scripts/hangul.js?v=43';
+} from './scripts/members-data.js?v=44';
+import { matches as hangulMatches } from './scripts/hangul.js?v=44';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -104,6 +104,46 @@ subscribe((event) => {
         updateAttSummary();
     }
 });
+
+// ============================================================================
+// 검색칸 지우기 (✕)
+//
+// 필터는 자주 지우고 다시 친다. 한 글자씩 지우게 두면 성가시고,
+// 화면이 큰 기기에서는 백스페이스를 오래 눌러야 한다.
+// 입력칸을 감싸고 오른쪽에 ✕ 를 얹는다 — 값이 있을 때만 보인다.
+//
+// 지운 뒤 input 이벤트를 직접 쏜다. 그래야 이미 붙어 있는 필터·오류 숨김
+// 리스너가 그대로 돈다. 여기서 화면을 다시 그리지 않는 이유다.
+// ============================================================================
+function attachClearButton(input) {
+    if (!input || input.dataset.clearable) return;
+    input.dataset.clearable = '1';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'input-clearable';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'input-clear';
+    btn.setAttribute('aria-label', '입력 지우기');
+    btn.textContent = '✕';
+    wrap.appendChild(btn);
+
+    const sync = () => { btn.style.display = input.value ? 'flex' : 'none'; };
+    sync();
+    input.addEventListener('input', sync);
+
+    btn.addEventListener('click', () => {
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        sync();
+        input.focus();
+    });
+}
+
+[searchNameInput, teamFilter, memberFilter].forEach(attachClearButton);
 
 // ============================================================================
 // 테마 / 로그아웃 / 탭
