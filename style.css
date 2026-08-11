@@ -1553,3 +1553,55 @@ body.dark-mode .matrix-table thead th { background: #111827; }
     font-size: calc(11px * var(--font-scale));
     color: var(--text-light, #6B7280);
 }
+
+/* 조원 명단 — 주차 선택
+   튜터가 지난 주차를 열어 출결을 확인·조정한다.
+   아직 하지 않은 강의는 목록에 넣지 않는다 (찍으면 결석 수가 부풀려진다). */
+.team-session-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 10px;
+    flex-wrap: wrap;
+}
+.team-session-bar label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-color, #333);
+    flex-shrink: 0;
+}
+.team-session-bar select {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    border: 1px solid #d5d9e0;
+    border-radius: 8px;
+    background: #fff;
+    color: #222;
+}
+.team-session-bar select:disabled {
+    background: #f2f3f5;
+    color: #888;
+}
+.team-session-note {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 600;
+    color: #b45309;
+    background: #fff7ed;
+    border-radius: 999px;
+    padding: 3px 10px;
+}
+.team-session-note:empty { display: none; }
+
+body.dark-mode .team-session-bar select {
+    background: #2a2d34;
+    color: #eee;
+    border-color: #444;
+}
+body.dark-mode .team-session-note {
+    color: #fbbf24;
+    background: #3a2f1a;
+}

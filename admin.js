@@ -10,8 +10,8 @@ import {
     updateAttendanceBatch,
     getCohortId,
     subscribe,
-} from './scripts/members-data.js?v=41';
-import { matches as hangulMatches } from './scripts/hangul.js?v=41';
+} from './scripts/members-data.js?v=42';
+import { matches as hangulMatches } from './scripts/hangul.js?v=42';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {

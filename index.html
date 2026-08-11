@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 
-    <link rel="stylesheet" href="style.css?v=41">
+    <link rel="stylesheet" href="style.css?v=42">
 </head>
 <body>
     <div class="container">
@@ -173,6 +173,11 @@
                             <h3 id="teamListTitle" style="font-size: 1.1rem; color: #333;"></h3>
                             <button type="button" id="openMatrixBtn" class="matrix-open-btn">📊 전체 출석표</button>
                         </div>
+                        <div class="team-session-bar">
+                            <label for="teamSessionSelect">주차</label>
+                            <select id="teamSessionSelect"></select>
+                            <span id="teamSessionNote" class="team-session-note"></span>
+                        </div>
                         <div id="teamSummaryCard" class="team-summary-card"></div>
                         <div id="teamMemberList" class="team-member-list-grid">
                         </div>
@@ -265,6 +270,6 @@
         </div>
     </div>
 
-<script type="module" src="script.js?v=41"></script>
+<script type="module" src="script.js?v=42"></script>
 </body>
 </html>

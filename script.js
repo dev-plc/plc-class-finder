@@ -21,9 +21,9 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=41';
+} from './scripts/members-data.js?v=42';
 
-const SCRIPT_VERSION = 'script.js v41';
+const SCRIPT_VERSION = 'script.js v42';
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
             'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');
@@ -803,15 +803,74 @@ const rolePriority = {
     "": 6
 };
 
-// 조원 명단·요약 카드가 보는 '이번 주차' 출결.
+// 조원 명단이 보고 있는 주차 (YYYY-MM-DD). 튜터가 드롭다운으로 고른다.
+// null 이면 '가장 최근 지난 강의' 로 떨어진다.
+let teamSessionDate = null;
+
+// 지난(오늘 포함) 주차만. 아직 하지 않은 강의는 찍을 것이 없고,
+// 미리 찍히면 결석 수가 부풀려져 수료 판정과 과제 안내가 틀어진다.
+function pastSessions() {
+    const t = new Date();
+    const todayIso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    return getSessions().filter(s => s.session_date <= todayIso);
+}
+
+// 조원 명단·요약 카드가 보는 주차의 출결 키 (MM/DD).
 //
 // buildMemberRow 는 주차별 값을 MM/DD 키로 펼쳐 둔다. 예전 GAS 응답에는
 // m.attendance 라는 단일 필드가 있었는데 Supabase 로 옮기며 사라졌고,
 // 그걸 모르고 계속 읽는 바람에 조원 전원이 미체크·결석으로 보였다.
 function currentSessionKey() {
-    const d = getCurrentSessionDate();
+    const d = teamSessionDate || getCurrentSessionDate();
     return d ? (getSessionKey(d) || '') : '';
 }
+
+// 주차 드롭다운. 열 때마다 다시 만든다 (배경 갱신으로 세션이 늘 수 있다).
+function renderTeamSessionBar() {
+    const sel = document.getElementById('teamSessionSelect');
+    const note = document.getElementById('teamSessionNote');
+    if (!sel) return;
+
+    const sessions = pastSessions();
+    if (sessions.length === 0) {
+        sel.innerHTML = '<option>아직 진행된 강의가 없습니다</option>';
+        sel.disabled = true;
+        if (note) note.textContent = '';
+        return;
+    }
+    sel.disabled = false;
+
+    const known = new Set(sessions.map(s => s.session_date));
+    if (!teamSessionDate || !known.has(teamSessionDate)) {
+        const current = getCurrentSessionDate();
+        teamSessionDate = known.has(current) ? current : sessions[sessions.length - 1].session_date;
+    }
+
+    // 최근이 위로 (방금 끝난 수업을 바로 찾도록)
+    sel.innerHTML = [...sessions].reverse().map(s => {
+        const name = s.label_norm || '';
+        const label = `${s.label}${name ? ' · ' + name : ''}${s.is_class ? '' : ' (수료 미반영)'}`;
+        return `<option value="${s.session_date}"${s.session_date === teamSessionDate ? ' selected' : ''}>${label}</option>`;
+    }).join('');
+
+    if (note) {
+        const latest = sessions[sessions.length - 1].session_date;
+        note.textContent = teamSessionDate === latest ? '' : '지난 주차를 보고 있습니다';
+    }
+}
+
+document.getElementById('teamSessionSelect')?.addEventListener('change', (e) => {
+    if (countAttendanceChanges() > 0 &&
+        !confirm('저장하지 않은 변경이 있습니다. 버리고 다른 주차로 이동할까요?')) {
+        e.target.value = teamSessionDate;
+        return;
+    }
+    teamSessionDate = e.target.value;
+    if (currentRenderedTeam) {
+        renderTeamMembers(getTeamMembers(currentRenderedTeam.name),
+                          currentRenderedTeam.name, currentRenderedTeam.role);
+    }
+});
 
 function attendanceOf(m, key) {
     return key ? String(m[key] || '').trim().toUpperCase() : '';
@@ -832,8 +891,9 @@ function renderTeamMembers(members, teamName, role) {
 
     container.style.display = 'block';
 
-    currentRenderedTeam = { name: teamName };
+    currentRenderedTeam = { name: teamName, role };
     titleElement.textContent = `👥 ${teamName} 조원 명단`;
+    renderTeamSessionBar();
     if (summaryEl) renderTeamSummary(summaryEl, members);
 
     const sortedMembers = [...members].sort((a, b) => {
@@ -946,7 +1006,8 @@ async function saveAttendanceBatch() {
     btn.disabled = true;
     btn.textContent = '저장 중…';
 
-    const { success, updated, session, error } = await updateAttendanceBatch(entries);
+    const { success, updated, session, error } =
+        await updateAttendanceBatch(entries, teamSessionDate || undefined);
 
     if (success) {
         // 저장 성공 → 현재 체크 상태를 새 기준선으로
