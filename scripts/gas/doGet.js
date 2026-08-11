@@ -180,63 +180,9 @@ function plcHeaderKey_(raw, tz) {
   return null;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 주민등록번호 → 성별
-//
-// ⚠️ 주민번호는 응답에 절대 싣지 않는다.
-//    이 웹앱은 URL 만 알면 누구나 GET 할 수 있고, 그 URL 은 공개 저장소에 있다.
-//    아래 headers.forEach 는 로스터의 모든 컬럼을 그대로 담으므로,
-//    번호가 든 컬럼을 찾아 빼지 않으면 전원의 주민번호가 그대로 공개된다.
-//    성별만 뽑고 번호 자체는 시트 밖으로 내보내지 않는다.
-//
-// 뒷자리 첫 숫자가 성별이다. 홀수 남, 짝수 여.
-//   1·3 내국인(1900·2000년대) 남   2·4 여
-//   5·7 외국인 남                  6·8 여
-//   9   1800년대 남                0   여
-// ═══════════════════════════════════════════════════════════════════════════
-
-// '1234561234567' · '123456-1234567' · 공백 섞인 것 모두 13 자리 숫자로 통일.
-// 13 자리가 아니면 빈 문자열 — 잘못 입력된 칸을 성별 판정에 쓰지 않는다.
-function plcNormalizeRrn_(raw) {
-  var digits = String(raw == null ? "" : raw).replace(/[^0-9]/g, "");
-  return digits.length === 13 ? digits : "";
-}
-
-function plcGenderFromRrn_(raw) {
-  var n = plcNormalizeRrn_(raw);
-  if (!n) return "";
-  var d = n.charCodeAt(6) - 48;      // 뒷자리 첫 숫자 (13 자리 중 7 번째)
-  if (d < 0 || d > 9) return "";
-  return (d % 2 === 1) ? "남" : "여";
-}
-
-// 이미 시트에 적혀 있던 성별 표기를 남/여 로 통일.
-// 주민번호가 비었거나 형식이 틀린 사람은 이 값으로 물러선다.
-function plcNormalizeGender_(raw) {
-  var v = String(raw == null ? "" : raw).trim();
-  if (!v) return "";
-  if (/^(남|남자|m|male)$/i.test(v)) return "남";
-  if (/^(여|여자|f|female)$/i.test(v)) return "여";
-  return v;
-}
-
-// 주민번호가 든 컬럼 번호들. 헤더 이름과 실제 값 양쪽으로 찾는다 —
-// 헤더가 비어 있거나 H 열이 아닌 곳으로 옮겨가도 놓치지 않는다.
-function plcFindRrnCols_(headers, data, firstDataRow) {
-  var cols = {};
-  var lastRow = Math.min(firstDataRow + 30, data.length);
-  for (var c = 0; c < headers.length; c++) {
-    if (/주민|rrn|ssn/i.test(String(headers[c] || ""))) { cols[c] = true; continue; }
-    for (var r = firstDataRow; r < lastRow; r++) {
-      if (plcNormalizeRrn_((data[r] || [])[c])) { cols[c] = true; break; }
-    }
-  }
-  return cols;
-}
-
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 26;
+  var currentVersion = 25;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -376,7 +322,7 @@ function doPost(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 26; // + 강의명 행 · 날짜 헤더 MM/DD · 기수 표식 · 주민번호 제거
+  var currentVersion = 25; // + 강의명 행 · 날짜 헤더 MM/DD · 기수 표식
 
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -682,9 +628,6 @@ function doGet(e) {
     // '가장 최근 지난 강의' 컬럼 (출석부(DB) 헤더 기준)
     var todayIdx = findRecentPastSessionCol_(originalHeadersRaw, todayNorm);
 
-    // 주민번호가 든 컬럼 — 응답에서 빼고, 성별만 뽑아 쓴다
-    var rrnCols = plcFindRrnCols_(headers, data, headerRowIdx + 1);
-
     var jsonData = [];
     for (var i = headerRowIdx + 1; i < data.length; i++) {
       var rawId = String(data[i][idIdx]).replace(/\s/g, '');
@@ -702,20 +645,12 @@ function doGet(e) {
       var attVal = (todayIdx !== -1) ? data[i][todayIdx] : "";
       obj["attendance"] = attVal instanceof Date ? Utilities.formatDate(attVal, tz, "yyyy-MM-dd") : String(attVal).trim();
 
-      var rrnGender = "";
       headers.forEach(function(h, idx){
-        if (rrnCols[idx]) {
-          // 번호는 obj 에 담지 않는다. 성별만 건져 낸다.
-          if (!rrnGender) rrnGender = plcGenderFromRrn_(data[i][idx]);
-          return;
-        }
         if (h && h !== "id") {
           var cellVal = data[i][idx];
           obj[h] = cellVal instanceof Date ? Utilities.formatDate(cellVal, tz, "yyyy-MM-dd") : String(cellVal).trim();
         }
       });
-      // 주민번호에서 뽑은 값이 우선. 없으면 시트에 적혀 있던 성별을 통일해서 쓴다.
-      obj["gen"] = rrnGender || plcNormalizeGender_(obj["gen"]);
       obj["telegramLink"] = telegramMap[obj["team"]] || "";
       obj["lunch"] = kimbapMap[obj["id"]] || "X";
 
@@ -735,7 +670,7 @@ function doGet(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 26, message: e.message
+      success: false, version: 25, message: e.message
     }));
   }
 }
