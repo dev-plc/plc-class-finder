@@ -173,6 +173,37 @@ if (!gas.success) { console.error('❌ GAS success=false:', gas.message); proces
 const rows       = Array.isArray(gas.data) ? gas.data : [];
 const kimbapIn   = gas.kimbap   || {};
 const homeworkIn = gas.homework || {};
+// 헤더 이름이 바뀌었는지 본다.
+//
+// 컬럼 순서가 바뀌는 건 괜찮다 — GAS 가 이름으로 찾는다.
+// 그런데 이름을 바꾸면 그 필드가 통째로 사라지고, 오류는 나지 않는다.
+// 'team' 을 '조' 로 바꾸면 전원의 조가 빈칸으로 들어가는데 로그는 조용하다.
+// 그래서 여기서 잡는다.
+{
+  const seen = new Set();
+  for (const row of (gas.data || [])) for (const k of Object.keys(row)) seen.add(k);
+
+  // 없으면 명단이 망가진다 — 쓰지 않고 멈춘다
+  const CRITICAL = ['team', 'location'];
+  // 없으면 화면 일부가 비지만 명단 자체는 산다 — 알리고 진행
+  const EXPECTED = ['role', 'gen', 'age', '연락처', '결혼', '담당교역자',
+                    'no.', '.note', '수료', '김밥1차', '김밥2차', 'telegram', '안내문자'];
+
+  const missCritical = CRITICAL.filter(k => !seen.has(k));
+  const missExpected = EXPECTED.filter(k => !seen.has(k));
+
+  if (missExpected.length) {
+    console.log(`⚠️  출석부(DB) 헤더에 없는 이름: ${missExpected.join(', ')}`);
+    console.log('    이름을 바꾸셨다면 원래대로 되돌리세요. 이 필드는 빈값으로 들어갑니다.');
+  }
+  if (missCritical.length) {
+    console.log(`❌ 출석부(DB) 헤더에 ${missCritical.join(', ')} 가 없습니다.`);
+    console.log('   이대로 쓰면 전원의 조·위치가 빈칸이 됩니다. 아무것도 쓰지 않고 멈춥니다.');
+    console.log(`   지금 읽힌 헤더: ${[...seen].filter(k => !/^\d{2}\/\d{2}$/.test(k)).join(', ')}`);
+    process.exit(1);
+  }
+}
+
 console.log(`   GAS v${gas.version} · ${rows.length}명 · kimbap ${Object.keys(kimbapIn).length} · homework ${Object.keys(homeworkIn).length}\n`);
 
 // ---------------------------------------------------------------- 기수 결정

@@ -182,7 +182,7 @@ function plcHeaderKey_(raw, tz) {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 25;
+  var currentVersion = 26;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -217,7 +217,11 @@ function doPost(e) {
     if (!sheet) throw new Error("'" + TAB_ROSTER + "' 시트를 찾을 수 없습니다.");
     var tz = Session.getScriptTimeZone();
 
-    var idCell = sheet.getRange(1, 1, 5, 26).createTextFinder("id").matchCase(false).matchEntireCell(true).findNext();
+    // 헤더 행의 'id' 칸을 찾는다. 컬럼 순서가 바뀌어도 따라간다.
+    // 폭을 26(A~Z)으로 고정하면 ID 열이 그 뒤로 밀렸을 때 못 찾는다 —
+    // 출석부는 정보 16칸 + 주차 18칸이라 금방 Z 를 넘는다.
+    var idCell = sheet.getRange(1, 1, 5, Math.max(sheet.getLastColumn(), 1))
+      .createTextFinder("id").matchCase(false).matchEntireCell(true).findNext();
     if (!idCell) throw new Error("'id' 열을 찾을 수 없습니다.");
 
     var headerRow = idCell.getRow();
@@ -322,7 +326,7 @@ function doPost(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 25; // + 강의명 행 · 날짜 헤더 MM/DD · 기수 표식
+  var currentVersion = 26; // + 강의명 행 · 날짜 헤더 MM/DD · 기수 표식
 
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -670,7 +674,7 @@ function doGet(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 25, message: e.message
+      success: false, version: 26, message: e.message
     }));
   }
 }
