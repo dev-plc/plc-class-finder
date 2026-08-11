@@ -795,3 +795,58 @@ body.dark-mode .att-save-btn { color: #1a1f3a; }
     .att-save-btn { padding: 10px 18px; font-size: 14px; }
     .att-save-info { font-size: 13px; }
 }
+
+/* 검색칸 지우기 (✕)
+   입력칸을 감싸고 오른쪽에 얹는다. 값이 있을 때만 보인다.
+   래퍼는 입력칸의 원래 폭·여백을 그대로 물려받아야 하므로 block + 100%. */
+.input-clearable {
+    position: relative;
+    display: block;
+    width: 100%;
+}
+.input-clearable > input {
+    width: 100%;
+    /* ✕ 자리를 비워 둔다. 없으면 긴 검색어가 버튼 밑으로 들어간다. */
+    padding-right: 42px;
+}
+.input-clear {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    display: none;              /* 값이 있을 때만 JS가 flex 로 바꾼다 */
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #4b5563;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.input-clear:hover,
+.input-clear:focus-visible {
+    background: #d1d5db;
+    color: #111827;
+}
+/* 손가락으로 누르는 영역은 눈에 보이는 원보다 넓게 (고령 사용자) */
+.input-clear::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+}
+
+body.dark-mode .input-clear {
+    background: #4b5563;
+    color: #e5e7eb;
+}
+body.dark-mode .input-clear:hover,
+body.dark-mode .input-clear:focus-visible {
+    background: #6b7280;
+    color: #fff;
+}
