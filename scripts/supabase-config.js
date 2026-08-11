@@ -1,8 +1,7 @@
 // Supabase 접속 설정.
 //
-// anon 키는 공개돼도 안전하다 — RLS 정책과 RPC 권한이 실제 접근을 제어한다.
-// 쓰기는 set_attendance / set_attendance_batch 함수로만 가능하고,
-// 테이블 직접 쓰기는 막혀 있다.
+// anon 키는 공개돼도 안전하다 — RLS 정책이 실제 접근을 제어한다.
+// 이 파일은 읽기 전용 창구다. 쓰기는 sbPostGas(GAS) 로만 나간다.
 
 export const SUPABASE_URL = 'https://wvpqdicsqjozhxtxsnin.supabase.co';
 export const SUPABASE_ANON_KEY =
@@ -81,23 +80,11 @@ export async function sbSelectAll(path, pageSize = 1000) {
   return out;
 }
 
-/**
- * RPC 호출 (쓰기는 전부 이 경로를 통한다).
- */
-export async function sbRpc(fn, args) {
-  const res = await fetch(`${REST}/rpc/${fn}`, {
-    method: 'POST',
-    headers: { ...baseHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify(args ?? {}),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    let msg = body;
-    try { msg = JSON.parse(body).message || body; } catch {}
-    throw new Error(`${fn} 실패 (${res.status}): ${String(msg).slice(0, 200)}`);
-  }
-  return res.json();
-}
+
+// 참고: DB 에 직접 쓰는 RPC 헬퍼(sbRpc)는 일부러 두지 않는다.
+// 출결의 원본은 시트이고, 앱의 쓰기는 sbPostGas 로만 나가야 한다.
+// 직접 쓰는 길을 열어 두면 언젠가 누군가 그 길로 가고,
+// 그 순간 시트와 DB 두 곳에서 쓰는 상태로 돌아간다.
 
 // ============================================================================
 // 활성 기수
