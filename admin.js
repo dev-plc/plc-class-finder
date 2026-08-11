@@ -10,8 +10,8 @@ import {
     updateAttendanceBatch,
     getCohortId,
     subscribe,
-} from './scripts/members-data.js?v=42';
-import { matches as hangulMatches } from './scripts/hangul.js?v=42';
+} from './scripts/members-data.js?v=43';
+import { matches as hangulMatches } from './scripts/hangul.js?v=43';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -80,14 +80,22 @@ subscribe((event) => {
     if (event.type !== 'refresh') return;
 
     // 배경 갱신이 끝났다. 화면은 캐시로 먼저 그려졌으니 여기서 새 값으로 바꾼다.
-    //
+
+    // 검색어를 넣어 둔 채로 갱신이 오면 필터를 그대로 유지한다.
+    // 인자 없이 부르면 목록이 전체로 돌아가 엉뚱한 화면으로 보인다.
+    renderTeamsView(teamFilter?.value.trim() || '');
+    renderMembersView(memberFilter?.value.trim() || '');
+
+    // 조 모달이 열려 있으면 그 안도 새 값으로 바꾼다 (열 때 뜬 스냅숏이라 안 따라온다)
+    if (teamModal?.classList.contains('active') && openTeamName) {
+        showTeamMembers({ name: openTeamName, members: getTeamMembers(openTeamName),
+                          location: getTeamMembers(openTeamName)[0]?.location || '' });
+    }
+
     // 출석 화면은 반드시 같이 갱신해야 한다. 이 화면만 값을 attBaseline/attDraft 에
     // 스냅숏으로 떠 놓기 때문에, 갱신하지 않으면 옛 값이 화면에 남는다.
     // 실제로 ◎ 인 사람이 빈칸으로 보였고, 그 상태에서 '빈칸 → 결석' 을 누르는 바람에
     // 지난 기수 이수자가 결석으로 저장된 일이 있었다.
-    renderTeamsView();
-    renderMembersView();
-
     if (attChanges().length === 0) {
         initAttendanceTab();
     } else {
@@ -282,7 +290,11 @@ teamFilter?.addEventListener('input', (e) => {
     renderTeamsView(e.target.value.trim());
 });
 
+// 지금 열려 있는 조. 배경 갱신이 오면 이 이름으로 다시 그린다.
+let openTeamName = null;
+
 function showTeamMembers(team) {
+    openTeamName = team.name;
     teamModalTitle.textContent = `${team.name} (${team.members.length}명) · ${team.location}`;
 
     teamMembersList.innerHTML = '';
@@ -301,6 +313,7 @@ function showTeamMembers(team) {
 }
 
 function closeTeamModal() {
+    openTeamName = null;
     teamModal.classList.remove('active');
     document.body.style.overflow = 'auto';
 }
