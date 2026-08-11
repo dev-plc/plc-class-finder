@@ -73,10 +73,5 @@ GAS 웹앱은 `application/json` 을 받으면 preflight 때문에 CORS 로 막�
 ## 저장소가 public 이다
 
 - 실명·전화번호가 든 파일(`data.live.json` 등)을 커밋하지 않는다 (`.gitignore` 등록됨)
-- **주민등록번호는 시트 밖으로 내보내지 않는다.** GAS 웹앱은 인증이 없고 URL 이
-  저장소에 적혀 있다. `doGet` 은 로스터의 모든 컬럼을 응답에 담으므로,
-  번호가 든 컬럼을 빼지 않으면 전원의 번호가 공개된다.
-  `plcFindRrnCols_` 로 찾아 빼고 성별(`gen`)만 넘긴다.
-  동기화 쪽에도 가드가 있다 — 응답에 번호가 섞여 오면 멈춘다 (재배포 누락 감지)
 - `service_role` 키는 GitHub Secrets 에만 둔다. 채팅·코드·로그 어디에도 남기지 않는다
 - `anon` 키는 공개돼도 안전하다 — RLS 가 막고, 쓰기는 `set_attendance_batch` RPC 로만 된다
