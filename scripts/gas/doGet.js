@@ -324,9 +324,36 @@ function doPost(e) {
   }
 }
 
+// 이 응답을 아무나 받으면 안 된다.
+//
+// doGet 은 명단 전체를 돌려준다 — 이름·연락처·나이·조·위치까지.
+// 웹앱 URL 은 인증이 없고, 그 URL 은 공개 저장소에 적혀 있다.
+// 토큰을 모르면 아무것도 주지 않는다.
+//
+// 토큰은 코드에 적지 않는다 (이 파일도 공개 저장소에 있다).
+// Apps Script 편집기 → 프로젝트 설정 → 스크립트 속성에
+//   API_TOKEN = <아무 긴 문자열>
+// 을 넣고, 같은 값을 GitHub Secrets 의 GAS_API_TOKEN 에 넣는다.
+//
+// 속성을 설정하지 않으면 검사를 건너뛴다 — 설정 전에 동기화가 죽지 않게.
+// 설정한 뒤에는 반드시 맞아야 한다.
+function plcCheckToken_(e) {
+  var want = PropertiesService.getScriptProperties().getProperty("API_TOKEN");
+  if (!want) return true;                       // 아직 설정 전
+  var got = (e && e.parameter && e.parameter.token) || "";
+  return got === want;
+}
+
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 26; // + 강의명 행 · 날짜 헤더 MM/DD · 기수 표식
+  var currentVersion = 27; // + doGet 토큰
+
+  if (!plcCheckToken_(e)) {
+    return output.setContent(JSON.stringify({
+      success: false, version: currentVersion,
+      message: "토큰이 필요합니다. GAS 스크립트 속성 API_TOKEN 과 GitHub Secrets GAS_API_TOKEN 을 맞추세요."
+    }));
+  }
 
   try {
     var ss = SpreadsheetApp.openById(SHEET_ID);
