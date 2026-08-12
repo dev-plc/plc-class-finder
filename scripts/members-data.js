@@ -11,10 +11,10 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=47';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=47';
+import { matches as hangulMatches } from './hangul.js?v=48';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=48';
 
-export const MODULE_VERSION = 'members-data v47';
+export const MODULE_VERSION = 'members-data v48';
 
 // 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
 export const MAKEUP_LIMIT = 3;

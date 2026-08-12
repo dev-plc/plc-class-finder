@@ -21,9 +21,9 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=47';
+} from './scripts/members-data.js?v=48';
 
-const SCRIPT_VERSION = 'script.js v47';
+const SCRIPT_VERSION = 'script.js v48';
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
             'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');
@@ -1205,7 +1205,16 @@ function initEventListeners() {
             if (id === 'plc' && pw === 'plc1234') {
                 alert("로그인 성공!");
                 sessionStorage.setItem('adminLoggedIn', 'true');
-                window.location.href = 'admin.html';
+                // 버전을 달고 넘어간다.
+                //
+                // 앞단 CDN 이 /admin.html 을 오래 붙들고 있어서, 배포는 됐는데
+                // 몇 주 전 화면이 나오는 일이 있었다. 쿼리가 붙으면 캐시가
+                // 본 적 없는 주소가 되어 원본까지 간다.
+                //
+                // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
+                // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
+                // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
+                window.location.href = 'admin.html?v=48';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {
