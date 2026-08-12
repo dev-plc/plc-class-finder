@@ -793,7 +793,12 @@ document.addEventListener('keydown', (e) => {
 // ============================================================================
 // 페이지 로드
 // ============================================================================
-window.addEventListener('load', () => {
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        loadData();
+        searchNameInput?.focus();
+    });
+} else {
     loadData();
     searchNameInput?.focus();
-});
+}
