@@ -312,6 +312,7 @@ function renderTeamsView(filterText = '') {
     }
 
     filteredTeams.forEach(team => {
+        const kimbapCount = team.members.filter(m => (m.lunch || '').toUpperCase() === 'O').length;
         const card = document.createElement('div');
         card.className = 'team-card';
         card.innerHTML = `
@@ -320,6 +321,7 @@ function renderTeamsView(filterText = '') {
                 <div class="team-card-count">${team.members.length}명</div>
             </div>
             <div class="team-card-location">${team.location}</div>
+            <div class="team-card-kimbap">🍱 김밥 ${kimbapCount}개 (${team.members.length}명 중)</div>
         `;
         card.addEventListener('click', () => showTeamMembers(team));
         teamsGrid.appendChild(card);
@@ -335,14 +337,21 @@ let openTeamName = null;
 
 function showTeamMembers(team) {
     openTeamName = team.name;
-    teamModalTitle.textContent = `${team.name} (${team.members.length}명) · ${team.location}`;
+    const kimbapCount = team.members.filter(m => (m.lunch || '').toUpperCase() === 'O').length;
+    teamModalTitle.textContent = `${team.name} (${team.members.length}명 / 🍱 김밥 ${kimbapCount}개) · ${team.location}`;
 
     teamMembersList.innerHTML = '';
     team.members.forEach(member => {
+        const isKimbap = (member.lunch || '').toUpperCase() === 'O';
+        const kimbapBadge = isKimbap
+            ? `<span class="kimbap-badge kimbap-yes">🍱 김밥 O</span>`
+            : `<span class="kimbap-badge kimbap-no">김밥 X</span>`;
+
         const card = document.createElement('div');
         card.className = 'team-member-card';
         card.innerHTML = `
-            <div class="team-member-id">${member.name}${member.phone}</div>
+            <div class="team-member-id">${member.name} (${member.phone})</div>
+            <div class="team-member-kimbap">${kimbapBadge}</div>
             <div class="team-member-age">${member.age}세</div>
         `;
         teamMembersList.appendChild(card);
@@ -475,9 +484,9 @@ function initAttendanceTab() {
     const sessions = getSessions();
     const prefs = loadAttPrefs();
 
-    // 주차 — 최근이 위로 (방금 끝난 수업을 바로 찾도록)
+    // 주차 — 오름차순 (1강부터 순서대로)
     attSessionSelect.innerHTML = '';
-    [...sessions].reverse().forEach(s => {
+    sessions.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.session_date;
         const name = s.label_norm || '';
@@ -559,12 +568,11 @@ function renderAttList() {
         ? `<b>${session.label}</b> ${session.label_norm || ''} · 수료 카운트에 포함`
         : `<b>${session.label}</b> ${session.label_norm || ''} · <span class="att-meta-off">수료 카운트 제외</span>`;
 
-    const groupByTeam = attTeamName === TEAM_ALL;
     let html = '';
     let lastTeam = null;
 
     for (const m of targets) {
-        if (groupByTeam && m.team !== lastTeam) {
+        if (m.team !== lastTeam) {
             lastTeam = m.team;
             html += `<div class="att-group">${escapeHtml(m.team || '미편성')}</div>`;
         }
