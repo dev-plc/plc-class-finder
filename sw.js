@@ -12,7 +12,7 @@
 //   한 겹만으로는 새지 않는다는 보장이 없어 둘 다 둔다.
 //   실제로 members-data 가 v33 에서 안 올라가는 일이 있었다.
 
-const CACHE_VERSION = 'plc-v31';
+const CACHE_VERSION = 'plc-v32';
 
 const PRECACHE_URLS = [
   './',
@@ -29,7 +29,7 @@ const PRECACHE_URLS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
-  './icons/icon.svg',
+  './icons/icon.svg'
 ];
 
 // 앱이 보낸 SKIP_WAITING 메시지를 받으면 즉시 활성화
@@ -39,7 +39,8 @@ self.addEventListener('message', (event) => {
   }
 });
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_VERSION)
       // cache: 'reload' 로 브라우저 HTTP 캐시를 건너뛴다.
@@ -49,7 +50,6 @@ self.addEventListener('install', (event) => {
       ).catch(err => {
         console.warn('[SW] 일부 precache 실패:', err);
       }))
-      .then(() => self.skipWaiting())
   );
 });
 
@@ -93,9 +93,15 @@ self.addEventListener('fetch', (event) => {
   };
 
   if (isAppCode(url)) {
+    // HTML 요청(페이지 네비게이션)인 경우 HTTP 캐시를 우회하여 강제로 원본 서버(CDN)에서 최신본을 확인
+    let fetchReq = req;
+    if (req.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+        fetchReq = new Request(req.url, { cache: 'no-cache' });
+    }
+
     // 네트워크 우선. 끊겼을 때만 캐시로 버틴다.
     event.respondWith(
-      fetch(req).then(save).catch(() =>
+      fetch(fetchReq).then(save).catch(() =>
         caches.match(req).then(cached => cached || Promise.reject(new Error('오프라인'))))
     );
   } else {
