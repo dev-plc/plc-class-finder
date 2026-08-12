@@ -12,19 +12,19 @@
 //   한 겹만으로는 새지 않는다는 보장이 없어 둘 다 둔다.
 //   실제로 members-data 가 v33 에서 안 올라가는 일이 있었다.
 
-const CACHE_VERSION = 'plc-v33';
+const CACHE_VERSION = 'plc-v34';
 
 const PRECACHE_URLS = [
   './',
   './index.html',
   './admin.html',
-  './style.css?v=46',
-  './admin.css?v=46',
-  './script.js?v=46',
-  './admin.js?v=46',
-  './scripts/members-data.js?v=46',
-  './scripts/supabase-config.js?v=46',
-  './scripts/hangul.js?v=46',
+  './style.css?v=47',
+  './admin.css?v=47',
+  './script.js?v=47',
+  './admin.js?v=47',
+  './scripts/members-data.js?v=47',
+  './scripts/supabase-config.js?v=47',
+  './scripts/hangul.js?v=47',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -45,8 +45,12 @@ self.addEventListener('install', event => {
     caches.open(CACHE_VERSION)
       // cache: 'reload' 로 브라우저 HTTP 캐시를 건너뛴다.
       // 이게 없으면 설치 시점에 옛 파일을 그대로 다시 저장할 수 있다.
-      .then(cache => cache.addAll(
-        PRECACHE_URLS.map(u => new Request(u, { cache: 'reload' }))
+      .then(cache => Promise.all(
+        PRECACHE_URLS.map(u =>
+          // 받아올 때만 쿼리를 붙이고, 저장은 원래 주소로 한다.
+          // 그래야 나중에 caches.match(요청) 이 그대로 찾는다.
+          fetch(new Request(bustEdge(u), { cache: 'reload' }))
+            .then(res => (res && res.ok) ? cache.put(u, res) : null))
       ).catch(err => {
         console.warn('[SW] 일부 precache 실패:', err);
       }))
@@ -60,6 +64,26 @@ self.addEventListener('activate', (event) => {
     ).then(() => self.clients.claim())
   );
 });
+
+// HTML 은 주소에 버전 쿼리를 붙여서 받아온다.
+//
+// 앞단 CDN 이 /admin.html 을 오래 붙들고 있어서, 배포는 됐는데 몇 주 전 화면이
+// 나오는 일이 있었다. 브라우저 캐시가 아니라 엣지 캐시라 강력 새로고침·시크릿·
+// 다른 브라우저 어느 것으로도 안 지워졌다. CDN 관리 권한이 없으면 손쓸 방법도 없다.
+//
+// 쿼리를 붙이면 그 캐시가 한 번도 본 적 없는 주소가 되어 원본까지 간다.
+// CACHE_VERSION 이 바뀔 때만 주소가 바뀌므로 평소에는 정상적으로 캐시된다.
+//
+// CSS·JS 는 이미 ?v=NN 이 붙어 있어 이 처리가 필요 없다.
+function isDocument(pathname) {
+  return pathname.endsWith('/') || pathname.endsWith('.html');
+}
+
+function bustEdge(u) {
+  const bare = u.split('?')[0];
+  if (!isDocument(bare)) return u;
+  return u + (u.includes('?') ? '&' : '?') + '_sw=' + CACHE_VERSION;
+}
 
 // 앱 코드인가 (바뀌면 즉시 반영돼야 하는 것)
 function isAppCode(url) {
@@ -100,7 +124,7 @@ self.addEventListener('fetch', (event) => {
     // 실제로 admin.css 가 v44 에 남아 있어서, 배포는 됐는데 웹에서만
     // 출석 관리 탭이 안 뜨는 일이 있었다 (로컬은 그 캐시가 없어 정상이었다).
     // 여기서 막으면 버전을 빠뜨려도 옛 파일이 나오지 않는다.
-    const fetchReq = new Request(req.url, { cache: 'no-cache' });
+    const fetchReq = new Request(bustEdge(req.url), { cache: 'no-cache' });
 
     // 네트워크 우선. 끊겼을 때만 캐시로 버틴다.
     event.respondWith(
