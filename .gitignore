@@ -34,3 +34,7 @@ venv/
 dist/
 build/
 *.log
+
+# 출석부 CSV — 실명·연락처가 들어간다 (public 저장소)
+*.csv
+!query-result.csv
