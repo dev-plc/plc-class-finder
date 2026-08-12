@@ -499,8 +499,8 @@ function initAttendanceTab() {
     const known = new Set(sessions.map(s => s.session_date));
     attSessionDate = (prefs.session && known.has(prefs.session))
         ? prefs.session
-        : getCurrentSessionDate();
-    if (attSessionDate) attSessionSelect.value = attSessionDate;
+        : (getCurrentSessionDate() || sessions[0]?.session_date || null);
+    if (attSessionDate && attSessionSelect) attSessionSelect.value = attSessionDate;
 
     // 조
     const teams = getTeams();
@@ -550,7 +550,14 @@ function renderAttList() {
     if (!attList) return;
 
     const targets = attTargets();
-    const session = getSessions().find(s => s.session_date === attSessionDate);
+    const sessions = getSessions();
+    let session = sessions.find(s => s.session_date === attSessionDate);
+    if (!session && sessions.length > 0) {
+        session = sessions[0];
+        attSessionDate = session.session_date;
+        if (attSessionSelect) attSessionSelect.value = attSessionDate;
+        resetAttDraft();
+    }
 
     if (!attSessionDate || !session) {
         attList.innerHTML = '<div class="att-empty">주차 정보를 불러오지 못했습니다.</div>';
