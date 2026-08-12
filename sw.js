@@ -12,19 +12,19 @@
 //   한 겹만으로는 새지 않는다는 보장이 없어 둘 다 둔다.
 //   실제로 members-data 가 v33 에서 안 올라가는 일이 있었다.
 
-const CACHE_VERSION = 'plc-v32';
+const CACHE_VERSION = 'plc-v33';
 
 const PRECACHE_URLS = [
   './',
   './index.html',
   './admin.html',
-  './style.css?v=45',
-  './admin.css?v=45',
-  './script.js?v=45',
-  './admin.js?v=45',
-  './scripts/members-data.js?v=45',
-  './scripts/supabase-config.js?v=45',
-  './scripts/hangul.js?v=45',
+  './style.css?v=46',
+  './admin.css?v=46',
+  './script.js?v=46',
+  './admin.js?v=46',
+  './scripts/members-data.js?v=46',
+  './scripts/supabase-config.js?v=46',
+  './scripts/hangul.js?v=46',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -93,11 +93,14 @@ self.addEventListener('fetch', (event) => {
   };
 
   if (isAppCode(url)) {
-    // HTML 요청(페이지 네비게이션)인 경우 HTTP 캐시를 우회하여 강제로 원본 서버(CDN)에서 최신본을 확인
-    let fetchReq = req;
-    if (req.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
-        fetchReq = new Request(req.url, { cache: 'no-cache' });
-    }
+    // 앱 코드는 전부 HTTP 캐시를 건너뛰고 원본에서 확인한다.
+    //
+    // HTML 만 우회하면 부족하다. ?v= 를 한 군데라도 빠뜨리면 URL 이 그대로라
+    // 브라우저 HTTP 캐시가 옛 파일을 그대로 내준다.
+    // 실제로 admin.css 가 v44 에 남아 있어서, 배포는 됐는데 웹에서만
+    // 출석 관리 탭이 안 뜨는 일이 있었다 (로컬은 그 캐시가 없어 정상이었다).
+    // 여기서 막으면 버전을 빠뜨려도 옛 파일이 나오지 않는다.
+    const fetchReq = new Request(req.url, { cache: 'no-cache' });
 
     // 네트워크 우선. 끊겼을 때만 캐시로 버틴다.
     event.respondWith(
