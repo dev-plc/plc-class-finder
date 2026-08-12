@@ -56,14 +56,14 @@ async function loadData() {
             onBackgroundRefreshError: (err) => console.warn('배경 갱신 실패:', err),
         });
         console.log('✅ 데이터 로드:', getCohortId(), getMembers().length, '명');
+    } catch (error) {
+        console.error('❌ 데이터 로드 예외 (네트워크/캐시):', error);
+    } finally {
         const badge = document.querySelector('.admin-badge');
         if (badge && getCohortId()) badge.textContent = `${getCohortId()} · 관리자`;
-        renderTeamsView();
-        renderMembersView();
-        initAttendanceTab();
-    } catch (error) {
-        console.error('❌ 데이터 로드 실패:', error);
-        alert('데이터를 불러오는데 실패했습니다.');
+        try { renderTeamsView(); } catch (e) { console.error(e); }
+        try { renderMembersView(); } catch (e) { console.error(e); }
+        try { initAttendanceTab(); } catch (e) { console.error(e); }
     }
 }
 
