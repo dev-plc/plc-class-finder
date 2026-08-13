@@ -948,25 +948,53 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 
 .pr-page {
     background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
-    padding: 18px; margin-bottom: 20px;
+    padding: 14px 16px; margin-bottom: 16px;
 }
 .pr-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.pr-head h2 { margin: 0; font-size: 20px; color: #111827; }
-.pr-session { font-size: 14px; font-weight: 700; color: #374151; }
-.pr-sub { margin: 4px 0 10px; font-size: 12px; color: #6b7280; }
+.pr-head h2 { margin: 0; font-size: 17px; color: #111827; }
+.pr-session { font-size: 13px; font-weight: 700; color: #374151; }
+.pr-sub { margin: 2px 0 8px; font-size: 11px; color: #6b7280; }
 
-.pr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+/* 폭을 칸 종류로 못 박는다.
+   table-layout 이 기본값이면 남는 폭이 아무 칸에나 붙어, 메모를 끄는 순간
+   체크 칸들이 쓸데없이 넓어진다. fixed 로 두고 이름 칸만 남는 폭을 먹게 한다. */
+.pr-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 12px;
+}
 .pr-table th, .pr-table td {
-    border: 1px solid #9ca3af; padding: 6px 4px; text-align: center; color: #111827;
+    border: 1px solid #9ca3af;
+    padding: 3px 4px;
+    text-align: center;
+    color: #111827;
+    overflow: hidden;
 }
 .pr-table th { background: #f3f4f6; font-weight: 700; white-space: nowrap; }
-.pr-table .pr-left { text-align: left; padding-left: 8px; white-space: nowrap; }
-.pr-phone { margin-left: 3px; font-size: 11px; color: #6b7280; }
-.pr-role  { margin-left: 6px; font-size: 10px; color: #2563eb; }
-/* 손으로 쓰는 칸은 넉넉해야 한다 */
-.pr-table .pr-blank { height: 26px; min-width: 48px; }
-.pr-table .pr-memo  { min-width: 130px; }
-.pr-summary { max-width: 380px; }
+
+/* 이름 — 이름 4자 + 전화 4자리가 들어갈 만큼만 */
+.pr-table .pr-left {
+    width: 130px;
+    text-align: left; padding-left: 8px; white-space: nowrap;
+}
+.pr-phone { margin-left: 3px; font-size: 10px; color: #6b7280; }
+.pr-role  { margin-left: 5px; font-size: 9px; color: #2563eb; }
+
+/* 체크 칸 — 손으로 O/X 하나 쓸 만큼만 */
+.pr-table .pr-c-mark { width: 34px; }
+.pr-table .pr-c-wide { width: 52px; }   /* '김밥신청' 은 글자가 길다 */
+
+/* 남는 폭은 메모가 먹는다. 메모를 끄면 아래 채움 칸이 대신 먹는다 —
+   그게 없으면 폭이 모자란 만큼 체크 칸들이 비례해서 늘어난다 (fixed 의 성질). */
+.pr-table .pr-c-memo { width: auto; }
+.pr-table .pr-c-fill { width: auto; border: none !important; background: none !important; }
+
+/* 손으로 쓰는 줄 높이 */
+.pr-table .pr-blank { height: 22px; }
+
+.pr-summary { width: auto; min-width: 260px; table-layout: auto; }
+.pr-summary th, .pr-summary td { padding: 4px 14px; }
 .pr-total td { font-weight: 700; background: #f9fafb; }
 
 /* 화면에서는 어두운 테마도 따라간다 (인쇄는 항상 흰 종이) */

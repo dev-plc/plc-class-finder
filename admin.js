@@ -12,8 +12,8 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=50';
-import { matches as hangulMatches } from './scripts/hangul.js?v=50';
+} from './scripts/members-data.js?v=51';
+import { matches as hangulMatches } from './scripts/hangul.js?v=51';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -982,13 +982,15 @@ function renderPrintPreview() {
             return pa !== pb ? pa - pb : a.name.localeCompare(b.name, 'ko');
         });
 
+        // 폭은 CSS 가 칸 종류로 정한다 (table-layout: fixed).
+        // 이름 칸만 남는 폭을 먹고, 체크 칸은 항상 좁게 유지된다.
         const head =
             '<th class="pr-left">이름</th>' +
-            (cols.kimbap ? '<th>김밥</th>' : '') +
-            '<th>출석</th>' +
-            (cols.kimbap ? '<th>김밥신청</th>' : '') +
-            (cols.homework ? '<th>과제</th>' : '') +
-            (cols.memo ? '<th class="pr-memo">메모</th>' : '');
+            (cols.kimbap ? '<th class="pr-c-mark">김밥</th>' : '') +
+            '<th class="pr-c-mark">출석</th>' +
+            (cols.kimbap ? '<th class="pr-c-mark pr-c-wide">김밥신청</th>' : '') +
+            (cols.homework ? '<th class="pr-c-mark">과제</th>' : '') +
+            (cols.memo ? '<th class="pr-c-memo">메모</th>' : '<th class="pr-c-fill"></th>');
 
         const rows = members.map(m => {
             const id = m.id || (String(m.name || '') + String(m.phone || ''));
@@ -998,11 +1000,11 @@ function renderPrintPreview() {
             return `
                 <tr>
                     <td class="pr-left">${escapeHtml(m.name)}<span class="pr-phone">${escapeHtml(m.phone)}</span>${role}</td>
-                    ${cols.kimbap ? `<td>${kb?.applied === 1 ? 'O' : ''}</td>` : ''}
-                    <td class="pr-blank"></td>
-                    ${cols.kimbap ? '<td class="pr-blank"></td>' : ''}
-                    ${cols.homework ? `<td>${hw ? '✓' : ''}</td>` : ''}
-                    ${cols.memo ? '<td class="pr-blank pr-memo"></td>' : ''}
+                    ${cols.kimbap ? `<td class="pr-c-mark">${kb?.applied === 1 ? 'O' : ''}</td>` : ''}
+                    <td class="pr-c-mark pr-blank"></td>
+                    ${cols.kimbap ? '<td class="pr-c-mark pr-c-wide pr-blank"></td>' : ''}
+                    ${cols.homework ? `<td class="pr-c-mark">${hw ? '✓' : ''}</td>` : ''}
+                    ${cols.memo ? '<td class="pr-c-memo pr-blank"></td>' : '<td class="pr-c-fill"></td>'}
                 </tr>`;
         }).join('');
 
