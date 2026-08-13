@@ -12,8 +12,8 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=53';
-import { matches as hangulMatches } from './scripts/hangul.js?v=53';
+} from './scripts/members-data.js?v=54';
+import { matches as hangulMatches } from './scripts/hangul.js?v=54';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -865,6 +865,29 @@ let prSessionDate = null;
 let prTeamName = TEAM_ALL;
 let prKimbapTouched = false;   // 사람이 김밥 칸을 직접 건드렸나
 
+// 출력에서 뺀 장(場). 조 이름 또는 '__summary__'.
+// 칸 토글로 다시 그릴 때는 유지하고, 주차·조를 바꾸면 비운다 —
+// 고른 범위가 달라지면 뺐던 것도 뜻을 잃는다.
+const prSkip = new Set();
+
+const PR_LOC_PREFIX = 'loc:';
+
+// 조가 어느 장소에 있나. 조원의 location 을 쓴다 (조원끼리는 같다).
+function prTeamLocation(team) {
+    return getTeamMembers(team)[0]?.location || '';
+}
+
+// 지금 고른 범위에 드는 조 목록
+function prSelectedTeams() {
+    const teams = getTeams();
+    if (prTeamName === TEAM_ALL) return teams;
+    if (prTeamName.startsWith(PR_LOC_PREFIX)) {
+        const loc = prTeamName.slice(PR_LOC_PREFIX.length);
+        return teams.filter(t => prTeamLocation(t) === loc);
+    }
+    return teams.includes(prTeamName) ? [prTeamName] : [];
+}
+
 // 그 주차가 해당 월의 마지막 수업인가.
 // 김밥은 다음 달 것을 이때 받으므로 이 주차에만 신청 칸이 필요하다.
 function isLastClassOfMonth(sessionDate) {
@@ -923,10 +946,28 @@ function initPrintTab() {
     if (prSessionDate) prSessionSelect.value = prSessionDate;
 
     const teams = getTeams();
+
+    // 장소별 묶음 — 웨슬리홀만, 칼빈채플만 뽑는 일이 잦다
+    const byLoc = new Map();
+    for (const t of teams) {
+        const loc = prTeamLocation(t) || '(장소 미정)';
+        if (!byLoc.has(loc)) byLoc.set(loc, []);
+        byLoc.get(loc).push(t);
+    }
+
     prTeamSelect.innerHTML =
         `<option value="${TEAM_ALL}">전체 (${teams.length}개 조)</option>` +
-        teams.map(t => `<option value="${t}">${t} (${getTeamMembers(t).length}명)</option>`).join('');
-    if (prTeamName !== TEAM_ALL && !teams.includes(prTeamName)) prTeamName = TEAM_ALL;
+        (byLoc.size > 1
+            ? '<optgroup label="장소별">' + [...byLoc].map(([loc, ts]) =>
+                `<option value="${PR_LOC_PREFIX}${escapeHtml(loc)}">${escapeHtml(loc)} (${ts.length}개 조)</option>`).join('') + '</optgroup>'
+            : '') +
+        '<optgroup label="조별">' + teams.map(t =>
+            `<option value="${escapeHtml(t)}">${escapeHtml(t)} (${getTeamMembers(t).length}명)</option>`).join('') + '</optgroup>';
+
+    const valid = prTeamName === TEAM_ALL
+        || teams.includes(prTeamName)
+        || (prTeamName.startsWith(PR_LOC_PREFIX) && byLoc.has(prTeamName.slice(PR_LOC_PREFIX.length)));
+    if (!valid) prTeamName = TEAM_ALL;
     prTeamSelect.value = prTeamName;
 
     syncKimbapDefault();
@@ -946,6 +987,15 @@ function syncKimbapDefault() {
     }
 }
 
+// 장마다 붙는 '출력' 체크. 기본은 켬 — 전체를 뽑되 몇 조만 빼는 쓰임이다.
+function prPickBox(key) {
+    const on = !prSkip.has(key);
+    return `<label class="pr-pick">
+        <input type="checkbox" class="pr-pick-input" data-page="${escapeHtml(key)}"${on ? ' checked' : ''}>
+        <span>출력</span>
+    </label>`;
+}
+
 function renderPrintPreview() {
     if (!prPreview) return;
 
@@ -956,7 +1006,7 @@ function renderPrintPreview() {
         return;
     }
 
-    const teams = prTeamName === TEAM_ALL ? getTeams() : [prTeamName];
+    const teams = prSelectedTeams();
     const cols = {
         status:   !!prOpt.status?.checked,     // 김밥 현황 (데이터)
         kimbap:   !!prOpt.kimbap?.checked,     // 김밥신청 (빈칸)
@@ -973,26 +1023,28 @@ function renderPrintPreview() {
             const d = getKimbapDetail(m.id || (m.name + m.phone));
             return session.label_norm && d[session.label_norm]?.applied === 1;
         }).length;
-        return { team: t, count: members.length, applied };
+        return { team: t, location: prTeamLocation(t), count: members.length, applied };
     });
 
     let html = '';
 
-    if (prTeamName === TEAM_ALL && prOpt.summary?.checked) {
+    if (teams.length > 1 && prOpt.summary?.checked) {
         const totalN = stats.reduce((n, x) => n + x.count, 0);
         const totalK = stats.reduce((n, x) => n + x.applied, 0);
         html += `
-            <section class="pr-page">
+            <section class="pr-page${prSkip.has('__summary__') ? ' pr-skip' : ''}" data-page="__summary__">
+                ${prPickBox('__summary__')}
                 <div class="pr-head">
                     <h2>${escapeHtml(getCohortId() || '')} 조별 집계</h2>
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
                 </div>
                 <table class="pr-table pr-summary">
-                    <thead><tr><th>조</th><th>인원</th><th>김밥</th></tr></thead>
+                    <thead><tr><th>조</th><th>장소</th><th>인원</th><th>김밥</th></tr></thead>
                     <tbody>
                         ${stats.map(x => `<tr><td class="pr-left">${escapeHtml(x.team)}</td>
+                            <td class="pr-left">${escapeHtml(x.location)}</td>
                             <td>${x.count}</td><td>${x.applied || ''}</td></tr>`).join('')}
-                        <tr class="pr-total"><td class="pr-left">합계</td><td>${totalN}</td><td>${totalK}</td></tr>
+                        <tr class="pr-total"><td class="pr-left">합계</td><td></td><td>${totalN}</td><td>${totalK}</td></tr>
                     </tbody>
                 </table>
             </section>`;
@@ -1032,12 +1084,14 @@ function renderPrintPreview() {
         }).join('');
 
         html += `
-            <section class="pr-page" style="--pr-row: ${prRowHeightMm(members.length)}mm">
+            <section class="pr-page${prSkip.has(st.team) ? ' pr-skip' : ''}" data-page="${escapeHtml(st.team)}"
+                     style="--pr-row: ${prRowHeightMm(members.length)}mm">
+                ${prPickBox(st.team)}
                 <div class="pr-head">
                     <h2>${escapeHtml(st.team)}</h2>
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
                 </div>
-                <div class="pr-sub">인원 ${st.count}명${cols.status ? ` · 김밥 ${st.applied}명` : ''}</div>
+                <div class="pr-sub">${st.location ? escapeHtml(st.location) + ' · ' : ''}인원 ${st.count}명${cols.status ? ` · 김밥 ${st.applied}명` : ''}</div>
                 <table class="pr-table">
                     <thead><tr>${head}</tr></thead>
                     <tbody>${rows}</tbody>
@@ -1046,18 +1100,47 @@ function renderPrintPreview() {
     }
 
     prPreview.innerHTML = html;
-    if (prInfo) {
-        prInfo.textContent = `${teams.length}개 조 · ${stats.reduce((n, x) => n + x.count, 0)}명`;
-    }
+    updatePrintInfo();
 }
 
+function updatePrintInfo() {
+    if (!prInfo || !prPreview) return;
+    const pages = prPreview.querySelectorAll('.pr-page');
+    const on = prPreview.querySelectorAll('.pr-page:not(.pr-skip)').length;
+    prInfo.textContent = pages.length === 0 ? ''
+        : (on === pages.length ? `${pages.length}장 출력`
+                               : `${pages.length}장 중 ${on}장 출력 (${pages.length - on}장 제외)`);
+}
+
+prPreview?.addEventListener('change', (e) => {
+    const box = e.target.closest('.pr-pick-input');
+    if (!box) return;
+    const key = box.dataset.page;
+    const page = box.closest('.pr-page');
+    if (box.checked) { prSkip.delete(key); page?.classList.remove('pr-skip'); }
+    else             { prSkip.add(key);    page?.classList.add('pr-skip'); }
+    updatePrintInfo();
+});
+
+document.getElementById('prPickAll')?.addEventListener('click', () => {
+    prSkip.clear();
+    renderPrintPreview();
+});
+document.getElementById('prPickNone')?.addEventListener('click', () => {
+    prPreview?.querySelectorAll('.pr-page').forEach(p => prSkip.add(p.dataset.page));
+    renderPrintPreview();
+});
+
+// 범위가 바뀌면 뺐던 것도 뜻을 잃는다
 prSessionSelect?.addEventListener('change', (e) => {
     prSessionDate = e.target.value;
+    prSkip.clear();
     syncKimbapDefault();
     renderPrintPreview();
 });
 prTeamSelect?.addEventListener('change', (e) => {
     prTeamName = e.target.value;
+    prSkip.clear();
     renderPrintPreview();
 });
 prOpt.kimbap?.addEventListener('change', () => { prKimbapTouched = true; renderPrintPreview(); });
@@ -1065,6 +1148,14 @@ prOpt.kimbap?.addEventListener('change', () => { prKimbapTouched = true; renderP
     el?.addEventListener('change', renderPrintPreview));
 
 document.getElementById('prPrintBtn')?.addEventListener('click', () => {
+    const live = [...(prPreview?.querySelectorAll('.pr-page:not(.pr-skip)') || [])];
+    if (live.length === 0) { alert('출력할 장이 없습니다. 체크를 하나 이상 켜세요.'); return; }
+
+    // 마지막 장 뒤에는 빈 장이 붙지 않게 표시해 둔다.
+    // :last-child 로는 안 된다 — 뺀 장은 숨겨질 뿐 여전히 마지막일 수 있다.
+    prPreview?.querySelectorAll('.pr-last').forEach(el => el.classList.remove('pr-last'));
+    live[live.length - 1].classList.add('pr-last');
+
     // 인쇄 대상은 미리보기다. 나머지 화면은 인쇄 CSS 가 숨긴다.
     document.body.classList.add('printing');
     window.print();

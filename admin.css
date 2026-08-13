@@ -944,6 +944,26 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 }
 .pr-print-btn:hover { background: #1d4ed8; }
 .pr-info { font-size: 13px; color: #6b7280; }
+.pr-sub-btn {
+    padding: 8px 12px; font-size: 13px; font-family: inherit;
+    border: 1px solid #d5d9e0; border-radius: 8px;
+    background: #fff; color: #374151; cursor: pointer;
+}
+.pr-sub-btn:hover { background: #f3f4f6; }
+
+/* 장마다 붙는 '출력' 체크 — 화면에만 보이고 인쇄물에는 안 나온다 */
+.pr-page { position: relative; }
+.pr-pick {
+    position: absolute; top: 10px; right: 12px;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; color: #6b7280; cursor: pointer;
+    background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 999px;
+    padding: 3px 10px;
+}
+.pr-pick input { cursor: pointer; }
+/* 뺀 장은 흐리게 — 목록에서 한눈에 구분된다 */
+.pr-page.pr-skip { opacity: 0.4; }
+.pr-page.pr-skip .pr-pick { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
 .pr-empty { padding: 40px; text-align: center; color: #9ca3af; }
 
 /* 미리보기를 A4 한 장과 같은 비율로 둔다.
@@ -1019,6 +1039,8 @@ body.dark-mode .pr-options { background: #232833; }
     body.printing .pr-picker,
     body.printing .pr-options,
     body.printing .pr-toolbar,
+    body.printing .pr-pick,
+    body.printing .pr-page.pr-skip,
     body.printing .tab-content:not(#printTab) { display: none !important; }
 
     body.printing { background: #fff; }
@@ -1028,7 +1050,9 @@ body.dark-mode .pr-options { background: #232833; }
         page-break-after: always;          /* 조마다 새 장 */
         break-after: page;
     }
-    body.printing .pr-page:last-child { page-break-after: auto; break-after: auto; }
+    /* 뺀 장을 숨기면 :last-child 가 어긋난다. 실제 마지막 장을 따로 잡는다. */
+    body.printing .pr-page.pr-last { page-break-after: auto; break-after: auto; }
+    body.printing .pr-page.pr-skip + .pr-page { page-break-before: auto; }
     /* 한 사람이 두 장에 걸치지 않게 */
     body.printing .pr-table tr { page-break-inside: avoid; break-inside: avoid; }
     body.printing .pr-table thead { display: table-header-group; }
