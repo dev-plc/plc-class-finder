@@ -12,8 +12,8 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=51';
-import { matches as hangulMatches } from './scripts/hangul.js?v=51';
+} from './scripts/members-data.js?v=52';
+import { matches as hangulMatches } from './scripts/hangul.js?v=52';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -885,6 +885,23 @@ function prNormalizeSession(v) {
     return raw;
 }
 
+// A4 한 장을 채우도록 줄 높이를 정한다.
+//
+// 조마다 인원이 달라서(12명 ~ 1명) 고정 높이로는 아래가 휑하거나 넘친다.
+// 남는 높이를 인원수로 나누되, 위아래로 묶어 둔다 —
+// 최소 9mm(손글씨가 들어갈 만큼), 최대 22mm(적은 조에서 우스꽝스러워지지 않게).
+//
+//   A4 세로 297mm - 위아래 여백 24mm        = 273mm
+//   제목·주차·인원 줄 18mm + 표 머리글 8mm  =  26mm
+//   여유 4mm
+const PR_PAGE_AVAIL_MM = 273 - 26 - 4;
+
+function prRowHeightMm(count) {
+    if (!count) return 9;
+    const fit = PR_PAGE_AVAIL_MM / count;
+    return Math.round(Math.min(22, Math.max(9, fit)) * 10) / 10;
+}
+
 function initPrintTab() {
     if (!prSessionSelect || !prTeamSelect) return;
 
@@ -1009,7 +1026,7 @@ function renderPrintPreview() {
         }).join('');
 
         html += `
-            <section class="pr-page">
+            <section class="pr-page" style="--pr-row: ${prRowHeightMm(members.length)}mm">
                 <div class="pr-head">
                     <h2>${escapeHtml(st.team)}</h2>
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
