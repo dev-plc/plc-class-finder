@@ -5,6 +5,15 @@
 //    배포 → 배포 관리 → 연필 → 버전: 새 버전.
 //    "새 배포" 는 URL 이 바뀌어 앱과 동기화가 한꺼번에 끊긴다.
 //
+// ⚠️ 처음 설치하거나 외부 요청 기능을 더한 뒤에는 편집기에서 plcAuthorize 를
+//    한 번 ▶ 실행해 권한을 승인해야 한다. doGet/doPost 는 URL 로 불려서
+//    승인 창을 띄울 자리가 없고, 권한이 없으면 조용히 실패한다.
+//    승인 → 재배포 순서를 지킬 것.
+//
+// 핵심 변경 (v28):
+//   - plcAuthorize 추가. 시트 접근·외부 요청·스크립트 속성을 한 번에 점검하고,
+//     실행하는 김에 권한 승인 창을 띄운다.
+//
 // 핵심 변경 (v27):
 //   - doPost 가 { action: "sync" } 를 받으면 GitHub Actions 의 동기화
 //     워크플로를 대신 실행한다. 관리자 페이지의 '시트에서 지금 가져오기' 버튼.
@@ -273,9 +282,51 @@ function plcRequestSync_() {
   return { success: false, message: "GitHub " + code + ": " + res.getContentText().slice(0, 200) };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 권한 승인용 — 편집기에서 한 번 실행하세요
+//
+// GAS 는 코드가 쓰는 기능에 맞춰 권한을 요구하는데, 그 승인은 사람이
+// 편집기에서 함수를 실행할 때만 받을 수 있다. doGet/doPost 는 URL 로 불리므로
+// 승인 창을 띄울 자리가 없다 — 그래서 권한 없이 배포되면 조용히 실패한다.
+//
+// 증상: "UrlFetchApp.fetch 을 호출할 수 있는 권한이 없습니다"
+//       또는 앱에서 출석은 저장되는데 DB 반영만 계속 늦는다
+//       (doPost 는 DB 실패를 삼키므로 눈에 안 띈다)
+//
+// 이 함수를 편집기에서 ▶ 실행 → 승인 창에서 허용 → 그다음 웹 앱을 재배포.
+// 순서가 중요하다. 승인 없이 재배포하면 그대로다.
+function plcAuthorize() {
+  var lines = [];
+
+  try {
+    SpreadsheetApp.openById(SHEET_ID).getName();
+    lines.push("시트 접근      : ✅");
+  } catch (e) {
+    lines.push("시트 접근      : ❌ " + e.message);
+  }
+
+  try {
+    var res = UrlFetchApp.fetch("https://api.github.com/zen", { muteHttpExceptions: true });
+    lines.push("외부 요청      : " + (res.getResponseCode() === 200 ? "✅" : "⚠️ " + res.getResponseCode()));
+  } catch (e) {
+    lines.push("외부 요청      : ❌ " + e.message);
+  }
+
+  var props = PropertiesService.getScriptProperties();
+  lines.push("GH_TOKEN       : " + (props.getProperty("GH_TOKEN") ? "있음" : "❌ 없음"));
+  lines.push("GH_REPO        : " + (props.getProperty("GH_REPO") || "(기본값 " + PLC_GH_REPO_DEFAULT + ")"));
+  lines.push("GH_WORKFLOW    : " + (props.getProperty("GH_WORKFLOW") || "(기본값 " + PLC_GH_WORKFLOW_DEFAULT + ")"));
+  lines.push("");
+  lines.push("전부 ✅ 면 웹 앱을 재배포하세요 (배포 관리 → 연필 → 버전: 새 버전).");
+
+  var msg = lines.join("\n");
+  Logger.log(msg);
+  return msg;
+}
+
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 27;
+  var currentVersion = 28;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -453,7 +504,7 @@ function plcCheckToken_(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 27; // + doGet 토큰
+  var currentVersion = 28; // + doGet 토큰 · 권한 점검
 
   if (!plcCheckToken_(e)) {
     return output.setContent(JSON.stringify({
