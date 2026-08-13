@@ -9,12 +9,14 @@ import {
     getTeamMembers,
     updateAttendanceBatch,
     getCohortId,
+    refresh,
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=58';
-import { matches as hangulMatches } from './scripts/hangul.js?v=58';
-import { registerServiceWorker } from './scripts/sw-update.js?v=58';
+} from './scripts/members-data.js?v=59';
+import { matches as hangulMatches } from './scripts/hangul.js?v=59';
+import { registerServiceWorker } from './scripts/sw-update.js?v=59';
+import { sbPostGas } from './scripts/supabase-config.js?v=59';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1171,6 +1173,63 @@ document.getElementById('prPrintBtn')?.addEventListener('click', () => {
     document.body.classList.add('printing');
     window.print();
     setTimeout(() => document.body.classList.remove('printing'), 0);
+});
+
+
+// ============================================================================
+// 시트에서 지금 가져오기
+//
+// 명단·편성·위치·과제·김밥은 하루 한 번(정오)만 들어온다.
+// 수업 직전에 장소를 옮기거나 인원을 넣으면 그때까지 앱에 안 나온다.
+//
+// 동기화는 GitHub Actions 워크플로라 실행하려면 토큰이 필요한데,
+// 그 토큰을 여기 둘 수는 없다 — 이 파일은 공개 저장소에 있다.
+// 그래서 GAS 에 부탁한다. 토큰은 GAS 스크립트 속성에 있다.
+// ============================================================================
+const syncBtn = document.getElementById('syncBtn');
+const reloadBtn = document.getElementById('reloadBtn');
+const syncInfo = document.getElementById('syncInfo');
+
+function setSyncInfo(text, kind) {
+    if (!syncInfo) return;
+    syncInfo.textContent = text;
+    syncInfo.className = 'sync-info' + (kind ? ' ' + kind : '');
+}
+
+syncBtn?.addEventListener('click', async () => {
+    if (syncBtn.disabled) return;
+    const prev = syncBtn.textContent;
+    syncBtn.disabled = true;
+    syncBtn.textContent = '요청 중…';
+    setSyncInfo('요청하는 중입니다…');
+
+    try {
+        const res = await sbPostGas({ action: 'sync' });
+        setSyncInfo((res.message || '요청했습니다.') +
+            ' 끝나면 아래 [화면 새로 고침] 을 눌러 주세요.', 'ok');
+    } catch (err) {
+        setSyncInfo('요청 실패: ' + (err?.message || '알 수 없는 오류'), 'fail');
+    } finally {
+        syncBtn.textContent = prev;
+        // 연타 방지 — GAS 쪽에서도 1분에 한 번으로 묶여 있다
+        setTimeout(() => { syncBtn.disabled = false; }, 60000);
+    }
+});
+
+reloadBtn?.addEventListener('click', async () => {
+    if (reloadBtn.disabled) return;
+    reloadBtn.disabled = true;
+    const prev = reloadBtn.textContent;
+    reloadBtn.textContent = '불러오는 중…';
+    try {
+        await refresh();                       // 화면 갱신은 refresh 이벤트가 알아서 한다
+        setSyncInfo('최신 데이터로 새로 그렸습니다.', 'ok');
+    } catch (err) {
+        setSyncInfo('불러오기 실패: ' + (err?.message || '알 수 없는 오류'), 'fail');
+    } finally {
+        reloadBtn.textContent = prev;
+        reloadBtn.disabled = false;
+    }
 });
 
 // 관리자 페이지도 새 버전을 스스로 받는다.

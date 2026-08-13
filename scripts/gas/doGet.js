@@ -180,12 +180,91 @@ function plcHeaderKey_(raw, tz) {
   return null;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 시트 → DB 동기화를 앱에서 요청받는다
+//
+// 명단·편성·위치·과제·김밥은 하루 한 번(정오)만 들어온다. 시트에서 고친 것을
+// 바로 보려면 GitHub Actions 의 워크플로를 돌려야 하는데, 그러려면 토큰이 있어야 한다.
+// 그 토큰을 앱에 넣을 수는 없다 — 공개 저장소의 JS 는 누구나 읽는다.
+//
+// 그래서 GAS 가 대신 부른다. 토큰은 코드가 아니라 스크립트 속성에 둔다.
+//   Apps Script 편집기 → 프로젝트 설정 → 스크립트 속성
+//     GH_TOKEN  = GitHub 파인그레인드 토큰 (이 저장소의 Actions: read and write)
+//     GH_REPO   = dev-plc/plc-class-finder      (없으면 아래 기본값)
+//     GH_WORKFLOW = sync-db.yml                 (없으면 아래 기본값)
+//
+// 이 URL 은 인증이 없으므로 누구나 부를 수 있다. 다만 이 동작이 하는 일은
+// 시트를 DB 로 옮기는 것뿐이고 워크플로에 동시성 제한이 걸려 있어 겹치지 않는다.
+// 그래도 실수로 연타하는 것은 막는다 — 1분에 한 번으로 묶는다.
+// ═══════════════════════════════════════════════════════════════════════════
+var PLC_GH_REPO_DEFAULT = "dev-plc/plc-class-finder";
+var PLC_GH_WORKFLOW_DEFAULT = "sync-db.yml";
+var PLC_SYNC_MIN_INTERVAL_MS = 60 * 1000;
+
+function plcRequestSync_() {
+  var props = PropertiesService.getScriptProperties();
+  var token = props.getProperty("GH_TOKEN");
+  if (!token) {
+    return { success: false, message: "GH_TOKEN 이 없습니다. Apps Script → 프로젝트 설정 → 스크립트 속성에 넣어 주세요." };
+  }
+
+  // 연타 방지. 마지막 요청 시각을 캐시에 둔다 (스크립트 속성은 쓰기가 느리다).
+  var cache = CacheService.getScriptCache();
+  if (cache.get("plc_sync_recent")) {
+    return { success: false, message: "방금 요청했습니다. 1분 뒤에 다시 눌러 주세요." };
+  }
+
+  var repo = props.getProperty("GH_REPO") || PLC_GH_REPO_DEFAULT;
+  var wf = props.getProperty("GH_WORKFLOW") || PLC_GH_WORKFLOW_DEFAULT;
+
+  var res = UrlFetchApp.fetch(
+    "https://api.github.com/repos/" + repo + "/actions/workflows/" + wf + "/dispatches", {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        Authorization: "Bearer " + token,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      },
+      // 입력은 비운다 — 기본값(기수 자동, 출석 가져오기 꺼짐)이 평소 설정이다
+      payload: JSON.stringify({ ref: "main", inputs: {} }),
+      muteHttpExceptions: true
+    });
+
+  var code = res.getResponseCode();
+  if (code === 204) {
+    cache.put("plc_sync_recent", "1", Math.ceil(PLC_SYNC_MIN_INTERVAL_MS / 1000));
+    return { success: true, message: "동기화를 요청했습니다. 보통 1~2분 걸립니다." };
+  }
+  if (code === 401 || code === 403) {
+    return { success: false, message: "GitHub 토큰이 거부됐습니다 (" + code + "). 권한(Actions: read and write)과 만료일을 확인하세요." };
+  }
+  if (code === 404) {
+    return { success: false, message: "워크플로를 찾지 못했습니다. GH_REPO / GH_WORKFLOW 를 확인하세요 (" + repo + " · " + wf + ")." };
+  }
+  return { success: false, message: "GitHub " + code + ": " + res.getContentText().slice(0, 200) };
+}
+
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 26;
+  var currentVersion = 27;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
+
+  // 동기화 요청은 시트를 건드리지 않는다. 잠금을 잡기 전에 처리한다 —
+  // 출석 저장이 진행 중이어도 막힐 이유가 없다.
+  try {
+    var probe = JSON.parse(e.postData.contents);
+    if (probe && probe.action === "sync") {
+      var r = plcRequestSync_();
+      return output.setContent(JSON.stringify({
+        success: r.success, version: currentVersion, message: r.message
+      }));
+    }
+  } catch (probeErr) {
+    return fail("요청을 읽지 못했습니다: " + probeErr.message);
+  }
 
   // 컬럼을 통째로 읽어 메모리에서 고치고 다시 쓴다.
   // 두 튜터가 같은 시각에 저장하면 나중 사람이 먼저 사람의 변경을 덮어쓰고,
