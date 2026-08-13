@@ -12,9 +12,9 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=57';
-import { matches as hangulMatches } from './scripts/hangul.js?v=57';
-import { registerServiceWorker } from './scripts/sw-update.js?v=57';
+} from './scripts/members-data.js?v=58';
+import { matches as hangulMatches } from './scripts/hangul.js?v=58';
+import { registerServiceWorker } from './scripts/sw-update.js?v=58';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1062,21 +1062,28 @@ function renderPrintPreview() {
 
         // 폭은 CSS 가 칸 종류로 정한다 (table-layout: fixed).
         // 이름 칸만 남는 폭을 먹고, 체크 칸은 항상 좁게 유지된다.
+        // 메모 머리글에는 쓰던 시트의 표기를 그대로 옅게 남긴다.
+        // 적는 사람이 무슨 기호를 쓰는지 기억하지 않아도 되게.
+        const memoHead =
+            '<span class="pr-memo-mark">1 □ ◎</span> 메모 <span class="pr-memo-mark">▷ ♡ 5</span>';
+
         const head =
+            '<th class="pr-c-no">No.</th>' +
             '<th class="pr-left">이름</th>' +
             (cols.status ? '<th class="pr-c-mark">김밥</th>' : '') +
             (cols.kimbap ? '<th class="pr-c-mark pr-c-wide">김밥신청</th>' : '') +
             '<th class="pr-c-mark">출석</th>' +
             (cols.homework ? '<th class="pr-c-mark">과제</th>' : '') +
-            (cols.memo ? '<th class="pr-c-memo">메모</th>' : '<th class="pr-c-fill"></th>');
+            (cols.memo ? `<th class="pr-c-memo">${memoHead}</th>` : '<th class="pr-c-fill"></th>');
 
-        const rows = members.map(m => {
+        const rows = members.map((m, i) => {
             const id = m.id || (String(m.name || '') + String(m.phone || ''));
             const kb = session.label_norm ? getKimbapDetail(id)[session.label_norm] : null;
             const hw = getHomeworkList(id).some(h => prNormalizeSession(h.session) === sessionKey);
             const role = m.role && m.role !== '조원' ? `<span class="pr-role">${escapeHtml(m.role)}</span>` : '';
             return `
                 <tr>
+                    <td class="pr-c-no">${i + 1}</td>
                     <td class="pr-left">${escapeHtml(m.name)}<span class="pr-phone">${escapeHtml(m.phone)}</span>${role}</td>
                     ${cols.status ? `<td class="pr-c-mark">${kb?.applied === 1 ? 'O' : ''}</td>` : ''}
                     ${cols.kimbap ? '<td class="pr-c-mark pr-c-wide pr-blank"></td>' : ''}

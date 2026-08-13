@@ -1048,9 +1048,12 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 /* 한 줄 걸러 아주 옅게 — 긴 표에서 줄을 놓치지 않는다 */
 .pr-table tbody tr:nth-child(even) td { background: #fafbfc; }
 
+/* 번호 — 두 자리까지 */
+.pr-table .pr-c-no { width: 26px; color: #667085; font-size: 11px; }
+
 /* 이름 — 이름 4자 + 전화 4자리가 들어갈 만큼만 */
 .pr-table .pr-left {
-    width: 130px;
+    width: 122px;
     text-align: left; padding-left: 9px; white-space: nowrap;
     font-weight: 600;
 }
@@ -1059,8 +1062,10 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 
 /* 체크 칸 — 손으로 O/X 하나 쓸 만큼만 */
 .pr-table .pr-c-mark { width: 34px; }
-.pr-table .pr-c-wide { width: 52px; }   /* '김밥신청' 은 글자가 길다 */
+.pr-table .pr-c-wide { width: 64px; }   /* '김밥신청' — 글자도 길고 손으로 쓸 자리도 필요하다 */
 .pr-table .pr-c-memo { width: auto; }
+/* 쓰던 시트의 기호 표기 — 안내일 뿐이라 옅게 둔다 */
+.pr-memo-mark { color: #98a2b3; font-weight: 400; letter-spacing: 0.12em; }
 .pr-table .pr-c-fill { width: auto; border: none !important; background: none !important; }
 
 /* 손으로 쓰는 줄 높이 — A4 한 장을 채우도록 JS 가 인원수에 맞춰 정한다 */
