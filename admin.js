@@ -12,8 +12,8 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=52';
-import { matches as hangulMatches } from './scripts/hangul.js?v=52';
+} from './scripts/members-data.js?v=53';
+import { matches as hangulMatches } from './scripts/hangul.js?v=53';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -850,6 +850,11 @@ const prPreview       = document.getElementById('prPreview');
 const prInfo          = document.getElementById('prInfo');
 const prHint          = document.getElementById('prHint');
 const prOpt = {
+    // 두 칸은 따로 켜고 끈다.
+    //   status — 이번 주차에 신청한 사람 (데이터). 평소에도 보고 싶은 값이다.
+    //   kimbap — 다음 달 신청을 받는 빈 칸. 월 마지막 수업에만 필요하다.
+    // 하나로 묶었더니 신청 칸을 끄면 현황까지 사라졌다.
+    status:   document.getElementById('prKimbapStatus'),
     kimbap:   document.getElementById('prKimbap'),
     homework: document.getElementById('prHomework'),
     memo:     document.getElementById('prMemo'),
@@ -953,7 +958,8 @@ function renderPrintPreview() {
 
     const teams = prTeamName === TEAM_ALL ? getTeams() : [prTeamName];
     const cols = {
-        kimbap:   !!prOpt.kimbap?.checked,
+        status:   !!prOpt.status?.checked,     // 김밥 현황 (데이터)
+        kimbap:   !!prOpt.kimbap?.checked,     // 김밥신청 (빈칸)
         homework: !!prOpt.homework?.checked,
         memo:     !!prOpt.memo?.checked,
     };
@@ -1003,9 +1009,9 @@ function renderPrintPreview() {
         // 이름 칸만 남는 폭을 먹고, 체크 칸은 항상 좁게 유지된다.
         const head =
             '<th class="pr-left">이름</th>' +
-            (cols.kimbap ? '<th class="pr-c-mark">김밥</th>' : '') +
-            '<th class="pr-c-mark">출석</th>' +
+            (cols.status ? '<th class="pr-c-mark">김밥</th>' : '') +
             (cols.kimbap ? '<th class="pr-c-mark pr-c-wide">김밥신청</th>' : '') +
+            '<th class="pr-c-mark">출석</th>' +
             (cols.homework ? '<th class="pr-c-mark">과제</th>' : '') +
             (cols.memo ? '<th class="pr-c-memo">메모</th>' : '<th class="pr-c-fill"></th>');
 
@@ -1017,9 +1023,9 @@ function renderPrintPreview() {
             return `
                 <tr>
                     <td class="pr-left">${escapeHtml(m.name)}<span class="pr-phone">${escapeHtml(m.phone)}</span>${role}</td>
-                    ${cols.kimbap ? `<td class="pr-c-mark">${kb?.applied === 1 ? 'O' : ''}</td>` : ''}
-                    <td class="pr-c-mark pr-blank"></td>
+                    ${cols.status ? `<td class="pr-c-mark">${kb?.applied === 1 ? 'O' : ''}</td>` : ''}
                     ${cols.kimbap ? '<td class="pr-c-mark pr-c-wide pr-blank"></td>' : ''}
+                    <td class="pr-c-mark pr-blank"></td>
                     ${cols.homework ? `<td class="pr-c-mark">${hw ? '✓' : ''}</td>` : ''}
                     ${cols.memo ? '<td class="pr-c-memo pr-blank"></td>' : '<td class="pr-c-fill"></td>'}
                 </tr>`;
@@ -1031,7 +1037,7 @@ function renderPrintPreview() {
                     <h2>${escapeHtml(st.team)}</h2>
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
                 </div>
-                <div class="pr-sub">인원 ${st.count}명${cols.kimbap ? ` · 김밥 ${st.applied}명` : ''}</div>
+                <div class="pr-sub">인원 ${st.count}명${cols.status ? ` · 김밥 ${st.applied}명` : ''}</div>
                 <table class="pr-table">
                     <thead><tr>${head}</tr></thead>
                     <tbody>${rows}</tbody>
@@ -1055,7 +1061,7 @@ prTeamSelect?.addEventListener('change', (e) => {
     renderPrintPreview();
 });
 prOpt.kimbap?.addEventListener('change', () => { prKimbapTouched = true; renderPrintPreview(); });
-[prOpt.homework, prOpt.memo, prOpt.summary].forEach(el =>
+[prOpt.status, prOpt.homework, prOpt.memo, prOpt.summary].forEach(el =>
     el?.addEventListener('change', renderPrintPreview));
 
 document.getElementById('prPrintBtn')?.addEventListener('click', () => {
