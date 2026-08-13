@@ -12,8 +12,9 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=56';
-import { matches as hangulMatches } from './scripts/hangul.js?v=56';
+} from './scripts/members-data.js?v=57';
+import { matches as hangulMatches } from './scripts/hangul.js?v=57';
+import { registerServiceWorker } from './scripts/sw-update.js?v=57';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1164,3 +1165,7 @@ document.getElementById('prPrintBtn')?.addEventListener('click', () => {
     window.print();
     setTimeout(() => document.body.classList.remove('printing'), 0);
 });
+
+// 관리자 페이지도 새 버전을 스스로 받는다.
+// 이게 없어서 들어갈 때마다 옛 화면이 떴다 (강력 새로고침만 통했다).
+registerServiceWorker();

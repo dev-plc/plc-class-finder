@@ -21,9 +21,10 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=56';
+} from './scripts/members-data.js?v=57';
+import { registerServiceWorker } from './scripts/sw-update.js?v=57';
 
-const SCRIPT_VERSION = 'script.js v56';
+const SCRIPT_VERSION = 'script.js v57';
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
             'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');
@@ -1221,7 +1222,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=56';
+                window.location.href = 'admin.html?v=57';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {
@@ -1274,71 +1275,9 @@ function applyLastSearch() {
 }
 
 // ============================================================================
-// Service Worker — 새 버전 자동 적용 (안내 토스트 후 리로드)
-// ============================================================================
-function showUpdateToast(message) {
-    let toast = document.getElementById('swUpdateToast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'swUpdateToast';
-        toast.className = 'sw-update-toast';
-        document.body.appendChild(toast);
-    }
-    toast.textContent = message;
-    toast.classList.add('visible');
-}
-
-function applyUpdate(worker) {
-    showUpdateToast('🎉 새 버전을 적용하는 중이에요…');
-    // 잠깐 보여준 뒤 적용 (controllerchange → 자동 리로드)
-    setTimeout(() => worker.postMessage({ type: 'SKIP_WAITING' }), 600);
-}
-
-function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) return;
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        return;
-    }
-
-    window.addEventListener('load', async () => {
-        try {
-            const registration = await navigator.serviceWorker.register('sw.js');
-
-            // 이미 대기 중인 새 버전이 있으면 바로 적용
-            if (registration.waiting && navigator.serviceWorker.controller) {
-                applyUpdate(registration.waiting);
-            }
-
-            // 새 버전이 설치되는 즉시 적용
-            registration.addEventListener('updatefound', () => {
-                const newSW = registration.installing;
-                if (!newSW) return;
-                newSW.addEventListener('statechange', () => {
-                    // controller가 있어야 '업데이트'(첫 설치가 아님)
-                    if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                        applyUpdate(newSW);
-                    }
-                });
-            });
-
-            // 주기적·포커스 시 업데이트 확인 (브라우저 HTTP 캐시 우회)
-            setInterval(() => registration.update(), 30 * 60 * 1000);
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') registration.update();
-            });
-
-            // 새 SW가 페이지를 넘겨받으면 리로드
-            let reloading = false;
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                if (reloading) return;
-                reloading = true;
-                window.location.reload();
-            });
-        } catch (err) {
-            console.warn('SW 등록 실패:', err);
-        }
-    });
-}
+// Service Worker — 새 버전 자동 적용
+// 실제 구현은 scripts/sw-update.js 에 있다. admin.js 도 같은 것을 쓴다 —
+// 여기에만 두었더니 관리자 페이지가 갱신되지 않았다.
 registerServiceWorker();
 
 function initModal() {
