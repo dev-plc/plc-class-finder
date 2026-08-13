@@ -7,6 +7,7 @@
 
 대상 파일: `index.html` · `admin.html` · `script.js` · `admin.js` ·
 `style.css` · `admin.css` · `scripts/*.js` · `sw.js`
+(`scripts/*.js` 가 늘면 `sw.js` 의 `PRECACHE_URLS` 에도 넣는다)
 
 이 중 **하나라도** 내용이 바뀌면, 커밋 전에 네 자리를 전부 손본다.
 
@@ -38,8 +39,11 @@ git grep -n "from '\./[^']*\.js'" -- '*.js'             # 아무것도 안 나�
 1. `sw.js` — 앱 코드는 **네트워크 우선**, 아이콘·이미지만 캐시 우선,
    외부 API(`supabase.co` 등)는 아예 통과
 2. 모든 자원 URL 에 `?v=NN` (위 규칙)
-3. `script.js` 의 `registerServiceWorker()` — 새 버전 감지 →
-   `SKIP_WAITING` → `controllerchange` → 리로드
+3. `scripts/sw-update.js` 의 `registerServiceWorker()` — 새 버전 감지 →
+   `SKIP_WAITING` → `controllerchange` → 리로드.
+   **`script.js` 와 `admin.js` 양쪽에서 다 불러야 한다.**
+   한때 `script.js` 에만 있어서, 관리자 페이지는 들어갈 때마다 옛 화면이 뜨고
+   강력 새로고침(서비스 워커를 건너뛴다)을 해야만 최신이 나왔다.
 
 3번에는 건드리면 안 되는 가드가 둘 있다.
 `reloading` 플래그(없으면 무한 리로드)와 `navigator.serviceWorker.controller`
