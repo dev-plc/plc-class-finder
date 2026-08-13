@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=61';
-import { matches as hangulMatches } from './scripts/hangul.js?v=61';
-import { registerServiceWorker } from './scripts/sw-update.js?v=61';
-import { sbPostGas } from './scripts/supabase-config.js?v=61';
+} from './scripts/members-data.js?v=62';
+import { matches as hangulMatches } from './scripts/hangul.js?v=62';
+import { registerServiceWorker } from './scripts/sw-update.js?v=62';
+import { sbPostGas } from './scripts/supabase-config.js?v=62';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -931,6 +931,14 @@ function prNormalizeSession(v) {
 const PR_NOTE_BOX_MM = 30;
 const PR_PAGE_AVAIL_MM = 273 - 26 - PR_NOTE_BOX_MM - 4;
 
+// 집계표는 특이사항 칸이 없으니 그만큼 더 쓴다.
+// 줄이 열댓 개뿐이라 상한을 좀 더 열어 둔다 — 안 그러면 한 장이 휑하다.
+function prSummaryRowMm(count) {
+    if (!count) return 10;
+    const fit = (273 - 26 - 4) / count;
+    return Math.round(Math.min(24, Math.max(10, fit)) * 10) / 10;
+}
+
 function prRowHeightMm(count) {
     if (!count) return 9;
     const fit = PR_PAGE_AVAIL_MM / count;
@@ -1041,13 +1049,14 @@ function renderPrintPreview() {
         html += `
             <div class="pr-sheet${prSkip.has('__summary__') ? ' pr-skip' : ''}" data-page="__summary__">
                 ${prPickBox('__summary__')}
-                <section class="pr-page">
+                <section class="pr-page" style="--pr-row: ${prSummaryRowMm(stats.length + 1)}mm">
                 <div class="pr-head">
                     <h2>${escapeHtml(getCohortId() || '')} 조별 집계</h2>
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
                 </div>
                 <table class="pr-table pr-summary">
-                    <thead><tr><th>조</th><th>장소</th><th>인원</th><th>김밥</th></tr></thead>
+                    <thead><tr><th class="pr-c-team">조</th><th class="pr-c-loc">장소</th>
+                               <th class="pr-c-num">인원</th><th class="pr-c-num">김밥</th></tr></thead>
                     <tbody>
                         ${stats.map(x => `<tr><td class="pr-left">${escapeHtml(x.team)}</td>
                             <td class="pr-left">${escapeHtml(x.location)}</td>
