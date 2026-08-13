@@ -21,9 +21,9 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=48';
+} from './scripts/members-data.js?v=49';
 
-const SCRIPT_VERSION = 'script.js v48';
+const SCRIPT_VERSION = 'script.js v49';
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
             'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');
@@ -911,18 +911,22 @@ function renderTeamMembers(members, teamName, role) {
         const lunchIcon = (m.lunch && m.lunch.toUpperCase() === 'O') ? '<span style="margin-left:4px;" title="김밥 대상자">🍙</span>' : '';
         const attendanceRaw = attendanceOf(m, sessionKey);
         const isChecked = (attendanceRaw === 'O' || attendanceRaw === '◎') ? 'checked' : '';
-        // ◎(지난 기수 이수)·−(집계 제외)는 체크만으로 표현이 안 된다.
-        // 원래 값을 실어 두고, 튜터가 손대지 않으면 저장에서 제외한다.
-        const mark = attendanceRaw === '◎' ? ' <span title="지난 기수 이수" style="color:#7c3aed;">◎</span>'
-                   : attendanceRaw === '-' ? ' <span title="집계 제외" style="color:#888;">−</span>' : '';
+
+        // ◎(지난 기수 이수)·−(집계 제외)는 튜터가 정하는 값이 아니다.
+        // ◎ 는 이월 스크립트가 지난 기수 기록에서 뽑고, − 는 수업이 없는 주차다.
+        // 체크를 풀 수 있게 두면 이수자가 결석으로 저장된다 — 실제로 그렇게 사고가 났다.
+        // 보여만 주고 잠근다. 고쳐야 하면 시트에서 고친다.
+        const locked = (attendanceRaw === '◎' || attendanceRaw === '-');
+        const mark = attendanceRaw === '◎' ? ' <span title="지난 기수 이수 — 시트에서만 고칩니다" style="color:#7c3aed;">◎</span>'
+                   : attendanceRaw === '-' ? ' <span title="집계 제외 — 시트에서만 고칩니다" style="color:#888;">−</span>' : '';
 
         return `
             <label class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle} cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" ${isChecked} class="attendance-check"
+                    <input type="checkbox" ${isChecked} class="attendance-check"${locked ? ' disabled' : ''}
                         data-name="${m.name}" data-phone="${m.phone}" data-initial="${isChecked ? '1' : '0'}"
-                        data-initial-status="${attendanceRaw}"
-                        style="width: 18px; height: 18px; cursor: pointer;">
+                        data-initial-status="${attendanceRaw}"${locked ? ' data-locked="1"' : ''}
+                        style="width: 18px; height: 18px; cursor: ${locked ? 'not-allowed' : 'pointer'};">
                     <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
                         ${m.name}(${m.phone}) ${lunchIcon}${mark}
                     </span>
@@ -945,7 +949,9 @@ function getAttendanceChecks() {
 }
 
 function countAttendanceChanges() {
-    return getAttendanceChecks().filter(cb => (cb.checked ? '1' : '0') !== cb.dataset.initial).length;
+    return getAttendanceChecks()
+        .filter(cb => !cb.dataset.locked)
+        .filter(cb => (cb.checked ? '1' : '0') !== cb.dataset.initial).length;
 }
 
 function refreshSaveBar() {
@@ -986,6 +992,7 @@ async function saveAttendanceBatch() {
     // 전원을 보내면 present ? 'O' : 'X' 로 바뀌면서 ◎(지난 기수 이수)와
     // −(집계 제외)가 통째로 사라진다. 손대지 않은 사람은 건드리지 않는다.
     const changed = getAttendanceChecks()
+        .filter(cb => !cb.dataset.locked)
         .filter(cb => (cb.checked ? '1' : '0') !== cb.dataset.initial);
     if (changed.length === 0) return;
 
@@ -1214,7 +1221,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=48';
+                window.location.href = 'admin.html?v=49';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {
