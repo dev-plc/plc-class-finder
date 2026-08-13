@@ -924,13 +924,18 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
    ============================================================================ */
 
 /* ── 조작부 ─────────────────────────────────────────────────────────── */
+/* 미리보기가 길어서(조 13개면 13장) 스크롤을 내리면 조작부가 사라진다.
+   조를 빼거나 칸을 바꾸려면 다시 맨 위로 올라가야 했다. 붙여 둔다. */
 .pr-panel {
+    position: sticky;
+    top: 0;
+    z-index: 20;
     background: #fff;
     border: 1px solid #e6e8ec;
     border-radius: 12px;
     padding: 16px 18px;
     margin-bottom: 22px;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 16px rgba(16, 24, 40, 0.06);
 }
 .pr-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .pr-row + .pr-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f2f4; }
@@ -1000,11 +1005,10 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
     border-radius: 2px;
     box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12), 0 8px 24px rgba(16, 24, 40, 0.06);
     padding: 16px 18px;
-    margin: 0 auto 26px;
-    width: 186mm;
+    margin: 0;
+    width: 100%;
     min-height: 273mm;
-    max-width: 100%;
-    box-sizing: content-box;
+    box-sizing: border-box;
     transition: opacity 0.15s ease;
 }
 
@@ -1067,19 +1071,27 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 .pr-total td { font-weight: 800; background: #f2f4f7 !important; border-top: 1.5px solid #344054; }
 
 /* ── 장마다 붙는 '출력' 체크 (화면 전용) ───────────────────────────── */
+/* 종이 위에 얹지 않고 종이 밖 상자에 올린다.
+   미리보기 컨테이너가 가로 스크롤을 쓰느라 밖으로 삐져나온 것을 잘라내서,
+   종이 모서리에 걸쳐 두면 체크가 잘려 보였다. */
+.pr-sheet {
+    width: 186mm;
+    max-width: 100%;
+    margin: 0 auto 26px;
+}
 .pr-pick {
-    position: absolute; top: -11px; right: 14px;
-    display: inline-flex; align-items: center; gap: 6px;
+    display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+    width: fit-content; margin: 0 0 6px auto;
     font-size: 12px; font-weight: 600; color: #475467; cursor: pointer;
     background: #fff; border: 1px solid #d0d5dd; border-radius: 999px;
-    padding: 4px 12px;
+    padding: 5px 13px;
     box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
 }
 .pr-pick input { margin: 0; cursor: pointer; accent-color: #2563eb; }
 .pr-pick:has(input:checked) { border-color: #84adff; color: #1849a9; background: #eff4ff; }
-/* 뺀 장은 흐리게 — 목록에서 한눈에 구분된다 */
-.pr-page.pr-skip { opacity: 0.35; }
-.pr-page.pr-skip .pr-pick { opacity: 1; background: #fef3f2; border-color: #fda29b; color: #b42318; }
+/* 뺀 장은 흐리게 — 목록에서 한눈에 구분된다 (체크 자체는 또렷하게 둔다) */
+.pr-sheet.pr-skip .pr-page { opacity: 0.35; }
+.pr-sheet.pr-skip .pr-pick { background: #fef3f2; border-color: #fda29b; color: #b42318; }
 
 /* ── 어두운 테마 (화면만. 인쇄는 늘 흰 종이) ───────────────────────── */
 body.dark-mode .pr-panel { background: #1f2937; border-color: #374151; }
@@ -1099,11 +1111,12 @@ body.dark-mode .pr-hint { background: #3a2f1a; border-color: #78350f; color: #fb
     body.printing .tab-nav,
     body.printing .pr-panel,
     body.printing .pr-pick,
-    body.printing .pr-page.pr-skip,
+    body.printing .pr-sheet.pr-skip,
     body.printing .tab-content:not(#printTab) { display: none !important; }
 
     body.printing { background: #fff; }
     body.printing .pr-preview { overflow: visible; padding: 0; }
+    body.printing .pr-sheet { width: auto; max-width: none; margin: 0; }
     body.printing .pr-page {
         border: none; border-radius: 0; box-shadow: none;
         padding: 0; margin: 0;
@@ -1115,7 +1128,7 @@ body.dark-mode .pr-hint { background: #3a2f1a; border-color: #78350f; color: #fb
         print-color-adjust: exact;
     }
     /* 뺀 장을 숨기면 :last-child 가 어긋난다. 실제 마지막 장을 따로 잡는다. */
-    body.printing .pr-page.pr-last { page-break-after: auto; break-after: auto; }
+    body.printing .pr-sheet.pr-last .pr-page { page-break-after: auto; break-after: auto; }
     /* 한 사람이 두 장에 걸치지 않게 */
     body.printing .pr-table tr { page-break-inside: avoid; break-inside: avoid; }
     body.printing .pr-table thead { display: table-header-group; }

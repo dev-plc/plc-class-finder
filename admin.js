@@ -12,8 +12,8 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=55';
-import { matches as hangulMatches } from './scripts/hangul.js?v=55';
+} from './scripts/members-data.js?v=56';
+import { matches as hangulMatches } from './scripts/hangul.js?v=56';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1032,8 +1032,9 @@ function renderPrintPreview() {
         const totalN = stats.reduce((n, x) => n + x.count, 0);
         const totalK = stats.reduce((n, x) => n + x.applied, 0);
         html += `
-            <section class="pr-page${prSkip.has('__summary__') ? ' pr-skip' : ''}" data-page="__summary__">
+            <div class="pr-sheet${prSkip.has('__summary__') ? ' pr-skip' : ''}" data-page="__summary__">
                 ${prPickBox('__summary__')}
+                <section class="pr-page">
                 <div class="pr-head">
                     <h2>${escapeHtml(getCohortId() || '')} 조별 집계</h2>
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
@@ -1047,7 +1048,8 @@ function renderPrintPreview() {
                         <tr class="pr-total"><td class="pr-left">합계</td><td></td><td>${totalN}</td><td>${totalK}</td></tr>
                     </tbody>
                 </table>
-            </section>`;
+                </section>
+            </div>`;
     }
 
     for (const st of stats) {
@@ -1084,9 +1086,9 @@ function renderPrintPreview() {
         }).join('');
 
         html += `
-            <section class="pr-page${prSkip.has(st.team) ? ' pr-skip' : ''}" data-page="${escapeHtml(st.team)}"
-                     style="--pr-row: ${prRowHeightMm(members.length)}mm">
+            <div class="pr-sheet${prSkip.has(st.team) ? ' pr-skip' : ''}" data-page="${escapeHtml(st.team)}">
                 ${prPickBox(st.team)}
+                <section class="pr-page" style="--pr-row: ${prRowHeightMm(members.length)}mm">
                 <div class="pr-head">
                     <h2>${escapeHtml(st.team)}</h2>
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
@@ -1096,7 +1098,8 @@ function renderPrintPreview() {
                     <thead><tr>${head}</tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
-            </section>`;
+                </section>
+            </div>`;
     }
 
     prPreview.innerHTML = html;
@@ -1105,8 +1108,8 @@ function renderPrintPreview() {
 
 function updatePrintInfo() {
     if (!prInfo || !prPreview) return;
-    const pages = prPreview.querySelectorAll('.pr-page');
-    const on = prPreview.querySelectorAll('.pr-page:not(.pr-skip)').length;
+    const pages = prPreview.querySelectorAll('.pr-sheet');
+    const on = prPreview.querySelectorAll('.pr-sheet:not(.pr-skip)').length;
     prInfo.textContent = pages.length === 0 ? ''
         : (on === pages.length ? `${pages.length}장 출력`
                                : `${pages.length}장 중 ${on}장 출력 (${pages.length - on}장 제외)`);
@@ -1116,7 +1119,7 @@ prPreview?.addEventListener('change', (e) => {
     const box = e.target.closest('.pr-pick-input');
     if (!box) return;
     const key = box.dataset.page;
-    const page = box.closest('.pr-page');
+    const page = box.closest('.pr-sheet');
     if (box.checked) { prSkip.delete(key); page?.classList.remove('pr-skip'); }
     else             { prSkip.add(key);    page?.classList.add('pr-skip'); }
     updatePrintInfo();
@@ -1127,7 +1130,7 @@ document.getElementById('prPickAll')?.addEventListener('click', () => {
     renderPrintPreview();
 });
 document.getElementById('prPickNone')?.addEventListener('click', () => {
-    prPreview?.querySelectorAll('.pr-page').forEach(p => prSkip.add(p.dataset.page));
+    prPreview?.querySelectorAll('.pr-sheet').forEach(p => prSkip.add(p.dataset.page));
     renderPrintPreview();
 });
 
@@ -1148,7 +1151,7 @@ prOpt.kimbap?.addEventListener('change', () => { prKimbapTouched = true; renderP
     el?.addEventListener('change', renderPrintPreview));
 
 document.getElementById('prPrintBtn')?.addEventListener('click', () => {
-    const live = [...(prPreview?.querySelectorAll('.pr-page:not(.pr-skip)') || [])];
+    const live = [...(prPreview?.querySelectorAll('.pr-sheet:not(.pr-skip)') || [])];
     if (live.length === 0) { alert('출력할 장이 없습니다. 체크를 하나 이상 켜세요.'); return; }
 
     // 마지막 장 뒤에는 빈 장이 붙지 않게 표시해 둔다.
