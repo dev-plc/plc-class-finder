@@ -10,9 +10,13 @@
 //    승인 창을 띄울 자리가 없고, 권한이 없으면 조용히 실패한다.
 //    승인 → 재배포 순서를 지킬 것.
 //
+// 핵심 변경 (v29): plcAuthorize 가 GitHub 토큰·저장소·워크플로까지 실제로 확인한다
+//
 // 핵심 변경 (v28):
-//   - plcAuthorize 추가. 시트 접근·외부 요청·스크립트 속성을 한 번에 점검하고,
-//     실행하는 김에 권한 승인 창을 띄운다.
+//   - plcAuthorize 추가. 실행하는 김에 권한 승인 창을 띄우고,
+//     시트·Supabase·GitHub 토큰·저장소·워크플로를 한 번에 점검한다.
+//     외부 요청 확인을 GitHub 미인증 주소로 하면 안 된다 — Google 서버 IP 는
+//     공용이라 미인증 한도에 걸려 403 이 나고, 권한 문제로 오해하게 된다.
 //
 // 핵심 변경 (v27):
 //   - doPost 가 { action: "sync" } 를 받으면 GitHub Actions 의 동기화
@@ -296,27 +300,64 @@ function plcRequestSync_() {
 // 이 함수를 편집기에서 ▶ 실행 → 승인 창에서 허용 → 그다음 웹 앱을 재배포.
 // 순서가 중요하다. 승인 없이 재배포하면 그대로다.
 function plcAuthorize() {
+  var props = PropertiesService.getScriptProperties();
+  var repo = props.getProperty("GH_REPO") || PLC_GH_REPO_DEFAULT;
+  var wf = props.getProperty("GH_WORKFLOW") || PLC_GH_WORKFLOW_DEFAULT;
+  var token = props.getProperty("GH_TOKEN");
   var lines = [];
 
+  // ── 시트
   try {
-    SpreadsheetApp.openById(SHEET_ID).getName();
-    lines.push("시트 접근      : ✅");
+    lines.push("시트 접근    : ✅ " + SpreadsheetApp.openById(SHEET_ID).getName());
   } catch (e) {
-    lines.push("시트 접근      : ❌ " + e.message);
+    lines.push("시트 접근    : ❌ " + e.message);
   }
 
+  // ── 외부 요청 (Supabase 로 확인한다)
+  //    GitHub 의 미인증 주소로 확인하면 안 된다 — Google 서버 IP 는 공용이라
+  //    미인증 한도에 걸려 403 이 나고, 권한 문제로 오해하게 된다.
   try {
-    var res = UrlFetchApp.fetch("https://api.github.com/zen", { muteHttpExceptions: true });
-    lines.push("외부 요청      : " + (res.getResponseCode() === 200 ? "✅" : "⚠️ " + res.getResponseCode()));
+    var sb = UrlFetchApp.fetch(PLC_SUPABASE_URL + "/rest/v1/cohorts?select=id&limit=1", {
+      headers: plcSbHeaders_(), muteHttpExceptions: true
+    });
+    lines.push("외부 요청    : " + (sb.getResponseCode() === 200
+      ? "✅ Supabase 응답 정상"
+      : "❌ Supabase " + sb.getResponseCode() + " — " + sb.getContentText().slice(0, 120)));
   } catch (e) {
-    lines.push("외부 요청      : ❌ " + e.message);
+    lines.push("외부 요청    : ❌ " + e.message);
   }
 
-  var props = PropertiesService.getScriptProperties();
-  lines.push("GH_TOKEN       : " + (props.getProperty("GH_TOKEN") ? "있음" : "❌ 없음"));
-  lines.push("GH_REPO        : " + (props.getProperty("GH_REPO") || "(기본값 " + PLC_GH_REPO_DEFAULT + ")"));
-  lines.push("GH_WORKFLOW    : " + (props.getProperty("GH_WORKFLOW") || "(기본값 " + PLC_GH_WORKFLOW_DEFAULT + ")"));
+  // ── GitHub 토큰·저장소·워크플로 (동기화 버튼이 실제로 쓰는 길)
+  if (!token) {
+    lines.push("GitHub       : ❌ GH_TOKEN 이 없습니다 (스크립트 속성에 넣으세요)");
+  } else {
+    var gh = { Authorization: "Bearer " + token, Accept: "application/vnd.github+json",
+               "X-GitHub-Api-Version": "2022-11-28" };
+    try {
+      var r1 = UrlFetchApp.fetch("https://api.github.com/repos/" + repo,
+                                 { headers: gh, muteHttpExceptions: true });
+      if (r1.getResponseCode() === 200) {
+        lines.push("GitHub 저장소: ✅ " + repo);
+        var r2 = UrlFetchApp.fetch(
+          "https://api.github.com/repos/" + repo + "/actions/workflows/" + wf,
+          { headers: gh, muteHttpExceptions: true });
+        lines.push("GitHub 워크플로: " + (r2.getResponseCode() === 200
+          ? "✅ " + wf
+          : "❌ " + r2.getResponseCode() + " — " + wf + " 를 찾지 못했습니다"));
+      } else if (r1.getResponseCode() === 401) {
+        lines.push("GitHub 저장소: ❌ 401 — 토큰이 잘못됐거나 만료됐습니다");
+      } else if (r1.getResponseCode() === 404) {
+        lines.push("GitHub 저장소: ❌ 404 — " + repo + " 가 없거나 토큰에 포함되지 않았습니다");
+      } else {
+        lines.push("GitHub 저장소: ❌ " + r1.getResponseCode() + " — " + r1.getContentText().slice(0, 120));
+      }
+    } catch (e) {
+      lines.push("GitHub       : ❌ " + e.message);
+    }
+  }
+
   lines.push("");
+  lines.push("설정값  GH_REPO=" + repo + "  GH_WORKFLOW=" + wf);
   lines.push("전부 ✅ 면 웹 앱을 재배포하세요 (배포 관리 → 연필 → 버전: 새 버전).");
 
   var msg = lines.join("\n");
@@ -326,7 +367,7 @@ function plcAuthorize() {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 28;
+  var currentVersion = 29;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -504,7 +545,7 @@ function plcCheckToken_(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 28; // + doGet 토큰 · 권한 점검
+  var currentVersion = 29; // + doGet 토큰 · 권한 점검
 
   if (!plcCheckToken_(e)) {
     return output.setContent(JSON.stringify({
