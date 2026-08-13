@@ -12,8 +12,8 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=54';
-import { matches as hangulMatches } from './scripts/hangul.js?v=54';
+} from './scripts/members-data.js?v=55';
+import { matches as hangulMatches } from './scripts/hangul.js?v=55';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {

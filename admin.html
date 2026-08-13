@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=54">
-    <link rel="stylesheet" href="admin.css?v=54">
+    <link rel="stylesheet" href="style.css?v=55">
+    <link rel="stylesheet" href="admin.css?v=55">
 </head>
 <body>
     <div class="admin-container">
@@ -98,31 +98,35 @@
 
         <!-- 출석부 출력 (인쇄용) -->
         <div class="tab-content" id="printTab">
-            <div class="pr-picker">
-                <div class="pr-field">
-                    <label for="prSession">주차</label>
-                    <select id="prSession"></select>
+            <div class="pr-panel">
+                <div class="pr-row">
+                    <div class="pr-field">
+                        <label for="prSession">주차</label>
+                        <select id="prSession"></select>
+                    </div>
+                    <div class="pr-field">
+                        <label for="prTeam">조 · 장소</label>
+                        <select id="prTeam"></select>
+                    </div>
                 </div>
-                <div class="pr-field">
-                    <label for="prTeam">조</label>
-                    <select id="prTeam"></select>
+
+                <div class="pr-row pr-row-opts">
+                    <span class="pr-row-label">표시할 칸</span>
+                    <label class="pr-chip"><input type="checkbox" id="prKimbapStatus" checked><span>김밥 현황</span></label>
+                    <label class="pr-chip"><input type="checkbox" id="prKimbap"><span>김밥신청</span></label>
+                    <label class="pr-chip"><input type="checkbox" id="prHomework"><span>과제</span></label>
+                    <label class="pr-chip"><input type="checkbox" id="prMemo" checked><span>메모</span></label>
+                    <label class="pr-chip"><input type="checkbox" id="prSummary" checked><span>조별 집계표</span></label>
                 </div>
-            </div>
+                <div class="pr-hint" id="prHint"></div>
 
-            <div class="pr-options">
-                <label><input type="checkbox" id="prKimbapStatus" checked> 김밥 현황</label>
-                <label><input type="checkbox" id="prKimbap"> 김밥신청 칸</label>
-                <label><input type="checkbox" id="prHomework"> 과제 칸</label>
-                <label><input type="checkbox" id="prMemo" checked> 메모 칸</label>
-                <label><input type="checkbox" id="prSummary" checked> 조별 집계표 (전체일 때)</label>
-                <span class="pr-hint" id="prHint"></span>
-            </div>
-
-            <div class="pr-toolbar">
-                <button type="button" id="prPrintBtn" class="pr-print-btn">🖨️ 인쇄</button>
-                <button type="button" id="prPickAll" class="pr-sub-btn">전체 선택</button>
-                <button type="button" id="prPickNone" class="pr-sub-btn">전체 해제</button>
-                <span class="pr-info" id="prInfo"></span>
+                <div class="pr-row pr-row-actions">
+                    <button type="button" id="prPrintBtn" class="pr-print-btn">🖨️ 인쇄</button>
+                    <span class="pr-divider"></span>
+                    <button type="button" id="prPickAll" class="pr-sub-btn">전체 선택</button>
+                    <button type="button" id="prPickNone" class="pr-sub-btn">전체 해제</button>
+                    <span class="pr-info" id="prInfo"></span>
+                </div>
             </div>
 
             <div class="pr-preview" id="prPreview"></div>
@@ -230,7 +234,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=54"></script>
+    <script type="module" src="admin.js?v=55"></script>
 </body>
 </html>
 
