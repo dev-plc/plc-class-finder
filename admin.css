@@ -1084,6 +1084,24 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 /* 손으로 쓰는 줄 높이 — A4 한 장을 채우도록 JS 가 인원수에 맞춰 정한다 */
 .pr-table tbody td { height: var(--pr-row, 22px); }
 
+/* 맨 아래 특이사항 — 사람별이 아니라 조 전체에 대한 메모.
+   높이를 30mm 로 못 박고 줄 높이 계산에서 미리 빼 둔다.
+   늘어나게 두면 인원 많은 조에서 표를 밀어내 두 장이 된다. */
+.pr-note {
+    position: relative;
+    height: 30mm;
+    margin-top: 6px;
+    border: 1px solid #9ca3af;
+    /* 손글씨 줄. 8mm 간격으로 옅게 */
+    background-image: repeating-linear-gradient(
+        to bottom, transparent 0, transparent 7.9mm, #eceef1 7.9mm, #eceef1 8mm);
+}
+.pr-note-label {
+    position: absolute; top: 3px; left: 7px;
+    font-size: 10px; font-weight: 700; color: #667085;
+    background: #fff; padding: 0 4px;
+}
+
 .pr-summary { width: auto; min-width: 300px; table-layout: auto; }
 .pr-summary th, .pr-summary td { padding: 5px 16px; }
 .pr-total td { font-weight: 800; background: #f2f4f7 !important; border-top: 1.5px solid #344054; }

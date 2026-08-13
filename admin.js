@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=60';
-import { matches as hangulMatches } from './scripts/hangul.js?v=60';
-import { registerServiceWorker } from './scripts/sw-update.js?v=60';
-import { sbPostGas } from './scripts/supabase-config.js?v=60';
+} from './scripts/members-data.js?v=61';
+import { matches as hangulMatches } from './scripts/hangul.js?v=61';
+import { registerServiceWorker } from './scripts/sw-update.js?v=61';
+import { sbPostGas } from './scripts/supabase-config.js?v=61';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -924,8 +924,12 @@ function prNormalizeSession(v) {
 //
 //   A4 세로 297mm - 위아래 여백 24mm        = 273mm
 //   제목·주차·인원 줄 18mm + 표 머리글 8mm  =  26mm
+//   맨 아래 특이사항 칸                      =  30mm
 //   여유 4mm
-const PR_PAGE_AVAIL_MM = 273 - 26 - 4;
+//
+// 특이사항 칸을 여기서 미리 빼 두지 않으면 표가 밀려 두 장이 된다.
+const PR_NOTE_BOX_MM = 30;
+const PR_PAGE_AVAIL_MM = 273 - 26 - PR_NOTE_BOX_MM - 4;
 
 function prRowHeightMm(count) {
     if (!count) return 9;
@@ -1113,6 +1117,9 @@ function renderPrintPreview() {
                     <thead><tr>${head}</tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
+                <div class="pr-note">
+                    <span class="pr-note-label">특이사항</span>
+                </div>
                 </section>
             </div>`;
     }
