@@ -1102,8 +1102,14 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
     background: #fff; padding: 0 4px;
 }
 
-.pr-summary { width: auto; min-width: 300px; table-layout: auto; }
-.pr-summary th, .pr-summary td { padding: 5px 16px; }
+/* 집계표는 한 장을 통째로 쓴다. 구석에 작게 박히면 읽히지 않는다. */
+.pr-summary { width: 100%; table-layout: fixed; font-size: 15px; }
+.pr-summary th, .pr-summary td { padding: 4px 12px; }
+.pr-summary tbody td { height: var(--pr-row, 18mm); }
+.pr-summary thead th { font-size: 14px; padding: 8px 12px; }
+.pr-summary .pr-c-team { width: 22%; }
+.pr-summary .pr-c-loc  { width: 40%; }
+.pr-summary .pr-c-num  { width: 19%; }
 .pr-total td { font-weight: 800; background: #f2f4f7 !important; border-top: 1.5px solid #344054; }
 
 /* ── 장마다 붙는 '출력' 체크 (화면 전용) ───────────────────────────── */
