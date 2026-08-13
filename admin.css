@@ -1051,14 +1051,27 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 /* 번호 — 두 자리까지 */
 .pr-table .pr-c-no { width: 26px; color: #667085; font-size: 11px; }
 
-/* 이름 — 이름 4자 + 전화 4자리가 들어갈 만큼만 */
-.pr-table .pr-left {
+/* 이름 — 이름 4자 + 전화 4자리가 들어갈 만큼만.
+   역할은 옆이 아니라 아래 줄에 둔다. 옆에 붙이면 칸이 길어지고,
+   튜터가 누구인지 세로로 훑을 때 눈에 안 들어온다. */
+.pr-table .pr-c-name {
     width: 122px;
-    text-align: left; padding-left: 9px; white-space: nowrap;
+    text-align: center;
+    padding: 2px 4px;
+    white-space: nowrap;
     font-weight: 600;
+    line-height: 1.2;
 }
+.pr-name-line { display: block; }
 .pr-phone { margin-left: 3px; font-size: 10px; font-weight: 400; color: #667085; }
-.pr-role  { margin-left: 5px; font-size: 9px; font-weight: 700; color: #2563eb; }
+.pr-role  {
+    display: block;
+    font-size: 9px; font-weight: 700; color: #2563eb;
+    letter-spacing: 0.02em;
+}
+
+/* 집계표의 조·장소는 그대로 왼쪽 정렬 */
+.pr-table .pr-left { text-align: left; padding-left: 9px; white-space: nowrap; }
 
 /* 체크 칸 — 손으로 O/X 하나 쓸 만큼만 */
 .pr-table .pr-c-mark { width: 34px; }
