@@ -915,3 +915,85 @@ body.dark-mode .input-clear:focus-visible {
 
 body.dark-mode .att-locked        { background: #374151; color: #9ca3af; }
 body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
+
+/* ============================================================================
+   출석부 출력 (인쇄용)
+
+   종이에 손으로 체크하는 양식이다. 화면 미리보기와 인쇄물이 같아야 하므로
+   같은 마크업을 쓰고, 인쇄할 때만 앱 껍데기를 숨긴다.
+   ============================================================================ */
+.pr-picker { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.pr-field { flex: 1 1 220px; min-width: 0; }
+.pr-field label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.pr-field select {
+    width: 100%; padding: 8px 10px; font-size: 14px; font-family: inherit;
+    border: 1px solid #d5d9e0; border-radius: 8px; background: #fff; color: #222;
+}
+.pr-options {
+    display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+    padding: 10px 12px; background: #f8fafc; border-radius: 8px; margin-bottom: 12px;
+    font-size: 13px;
+}
+.pr-options label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.pr-hint { flex-basis: 100%; font-size: 12px; color: #b45309; }
+.pr-hint:empty { display: none; }
+.pr-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.pr-print-btn {
+    padding: 10px 18px; font-size: 14px; font-weight: 700; font-family: inherit;
+    border: none; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer;
+}
+.pr-print-btn:hover { background: #1d4ed8; }
+.pr-info { font-size: 13px; color: #6b7280; }
+.pr-empty { padding: 40px; text-align: center; color: #9ca3af; }
+
+.pr-page {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 18px; margin-bottom: 20px;
+}
+.pr-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pr-head h2 { margin: 0; font-size: 20px; color: #111827; }
+.pr-session { font-size: 14px; font-weight: 700; color: #374151; }
+.pr-sub { margin: 4px 0 10px; font-size: 12px; color: #6b7280; }
+
+.pr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pr-table th, .pr-table td {
+    border: 1px solid #9ca3af; padding: 6px 4px; text-align: center; color: #111827;
+}
+.pr-table th { background: #f3f4f6; font-weight: 700; white-space: nowrap; }
+.pr-table .pr-left { text-align: left; padding-left: 8px; white-space: nowrap; }
+.pr-phone { margin-left: 3px; font-size: 11px; color: #6b7280; }
+.pr-role  { margin-left: 6px; font-size: 10px; color: #2563eb; }
+/* 손으로 쓰는 칸은 넉넉해야 한다 */
+.pr-table .pr-blank { height: 26px; min-width: 48px; }
+.pr-table .pr-memo  { min-width: 130px; }
+.pr-summary { max-width: 380px; }
+.pr-total td { font-weight: 700; background: #f9fafb; }
+
+/* 화면에서는 어두운 테마도 따라간다 (인쇄는 항상 흰 종이) */
+body.dark-mode .pr-page { background: #1f2937; border-color: #374151; }
+body.dark-mode .pr-head h2, body.dark-mode .pr-table th, body.dark-mode .pr-table td { color: #e5e7eb; }
+body.dark-mode .pr-table th { background: #374151; }
+body.dark-mode .pr-field select { background: #2a2d34; color: #eee; border-color: #444; }
+body.dark-mode .pr-options { background: #232833; }
+
+@media print {
+    /* 미리보기만 남기고 전부 숨긴다 */
+    body.printing .admin-header,
+    body.printing .tab-nav,
+    body.printing .pr-picker,
+    body.printing .pr-options,
+    body.printing .pr-toolbar,
+    body.printing .tab-content:not(#printTab) { display: none !important; }
+
+    body.printing { background: #fff; }
+    body.printing .pr-page {
+        border: none; border-radius: 0; padding: 0; margin: 0;
+        page-break-after: always;          /* 조마다 새 장 */
+        break-after: page;
+    }
+    body.printing .pr-page:last-child { page-break-after: auto; break-after: auto; }
+    /* 한 사람이 두 장에 걸치지 않게 */
+    body.printing .pr-table tr { page-break-inside: avoid; break-inside: avoid; }
+    body.printing .pr-table thead { display: table-header-group; }
+    @page { size: A4 portrait; margin: 12mm; }
+}

@@ -9,9 +9,11 @@ import {
     getTeamMembers,
     updateAttendanceBatch,
     getCohortId,
+    getKimbapDetail,
+    getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=49';
-import { matches as hangulMatches } from './scripts/hangul.js?v=49';
+} from './scripts/members-data.js?v=50';
+import { matches as hangulMatches } from './scripts/hangul.js?v=50';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -64,6 +66,7 @@ async function loadData() {
         try { renderTeamsView(); } catch (e) { console.error(e); }
         try { renderMembersView(); } catch (e) { console.error(e); }
         try { initAttendanceTab(); } catch (e) { console.error(e); }
+        try { initPrintTab(); } catch (e) { console.error(e); }
     }
 }
 
@@ -74,6 +77,7 @@ subscribe((event) => {
         renderTeamsView();
         renderMembersView();
         initAttendanceTab();
+        initPrintTab();
         alert(`${event.to} 명단으로 갱신되었습니다.`);
         return;
     }
@@ -96,6 +100,8 @@ subscribe((event) => {
     // 스냅숏으로 떠 놓기 때문에, 갱신하지 않으면 옛 값이 화면에 남는다.
     // 실제로 ◎ 인 사람이 빈칸으로 보였고, 그 상태에서 '빈칸 → 결석' 을 누르는 바람에
     // 지난 기수 이수자가 결석으로 저장된 일이 있었다.
+    try { initPrintTab(); } catch (e) { console.error(e); }
+
     if (attChanges().length === 0) {
         initAttendanceTab();
     } else {
@@ -828,3 +834,214 @@ if (document.readyState === 'loading') {
     loadData();
     searchNameInput?.focus();
 }
+
+// ============================================================================
+// 출석부 출력 (인쇄용)
+//
+// 지금까지 관리자가 스프레드시트로 만들어 인쇄하던 조별 출석부를 앱에서 낸다.
+// 종이에 손으로 체크하는 양식이므로, 아는 값은 미리 찍고 받을 값은 비워 둔다.
+//
+//   이름·김밥·과제  → 데이터에서 채운다 (이미 아는 것)
+//   출석·김밥신청·메모 → 빈칸 (현장에서 손으로 쓴다)
+// ============================================================================
+const prSessionSelect = document.getElementById('prSession');
+const prTeamSelect    = document.getElementById('prTeam');
+const prPreview       = document.getElementById('prPreview');
+const prInfo          = document.getElementById('prInfo');
+const prHint          = document.getElementById('prHint');
+const prOpt = {
+    kimbap:   document.getElementById('prKimbap'),
+    homework: document.getElementById('prHomework'),
+    memo:     document.getElementById('prMemo'),
+    summary:  document.getElementById('prSummary'),
+};
+
+let prSessionDate = null;
+let prTeamName = TEAM_ALL;
+let prKimbapTouched = false;   // 사람이 김밥 칸을 직접 건드렸나
+
+// 그 주차가 해당 월의 마지막 수업인가.
+// 김밥은 다음 달 것을 이때 받으므로 이 주차에만 신청 칸이 필요하다.
+function isLastClassOfMonth(sessionDate) {
+    if (!sessionDate) return false;
+    const ym = String(sessionDate).slice(0, 7);
+    const same = getSessions()
+        .filter(x => String(x.session_date).slice(0, 7) === ym)
+        .map(x => x.session_date)
+        .sort();
+    return same.length > 0 && same[same.length - 1] === sessionDate;
+}
+
+// 과제 세션명 대조. 폼 응답과 시트 강의명이 다르게 적히므로 양쪽을 정규화한다.
+// (script.js 의 normalizeSessionKey 와 같은 규칙이어야 한다)
+function prNormalizeSession(v) {
+    const raw = String(v || '').trim();
+    let m = raw.match(/^성경적대화\s*(\d+)/) || raw.match(/^대화\s*(\d+)/);
+    if (m) return '대화' + m[1];
+    m = raw.match(/^교리\s*(\d+)/) || raw.match(/^(\d+)\s*강/);
+    if (m) return '교리' + m[1];
+    if (/^교제/.test(raw) || /^교재/.test(raw)) return '교제';
+    if (/^나눔/.test(raw)) return '나눔';
+    return raw;
+}
+
+function initPrintTab() {
+    if (!prSessionSelect || !prTeamSelect) return;
+
+    const sessions = getSessions();
+    prSessionSelect.innerHTML = sessions.map(x => {
+        const name = x.label_norm || '';
+        return `<option value="${x.session_date}">${x.label}${name ? ' · ' + name : ''}</option>`;
+    }).join('');
+
+    const known = new Set(sessions.map(x => x.session_date));
+    if (!prSessionDate || !known.has(prSessionDate)) {
+        prSessionDate = getCurrentSessionDate() || sessions[0]?.session_date || null;
+    }
+    if (prSessionDate) prSessionSelect.value = prSessionDate;
+
+    const teams = getTeams();
+    prTeamSelect.innerHTML =
+        `<option value="${TEAM_ALL}">전체 (${teams.length}개 조)</option>` +
+        teams.map(t => `<option value="${t}">${t} (${getTeamMembers(t).length}명)</option>`).join('');
+    if (prTeamName !== TEAM_ALL && !teams.includes(prTeamName)) prTeamName = TEAM_ALL;
+    prTeamSelect.value = prTeamName;
+
+    syncKimbapDefault();
+    renderPrintPreview();
+}
+
+// 주차를 바꾸면 김밥 칸 기본값을 다시 잡는다.
+// 사람이 직접 건드린 뒤에는 그 뜻을 존중해 자동으로 되돌리지 않는다.
+function syncKimbapDefault() {
+    if (!prOpt.kimbap) return;
+    const last = isLastClassOfMonth(prSessionDate);
+    if (!prKimbapTouched) prOpt.kimbap.checked = last;
+    if (prHint) {
+        prHint.textContent = last
+            ? '이 주차는 해당 월의 마지막 수업입니다 — 김밥신청 칸을 기본으로 켰습니다.'
+            : '';
+    }
+}
+
+function renderPrintPreview() {
+    if (!prPreview) return;
+
+    const session = getSessions().find(x => x.session_date === prSessionDate);
+    if (!session) {
+        prPreview.innerHTML = '<div class="pr-empty">주차를 고르세요.</div>';
+        if (prInfo) prInfo.textContent = '';
+        return;
+    }
+
+    const teams = prTeamName === TEAM_ALL ? getTeams() : [prTeamName];
+    const cols = {
+        kimbap:   !!prOpt.kimbap?.checked,
+        homework: !!prOpt.homework?.checked,
+        memo:     !!prOpt.memo?.checked,
+    };
+    const sessionLabel = `${session.label}${session.label_norm ? ' ' + session.label_norm : ''}`;
+    const sessionKey = prNormalizeSession(session.label_norm || '');
+
+    // 조별 신청 수 — 집계표와 각 장 머리글에 같이 쓴다
+    const stats = teams.map(t => {
+        const members = getTeamMembers(t);
+        const applied = members.filter(m => {
+            const d = getKimbapDetail(m.id || (m.name + m.phone));
+            return session.label_norm && d[session.label_norm]?.applied === 1;
+        }).length;
+        return { team: t, count: members.length, applied };
+    });
+
+    let html = '';
+
+    if (prTeamName === TEAM_ALL && prOpt.summary?.checked) {
+        const totalN = stats.reduce((n, x) => n + x.count, 0);
+        const totalK = stats.reduce((n, x) => n + x.applied, 0);
+        html += `
+            <section class="pr-page">
+                <div class="pr-head">
+                    <h2>${escapeHtml(getCohortId() || '')} 조별 집계</h2>
+                    <div class="pr-session">${escapeHtml(sessionLabel)}</div>
+                </div>
+                <table class="pr-table pr-summary">
+                    <thead><tr><th>조</th><th>인원</th><th>김밥</th></tr></thead>
+                    <tbody>
+                        ${stats.map(x => `<tr><td class="pr-left">${escapeHtml(x.team)}</td>
+                            <td>${x.count}</td><td>${x.applied || ''}</td></tr>`).join('')}
+                        <tr class="pr-total"><td class="pr-left">합계</td><td>${totalN}</td><td>${totalK}</td></tr>
+                    </tbody>
+                </table>
+            </section>`;
+    }
+
+    for (const st of stats) {
+        const members = [...getTeamMembers(st.team)].sort((a, b) => {
+            const pa = { '튜터': 1, '서브튜터': 2, '조장': 3 }[a.role] || 4;
+            const pb = { '튜터': 1, '서브튜터': 2, '조장': 3 }[b.role] || 4;
+            return pa !== pb ? pa - pb : a.name.localeCompare(b.name, 'ko');
+        });
+
+        const head =
+            '<th class="pr-left">이름</th>' +
+            (cols.kimbap ? '<th>김밥</th>' : '') +
+            '<th>출석</th>' +
+            (cols.kimbap ? '<th>김밥신청</th>' : '') +
+            (cols.homework ? '<th>과제</th>' : '') +
+            (cols.memo ? '<th class="pr-memo">메모</th>' : '');
+
+        const rows = members.map(m => {
+            const id = m.id || (String(m.name || '') + String(m.phone || ''));
+            const kb = session.label_norm ? getKimbapDetail(id)[session.label_norm] : null;
+            const hw = getHomeworkList(id).some(h => prNormalizeSession(h.session) === sessionKey);
+            const role = m.role && m.role !== '조원' ? `<span class="pr-role">${escapeHtml(m.role)}</span>` : '';
+            return `
+                <tr>
+                    <td class="pr-left">${escapeHtml(m.name)}<span class="pr-phone">${escapeHtml(m.phone)}</span>${role}</td>
+                    ${cols.kimbap ? `<td>${kb?.applied === 1 ? 'O' : ''}</td>` : ''}
+                    <td class="pr-blank"></td>
+                    ${cols.kimbap ? '<td class="pr-blank"></td>' : ''}
+                    ${cols.homework ? `<td>${hw ? '✓' : ''}</td>` : ''}
+                    ${cols.memo ? '<td class="pr-blank pr-memo"></td>' : ''}
+                </tr>`;
+        }).join('');
+
+        html += `
+            <section class="pr-page">
+                <div class="pr-head">
+                    <h2>${escapeHtml(st.team)}</h2>
+                    <div class="pr-session">${escapeHtml(sessionLabel)}</div>
+                </div>
+                <div class="pr-sub">인원 ${st.count}명${cols.kimbap ? ` · 김밥 ${st.applied}명` : ''}</div>
+                <table class="pr-table">
+                    <thead><tr>${head}</tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </section>`;
+    }
+
+    prPreview.innerHTML = html;
+    if (prInfo) {
+        prInfo.textContent = `${teams.length}개 조 · ${stats.reduce((n, x) => n + x.count, 0)}명`;
+    }
+}
+
+prSessionSelect?.addEventListener('change', (e) => {
+    prSessionDate = e.target.value;
+    syncKimbapDefault();
+    renderPrintPreview();
+});
+prTeamSelect?.addEventListener('change', (e) => {
+    prTeamName = e.target.value;
+    renderPrintPreview();
+});
+prOpt.kimbap?.addEventListener('change', () => { prKimbapTouched = true; renderPrintPreview(); });
+[prOpt.homework, prOpt.memo, prOpt.summary].forEach(el =>
+    el?.addEventListener('change', renderPrintPreview));
+
+document.getElementById('prPrintBtn')?.addEventListener('click', () => {
+    // 인쇄 대상은 미리보기다. 나머지 화면은 인쇄 CSS 가 숨긴다.
+    document.body.classList.add('printing');
+    window.print();
+    setTimeout(() => document.body.classList.remove('printing'), 0);
+});
