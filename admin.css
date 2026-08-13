@@ -946,10 +946,18 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 .pr-info { font-size: 13px; color: #6b7280; }
 .pr-empty { padding: 40px; text-align: center; color: #9ca3af; }
 
+/* 미리보기를 A4 한 장과 같은 비율로 둔다.
+   화면에서 보이는 여백이 곧 인쇄물의 여백이라, 아래가 휑한지 바로 보인다.
+   (210mm - 좌우 여백 24mm = 186mm / 297mm - 위아래 24mm = 273mm) */
 .pr-page {
     background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
-    padding: 14px 16px; margin-bottom: 16px;
+    padding: 14px 16px; margin: 0 auto 16px;
+    width: 186mm;
+    min-height: 273mm;
+    max-width: 100%;
+    box-sizing: content-box;
 }
+.pr-preview { overflow-x: auto; }
 .pr-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .pr-head h2 { margin: 0; font-size: 17px; color: #111827; }
 .pr-session { font-size: 13px; font-weight: 700; color: #374151; }
@@ -990,8 +998,8 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 .pr-table .pr-c-memo { width: auto; }
 .pr-table .pr-c-fill { width: auto; border: none !important; background: none !important; }
 
-/* 손으로 쓰는 줄 높이 */
-.pr-table .pr-blank { height: 22px; }
+/* 손으로 쓰는 줄 높이 — A4 한 장을 채우도록 JS 가 인원수에 맞춰 정한다 */
+.pr-table tbody td { height: var(--pr-row, 22px); }
 
 .pr-summary { width: auto; min-width: 260px; table-layout: auto; }
 .pr-summary th, .pr-summary td { padding: 4px 14px; }
@@ -1016,6 +1024,7 @@ body.dark-mode .pr-options { background: #232833; }
     body.printing { background: #fff; }
     body.printing .pr-page {
         border: none; border-radius: 0; padding: 0; margin: 0;
+        width: auto; min-height: 0; max-width: none;
         page-break-after: always;          /* 조마다 새 장 */
         break-after: page;
     }
