@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=58">
-    <link rel="stylesheet" href="admin.css?v=58">
+    <link rel="stylesheet" href="style.css?v=59">
+    <link rel="stylesheet" href="admin.css?v=59">
 </head>
 <body>
     <div class="admin-container">
@@ -62,6 +62,13 @@
             <button class="tab-btn" data-tab="members">개인별 보기</button>
             <button class="tab-btn" data-tab="print">출석부 출력</button>
         </nav>
+
+        <!-- 시트에서 지금 가져오기 -->
+        <div class="sync-bar">
+            <button type="button" id="syncBtn" class="sync-btn">⟳ 시트에서 지금 가져오기</button>
+            <button type="button" id="reloadBtn" class="sync-sub-btn">화면 새로 고침</button>
+            <span class="sync-info" id="syncInfo">명단·편성·위치·과제·김밥은 하루 한 번(정오) 들어옵니다. 방금 시트를 고치셨다면 눌러 주세요.</span>
+        </div>
 
         <!-- 출석 관리 (DB 가 원본. 시트에서 고치지 않는다) -->
         <div class="tab-content active" id="attendanceTab">
@@ -234,7 +241,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=58"></script>
+    <script type="module" src="admin.js?v=59"></script>
 </body>
 </html>
 
