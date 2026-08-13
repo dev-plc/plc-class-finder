@@ -10,8 +10,8 @@ import {
     updateAttendanceBatch,
     getCohortId,
     subscribe,
-} from './scripts/members-data.js?v=48';
-import { matches as hangulMatches } from './scripts/hangul.js?v=48';
+} from './scripts/members-data.js?v=49';
+import { matches as hangulMatches } from './scripts/hangul.js?v=49';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -429,13 +429,27 @@ memberFilter?.addEventListener('input', (e) => {
 // 바꾼 칸만 보낸다 (건드리지 않은 사람은 기존 값 그대로).
 // ============================================================================
 
-// 화면에 노출하는 4단 상태. DB가 허용하는 값과 같아야 한다.
+// 관리자가 찍는 값은 둘뿐이다.
+//
+// ◎(지난 기수 이수)는 이월 스크립트가 지난 기수 기록에서 뽑고,
+// −(집계 제외)는 커리큘럼상 수업이 없는 주차다. 둘 다 사람이 판단할 값이 아니다.
+// 손으로 찍게 두면 근거 없는 이수 인정이 생기고, 반대로 이미 붙은 ◎ 를
+// 실수로 지우는 일이 난다 — 실제로 이수자 8명이 결석으로 저장된 적이 있다.
 const ATT_STATES = [
     { value: 'O', label: 'O', title: '출석' },
-    { value: '◎', label: '◎', title: '지난 기수에 이수 (출석 인정)' },
     { value: 'X', label: 'X', title: '결석' },
-    { value: '-', label: '−', title: '집계 제외' },
 ];
+
+// 보기 전용. 이 값이 들어 있는 줄은 아예 손댈 수 없게 한다.
+// 고쳐야 하면 시트에서 고친다 (출결의 원본은 시트다).
+const ATT_LOCKED = {
+    '◎': { label: '◎', title: '지난 기수에 이수 — 시트에서만 고칩니다' },
+    '-': { label: '−', title: '집계 제외 — 시트에서만 고칩니다' },
+};
+
+function isLocked(v) {
+    return Object.prototype.hasOwnProperty.call(ATT_LOCKED, normStatus(v));
+}
 const ATT_PREF_KEY = 'plc_admin_att_prefs';
 const TEAM_ALL = '__all__';
 
@@ -587,14 +601,17 @@ function renderAttList() {
         const changed = attBaseline.get(m._uuid) !== cur;
         const role = m.role ? `<span class="att-role">${escapeHtml(m.role)}</span>` : '';
 
-        const buttons = ATT_STATES.map(st => `
+        const locked = ATT_LOCKED[cur];
+        const buttons = locked
+            ? `<span class="att-locked s-${stateClass(cur)}" title="${locked.title}">${locked.label}</span>`
+            : ATT_STATES.map(st => `
             <button type="button"
                     class="att-state${cur === st.value ? ' on s-' + stateClass(st.value) : ''}"
                     data-uuid="${m._uuid}" data-status="${st.value}"
                     title="${st.title}" aria-pressed="${cur === st.value}">${st.label}</button>`).join('');
 
         html += `
-            <div class="att-row${changed ? ' changed' : ''}${cur === '' ? ' blank' : ''}" data-uuid="${m._uuid}">
+            <div class="att-row${changed ? ' changed' : ''}${cur === '' && !locked ? ' blank' : ''}${locked ? ' locked' : ''}" data-uuid="${m._uuid}">
                 <div class="att-who">
                     <span class="att-name">${escapeHtml(m.name)}<span class="att-phone">${escapeHtml(m.phone)}</span></span>
                     ${role}
@@ -681,12 +698,18 @@ attList?.addEventListener('click', (e) => {
     const btn = e.target.closest('.att-state');
     if (!btn || attSaving) return;
     const uuid = btn.dataset.uuid;
+    if (isLocked(attBaseline.get(uuid))) return;   // ◎·− 은 시트에서만 고친다
     const next = attDraft.get(uuid) === btn.dataset.status ? '' : btn.dataset.status;
     attDraft.set(uuid, next);
     renderAttList();
 });
 
 // 이름을 몇 개만 뽑아 보여준다 (확인 창이 길어지지 않게)
+// 일괄 처리가 건드릴 수 있는 사람. ◎·− 인 줄은 제외한다.
+function editableUuids() {
+    return [...attDraft.keys()].filter(u => !isLocked(attBaseline.get(u)));
+}
+
 function attNamesOf(uuids, limit = 8) {
     const byUuid = new Map(attTargets().map(m => [m._uuid, m]));
     const names = uuids.map(u => {
@@ -707,30 +730,33 @@ document.querySelectorAll('.att-bulk-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         if (attSaving) return;
         const mode = btn.dataset.bulk;
+        // ◎·− 인 줄은 어떤 일괄 처리로도 바뀌지 않는다.
+        const editable = editableUuids();
+
         if (mode === 'reset') {
             for (const [uuid, v] of attBaseline) attDraft.set(uuid, v);
         } else if (mode === 'clear') {
-            const marked = [...attDraft].filter(([, v]) => v !== '').map(([u]) => u);
-            if (marked.length && !confirm(
-                `${marked.length}명의 기록을 지웁니다.\n\n` +
-                `${attNamesOf(marked)}\n\n` +
-                `지난 기수 이수(◎)까지 함께 지워집니다. 진행할까요?`)) return;
-            for (const uuid of attDraft.keys()) attDraft.set(uuid, '');
+            const marked = editable.filter(u => attDraft.get(u) !== '');
+            if (!marked.length) return;
+            if (!confirm(
+                `${marked.length}명의 출결 기록을 지웁니다.\n\n${attNamesOf(marked)}\n\n진행할까요?`)) return;
+            for (const uuid of marked) attDraft.set(uuid, '');
         } else if (mode === 'fillX') {
-            const blanks = [...attDraft].filter(([, v]) => v === '').map(([u]) => u);
+            const blanks = editable.filter(u => attDraft.get(u) === '');
             if (!blanks.length) return;
             if (!confirm(
-                `미기록 ${blanks.length}명을 결석으로 처리합니다.\n\n` +
-                `${attNamesOf(blanks)}\n\n` +
-                `지난 기수에 이수해 안 나와도 되는 분이 섞여 있으면\n` +
-                `취소하고 그분들을 ◎ 로 먼저 표시하세요.`)) return;
+                `미기록 ${blanks.length}명을 결석으로 처리합니다.\n\n${attNamesOf(blanks)}\n\n` +
+                `안 온 것이 확실한 분들이 맞는지 확인하세요.`)) return;
             for (const uuid of blanks) attDraft.set(uuid, 'X');
         } else {
-            const others = [...attDraft].filter(([, v]) => v !== '' && v !== mode).map(([u]) => u);
+            const others = editable.filter(u => {
+                const v = attDraft.get(u);
+                return v !== '' && v !== mode;
+            });
             if (others.length && !confirm(
                 `전원을 '${mode}' 로 바꿉니다.\n\n` +
                 `이미 다른 값이 있는 ${others.length}명도 덮어씁니다:\n${attNamesOf(others)}\n\n진행할까요?`)) return;
-            for (const uuid of attDraft.keys()) attDraft.set(uuid, mode);
+            for (const uuid of editable) attDraft.set(uuid, mode);
         }
         renderAttList();
     });
