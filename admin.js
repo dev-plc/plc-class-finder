@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=59';
-import { matches as hangulMatches } from './scripts/hangul.js?v=59';
-import { registerServiceWorker } from './scripts/sw-update.js?v=59';
-import { sbPostGas } from './scripts/supabase-config.js?v=59';
+} from './scripts/members-data.js?v=60';
+import { matches as hangulMatches } from './scripts/hangul.js?v=60';
+import { registerServiceWorker } from './scripts/sw-update.js?v=60';
+import { sbPostGas } from './scripts/supabase-config.js?v=60';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1071,7 +1071,7 @@ function renderPrintPreview() {
 
         const head =
             '<th class="pr-c-no">No.</th>' +
-            '<th class="pr-left">이름</th>' +
+            '<th class="pr-c-name">이름</th>' +
             (cols.status ? '<th class="pr-c-mark">김밥</th>' : '') +
             (cols.kimbap ? '<th class="pr-c-mark pr-c-wide">김밥신청</th>' : '') +
             '<th class="pr-c-mark">출석</th>' +
@@ -1082,11 +1082,16 @@ function renderPrintPreview() {
             const id = m.id || (String(m.name || '') + String(m.phone || ''));
             const kb = session.label_norm ? getKimbapDetail(id)[session.label_norm] : null;
             const hw = getHomeworkList(id).some(h => prNormalizeSession(h.session) === sessionKey);
-            const role = m.role && m.role !== '조원' ? `<span class="pr-role">${escapeHtml(m.role)}</span>` : '';
+            // 역할은 이름 아래 줄에. 옆에 붙이면 이름 칸이 길어지고,
+            // 튜터가 누구인지 세로로 훑을 때 눈에 안 들어온다.
+            const role = m.role && m.role !== '조원'
+                ? `<span class="pr-role">${escapeHtml(m.role)}</span>` : '';
             return `
                 <tr>
                     <td class="pr-c-no">${i + 1}</td>
-                    <td class="pr-left">${escapeHtml(m.name)}<span class="pr-phone">${escapeHtml(m.phone)}</span>${role}</td>
+                    <td class="pr-c-name">
+                        <span class="pr-name-line">${escapeHtml(m.name)}<span class="pr-phone">${escapeHtml(m.phone)}</span></span>${role}
+                    </td>
                     ${cols.status ? `<td class="pr-c-mark">${kb?.applied === 1 ? 'O' : ''}</td>` : ''}
                     ${cols.kimbap ? '<td class="pr-c-mark pr-c-wide pr-blank"></td>' : ''}
                     <td class="pr-c-mark pr-blank"></td>
