@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=62';
-import { matches as hangulMatches } from './scripts/hangul.js?v=62';
-import { registerServiceWorker } from './scripts/sw-update.js?v=62';
-import { sbPostGas } from './scripts/supabase-config.js?v=62';
+} from './scripts/members-data.js?v=63';
+import { matches as hangulMatches } from './scripts/hangul.js?v=63';
+import { registerServiceWorker } from './scripts/sw-update.js?v=63';
+import { sbPostGas } from './scripts/supabase-config.js?v=63';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -866,7 +866,55 @@ const prOpt = {
 
 let prSessionDate = null;
 let prTeamName = TEAM_ALL;
-let prKimbapTouched = false;   // 사람이 김밥 칸을 직접 건드렸나
+
+// ---------------------------------------------------------------------------
+// 표시할 칸을 기억한다
+//
+// 과제 칸을 쓰는 사람은 매번 쓴다. 들어올 때마다 다시 체크하게 두면 안 된다.
+//
+// 다만 김밥신청은 성격이 다르다. 그건 취향이 아니라 '월 마지막 수업이냐' 로
+// 정해지는 값이다. 다른 칸처럼 그냥 저장해 버리면, 한 번 끈 순간 자동 판단이
+// 영영 죽는다 — 다음 달 마지막 주에도 칸이 안 나온다.
+//
+// 그래서 김밥신청만 주차별로 기억한다.
+//   · 사람이 말한 적 없는 주차  → 자동 판단 (월 마지막 수업이면 켬)
+//   · 사람이 정한 적 있는 주차  → 그 뜻대로
+// 이러면 둘이 안 부딪힌다. 자동은 빈자리에서만 말하고, 사람 말은 안 덮인다.
+// ---------------------------------------------------------------------------
+const PR_PREF_KEY = 'plc_admin_print_prefs';
+const PR_SAVED_COLS = ['status', 'homework', 'memo', 'summary'];
+const PR_KIMBAP_KEEP = 40;      // 주차별 기록은 이만큼만 남긴다
+
+let prKimbapBy = {};            // { '2026-08-16': true|false }
+
+function loadPrintPrefs() {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(PR_PREF_KEY) || '{}'); }
+    catch { /* 깨진 값은 버린다 */ }
+
+    prKimbapBy = (saved.kimbapBy && typeof saved.kimbapBy === 'object') ? saved.kimbapBy : {};
+
+    const cols = saved.cols || {};
+    for (const key of PR_SAVED_COLS) {
+        if (typeof cols[key] === 'boolean' && prOpt[key]) prOpt[key].checked = cols[key];
+    }
+}
+
+function savePrintPrefs() {
+    // 주차 기록은 기수가 바뀌어도 쌓이기만 한다. 최근 것만 남긴다.
+    const dates = Object.keys(prKimbapBy).sort();
+    for (const d of dates.slice(0, Math.max(0, dates.length - PR_KIMBAP_KEEP))) {
+        delete prKimbapBy[d];
+    }
+
+    const cols = {};
+    for (const key of PR_SAVED_COLS) if (prOpt[key]) cols[key] = prOpt[key].checked;
+
+    try { localStorage.setItem(PR_PREF_KEY, JSON.stringify({ cols, kimbapBy: prKimbapBy })); }
+    catch { /* 저장 실패는 무시 */ }
+}
+
+loadPrintPrefs();
 
 // 출력에서 뺀 장(場). 조 이름 또는 '__summary__'.
 // 칸 토글로 다시 그릴 때는 유지하고, 주차·조를 바꾸면 비운다 —
@@ -989,17 +1037,39 @@ function initPrintTab() {
     renderPrintPreview();
 }
 
-// 주차를 바꾸면 김밥 칸 기본값을 다시 잡는다.
-// 사람이 직접 건드린 뒤에는 그 뜻을 존중해 자동으로 되돌리지 않는다.
+// 주차를 바꾸면 김밥 칸을 다시 잡는다.
+// 그 주차에 대해 사람이 정한 적이 있으면 그 값, 없으면 자동 판단.
 function syncKimbapDefault() {
     if (!prOpt.kimbap) return;
+    const chosen = prKimbapBy[prSessionDate];
+    prOpt.kimbap.checked = typeof chosen === 'boolean'
+        ? chosen
+        : isLastClassOfMonth(prSessionDate);
+    updateKimbapHint();
+}
+
+// 지금 칸이 켜지고 꺼진 이유를 한 줄로 알려준다.
+// 자동으로 켰는지, 내가 정해둔 값인지 구분이 안 되면 사람이 앱을 못 믿는다.
+function updateKimbapHint() {
+    if (!prHint) return;
     const last = isLastClassOfMonth(prSessionDate);
-    if (!prKimbapTouched) prOpt.kimbap.checked = last;
-    if (prHint) {
+    const chosen = prKimbapBy[prSessionDate];
+
+    if (typeof chosen !== 'boolean') {
         prHint.textContent = last
-            ? '이 주차는 해당 월의 마지막 수업입니다 — 김밥신청 칸을 기본으로 켰습니다.'
+            ? '이 주차는 해당 월의 마지막 수업입니다 — 김밥신청 칸을 자동으로 켰습니다.'
             : '';
+        return;
     }
+    if (chosen === last) {   // 정해둔 값이 자동 판단과 같으면 굳이 설명할 게 없다
+        prHint.textContent = last
+            ? '이 주차는 해당 월의 마지막 수업입니다 — 김밥신청 칸을 켰습니다.'
+            : '';
+        return;
+    }
+    prHint.textContent = last
+        ? '이 주차는 월 마지막 수업이지만, 김밥신청 칸을 끈 것으로 기억하고 있습니다.'
+        : '이 주차의 김밥신청 칸을 켠 것으로 기억하고 있습니다.';
 }
 
 // 장마다 붙는 '출력' 체크. 기본은 켬 — 전체를 뽑되 몇 조만 빼는 쓰임이다.
@@ -1177,9 +1247,15 @@ prTeamSelect?.addEventListener('change', (e) => {
     prSkip.clear();
     renderPrintPreview();
 });
-prOpt.kimbap?.addEventListener('change', () => { prKimbapTouched = true; renderPrintPreview(); });
+// 김밥신청은 '이 주차에 대해' 정한 것으로 남긴다 (자동 판단을 죽이지 않는다)
+prOpt.kimbap?.addEventListener('change', () => {
+    if (prSessionDate) prKimbapBy[prSessionDate] = prOpt.kimbap.checked;
+    savePrintPrefs();
+    updateKimbapHint();
+    renderPrintPreview();
+});
 [prOpt.status, prOpt.homework, prOpt.memo, prOpt.summary].forEach(el =>
-    el?.addEventListener('change', renderPrintPreview));
+    el?.addEventListener('change', () => { savePrintPrefs(); renderPrintPreview(); }));
 
 document.getElementById('prPrintBtn')?.addEventListener('click', () => {
     const live = [...(prPreview?.querySelectorAll('.pr-sheet:not(.pr-skip)') || [])];
