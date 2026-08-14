@@ -13,15 +13,25 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=65';
-import { matches as hangulMatches } from './scripts/hangul.js?v=65';
-import { registerServiceWorker } from './scripts/sw-update.js?v=65';
-import { sbPostGas } from './scripts/supabase-config.js?v=65';
+} from './scripts/members-data.js?v=66';
+import { matches as hangulMatches } from './scripts/hangul.js?v=66';
+import { registerServiceWorker } from './scripts/sw-update.js?v=66';
+import { sbPostGas } from './scripts/supabase-config.js?v=66';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
     window.location.href = 'index.html';
 }
+
+// 지금 돌고 있는 버전.
+//
+// import.meta.url 은 '실제로 불러온' 주소다. HTML 에 적힌 값이 아니라
+// 브라우저가 정말 받아온 파일의 주소라, 캐시에 걸려 옛 파일이 돌고 있으면
+// 옛 번호가 그대로 나온다. 그래서 이 값은 거짓말을 하지 않는다.
+//
+// 화면에 띄우는 이유: 고친 게 안 보인다고 할 때 원인이 코드인지 캐시인지
+// 구분할 방법이 없어 같은 자리를 몇 번씩 판 적이 있다. 번호 하나면 끝난다.
+const APP_VERSION = new URL(import.meta.url).searchParams.get('v') || '?';
 
 // ============================================================================
 // DOM 요소
@@ -64,8 +74,12 @@ async function loadData() {
     } catch (error) {
         console.error('❌ 데이터 로드 예외 (네트워크/캐시):', error);
     } finally {
+        // 버전은 데이터를 못 받아왔을 때도 보여야 한다 — 그때가 제일 알고 싶은 순간이다
         const badge = document.querySelector('.admin-badge');
-        if (badge && getCohortId()) badge.textContent = `${getCohortId()} · 관리자`;
+        if (badge) {
+            badge.textContent =
+                `${getCohortId() ? getCohortId() + ' · ' : ''}관리자 · v${APP_VERSION}`;
+        }
         try { renderTeamsView(); } catch (e) { console.error(e); }
         try { renderMembersView(); } catch (e) { console.error(e); }
         try { initAttendanceTab(); } catch (e) { console.error(e); }
