@@ -1012,13 +1012,17 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
     transition: opacity 0.15s ease;
 }
 
+/* 조 이름·주차·장소는 종이 가운데로.
+   손에 들고 보는 양식이라 제목이 왼쪽 구석에 박혀 있으면
+   어느 조 것인지 한눈에 안 들어온다.
+   높이는 그대로다 — 정렬만 바꾼다. 머리가 커지면 표가 밀려 두 장이 된다. */
 .pr-head {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    display: flex; align-items: baseline; justify-content: center; gap: 12px;
     padding-bottom: 6px; border-bottom: 2px solid #101828;
 }
 .pr-head h2 { margin: 0; font-size: 18px; font-weight: 800; color: #101828; letter-spacing: -0.01em; }
 .pr-session { font-size: 13px; font-weight: 700; color: #344054; }
-.pr-sub { margin: 6px 0 10px; font-size: 11px; color: #667085; }
+.pr-sub { margin: 6px 0 10px; font-size: 11px; color: #667085; text-align: center; }
 
 /* 폭을 칸 종류로 못 박는다.
    table-layout 이 기본값이면 남는 폭이 아무 칸에나 붙어, 메모를 끄는 순간
