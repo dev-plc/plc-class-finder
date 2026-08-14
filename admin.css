@@ -1070,9 +1070,6 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
     letter-spacing: 0.02em;
 }
 
-/* 집계표의 조·장소는 그대로 왼쪽 정렬 */
-.pr-table .pr-left { text-align: left; padding-left: 9px; white-space: nowrap; }
-
 /* 체크 칸 — 손으로 O/X 하나 쓸 만큼만 */
 .pr-table .pr-c-mark { width: 34px; }
 .pr-table .pr-c-wide { width: 64px; }   /* '김밥신청' — 글자도 길고 손으로 쓸 자리도 필요하다 */
@@ -1102,9 +1099,10 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
     background: #fff; padding: 0 4px;
 }
 
-/* 집계표는 한 장을 통째로 쓴다. 구석에 작게 박히면 읽히지 않는다. */
+/* 집계표는 한 장을 통째로 쓴다. 구석에 작게 박히면 읽히지 않는다.
+   조·장소도 가운데로 — 칸이 넓어서 왼쪽에 붙이면 숫자 칸과 따로 노는 표가 된다. */
 .pr-summary { width: 100%; table-layout: fixed; font-size: 15px; }
-.pr-summary th, .pr-summary td { padding: 4px 12px; }
+.pr-summary th, .pr-summary td { padding: 4px 12px; text-align: center; }
 .pr-summary tbody td { height: var(--pr-row, 18mm); }
 .pr-summary thead th { font-size: 14px; padding: 8px 12px; }
 .pr-summary .pr-c-team { width: 22%; }
