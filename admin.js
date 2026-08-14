@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=64';
-import { matches as hangulMatches } from './scripts/hangul.js?v=64';
-import { registerServiceWorker } from './scripts/sw-update.js?v=64';
-import { sbPostGas } from './scripts/supabase-config.js?v=64';
+} from './scripts/members-data.js?v=65';
+import { matches as hangulMatches } from './scripts/hangul.js?v=65';
+import { registerServiceWorker } from './scripts/sw-update.js?v=65';
+import { sbPostGas } from './scripts/supabase-config.js?v=65';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
