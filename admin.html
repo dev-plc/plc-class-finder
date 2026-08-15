@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=67">
-    <link rel="stylesheet" href="admin.css?v=67">
+    <link rel="stylesheet" href="style.css?v=68">
+    <link rel="stylesheet" href="admin.css?v=68">
 </head>
 <body>
     <div class="admin-container">
@@ -127,11 +127,17 @@
                 </div>
                 <div class="pr-hint" id="prHint"></div>
 
-                <div class="pr-row pr-row-actions">
-                    <button type="button" id="prPrintBtn" class="pr-print-btn">🖨️ 인쇄</button>
-                    <span class="pr-divider"></span>
+                <!-- 출력할 장을 여기서 고른다.
+                     장마다 붙은 체크로도 되지만, 13장이면 스크롤을 오르내려야 한다. -->
+                <div class="pr-row pr-row-pages">
+                    <span class="pr-row-label">출력할 장</span>
                     <button type="button" id="prPickAll" class="pr-sub-btn">전체 선택</button>
                     <button type="button" id="prPickNone" class="pr-sub-btn">전체 해제</button>
+                    <div class="pr-page-picks" id="prPagePicks"></div>
+                </div>
+
+                <div class="pr-row pr-row-actions">
+                    <button type="button" id="prPrintBtn" class="pr-print-btn">🖨️ 인쇄</button>
                     <span class="pr-info" id="prInfo"></span>
                 </div>
             </div>
@@ -241,7 +247,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=67"></script>
+    <script type="module" src="admin.js?v=68"></script>
 </body>
 </html>
 
