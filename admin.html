@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=69">
-    <link rel="stylesheet" href="admin.css?v=69">
+    <link rel="stylesheet" href="style.css?v=70">
+    <link rel="stylesheet" href="admin.css?v=70">
 </head>
 <body>
     <div class="admin-container">
@@ -128,12 +128,17 @@
                 <div class="pr-hint" id="prHint"></div>
 
                 <!-- 출력할 장을 여기서 고른다.
-                     장마다 붙은 체크로도 되지만, 13장이면 스크롤을 오르내려야 한다. -->
+                     장마다 붙은 체크로도 되지만, 13장이면 스크롤을 오르내려야 한다.
+                     목록은 접어 둔다 — 조가 많으면 늘 펼쳐 두기엔 자리를 너무 먹는다. -->
                 <div class="pr-row pr-row-pages">
                     <span class="pr-row-label">출력할 장</span>
                     <button type="button" id="prPickAll" class="pr-sub-btn">전체 선택</button>
                     <button type="button" id="prPickNone" class="pr-sub-btn">전체 해제</button>
-                    <div class="pr-page-picks" id="prPagePicks"></div>
+                    <div class="pr-pick-menu">
+                        <button type="button" id="prPickSomeBtn" class="pr-sub-btn"
+                                aria-expanded="false" aria-controls="prPagePicks">부분 선택 ▾</button>
+                        <div class="pr-page-picks" id="prPagePicks" hidden></div>
+                    </div>
                 </div>
 
                 <div class="pr-row pr-row-actions">
@@ -247,7 +252,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=69"></script>
+    <script type="module" src="admin.js?v=70"></script>
 </body>
 </html>
 
