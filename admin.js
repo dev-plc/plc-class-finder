@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=67';
-import { matches as hangulMatches } from './scripts/hangul.js?v=67';
-import { registerServiceWorker } from './scripts/sw-update.js?v=67';
-import { sbPostGas } from './scripts/supabase-config.js?v=67';
+} from './scripts/members-data.js?v=68';
+import { matches as hangulMatches } from './scripts/hangul.js?v=68';
+import { registerServiceWorker } from './scripts/sw-update.js?v=68';
+import { sbPostGas } from './scripts/supabase-config.js?v=68';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -864,6 +864,7 @@ if (document.readyState === 'loading') {
 const prSessionSelect = document.getElementById('prSession');
 const prTeamSelect    = document.getElementById('prTeam');
 const prPreview       = document.getElementById('prPreview');
+const prPagePicks     = document.getElementById('prPagePicks');
 const prInfo          = document.getElementById('prInfo');
 const prHint          = document.getElementById('prHint');
 const prOpt = {
@@ -1086,6 +1087,43 @@ function updateKimbapHint() {
         : '이 주차의 김밥신청 칸을 켠 것으로 기억하고 있습니다.';
 }
 
+// ---------------------------------------------------------------------------
+// 출력할 장 고르기
+//
+// 체크가 두 군데 있다 — 장마다 붙은 것과 위 조작부의 목록.
+// 어느 쪽을 눌러도 같은 곳(prSkip)을 고치고 나머지 한쪽을 따라오게 한다.
+// 한쪽만 고치면 위에서 끈 장이 아래에서는 켜진 채로 보인다.
+//
+// 다시 그리지 않는 것이 중요하다. renderPrintPreview 를 부르면
+// 미리보기가 통째로 새로 그려져 보고 있던 자리를 잃는다.
+// ---------------------------------------------------------------------------
+let prPageKeys = [];            // 지금 미리보기에 있는 장들 (그린 순서대로)
+
+const PR_SUMMARY_KEY = '__summary__';
+const prPageLabel = (key) => (key === PR_SUMMARY_KEY ? '집계표' : key);
+
+function prSetPageOn(key, on) {
+    if (on) prSkip.delete(key); else prSkip.add(key);
+
+    const sel = `[data-page="${CSS.escape(key)}"]`;
+    const sheet = prPreview?.querySelector(`.pr-sheet${sel}`);
+    sheet?.classList.toggle('pr-skip', !on);
+
+    for (const box of [sheet?.querySelector('.pr-pick-input'),
+                       prPagePicks?.querySelector(`.pr-pagepick-input${sel}`)]) {
+        if (box && box.checked !== on) box.checked = on;
+    }
+}
+
+function prRenderPagePicks() {
+    if (!prPagePicks) return;
+    prPagePicks.innerHTML = prPageKeys.map(k => `
+        <label class="pr-chip pr-page-chip">
+            <input type="checkbox" class="pr-pagepick-input" data-page="${escapeHtml(k)}"${prSkip.has(k) ? '' : ' checked'}>
+            <span>${escapeHtml(prPageLabel(k))}</span>
+        </label>`).join('');
+}
+
 // 장마다 붙는 '출력' 체크. 기본은 켬 — 전체를 뽑되 몇 조만 빼는 쓰임이다.
 function prPickBox(key) {
     const on = !prSkip.has(key);
@@ -1218,6 +1256,11 @@ function renderPrintPreview() {
     }
 
     prPreview.innerHTML = html;
+
+    // 조작부 목록은 미리보기와 같은 순서·같은 내용이어야 한다
+    prPageKeys = [...prPreview.querySelectorAll('.pr-sheet')].map(s => s.dataset.page);
+    prRenderPagePicks();
+
     updatePrintInfo();
 }
 
@@ -1230,23 +1273,28 @@ function updatePrintInfo() {
                                : `${pages.length}장 중 ${on}장 출력 (${pages.length - on}장 제외)`);
 }
 
+// 장 위의 체크, 조작부의 체크 — 어느 쪽을 눌러도 같은 곳으로 간다
 prPreview?.addEventListener('change', (e) => {
     const box = e.target.closest('.pr-pick-input');
     if (!box) return;
-    const key = box.dataset.page;
-    const page = box.closest('.pr-sheet');
-    if (box.checked) { prSkip.delete(key); page?.classList.remove('pr-skip'); }
-    else             { prSkip.add(key);    page?.classList.add('pr-skip'); }
+    prSetPageOn(box.dataset.page, box.checked);
+    updatePrintInfo();
+});
+prPagePicks?.addEventListener('change', (e) => {
+    const box = e.target.closest('.pr-pagepick-input');
+    if (!box) return;
+    prSetPageOn(box.dataset.page, box.checked);
     updatePrintInfo();
 });
 
+// 전체 선택·해제도 다시 그리지 않는다 — 보고 있던 자리를 잃지 않게
 document.getElementById('prPickAll')?.addEventListener('click', () => {
-    prSkip.clear();
-    renderPrintPreview();
+    prPageKeys.forEach(k => prSetPageOn(k, true));
+    updatePrintInfo();
 });
 document.getElementById('prPickNone')?.addEventListener('click', () => {
-    prPreview?.querySelectorAll('.pr-sheet').forEach(p => prSkip.add(p.dataset.page));
-    renderPrintPreview();
+    prPageKeys.forEach(k => prSetPageOn(k, false));
+    updatePrintInfo();
 });
 
 // 범위가 바뀌면 뺐던 것도 뜻을 잃는다
