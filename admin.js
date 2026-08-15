@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=69';
-import { matches as hangulMatches } from './scripts/hangul.js?v=69';
-import { registerServiceWorker } from './scripts/sw-update.js?v=69';
-import { sbPostGas } from './scripts/supabase-config.js?v=69';
+} from './scripts/members-data.js?v=70';
+import { matches as hangulMatches } from './scripts/hangul.js?v=70';
+import { registerServiceWorker } from './scripts/sw-update.js?v=70';
+import { sbPostGas } from './scripts/supabase-config.js?v=70';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -865,6 +865,7 @@ const prSessionSelect = document.getElementById('prSession');
 const prTeamSelect    = document.getElementById('prTeam');
 const prPreview       = document.getElementById('prPreview');
 const prPagePicks     = document.getElementById('prPagePicks');
+const prPickSomeBtn   = document.getElementById('prPickSomeBtn');
 const prInfo          = document.getElementById('prInfo');
 const prHint          = document.getElementById('prHint');
 const prOpt = {
@@ -1287,6 +1288,29 @@ prPagePicks?.addEventListener('change', (e) => {
     if (!box) return;
     prSetPageOn(box.dataset.page, box.checked);
     updatePrintInfo();
+    // 여러 장을 연달아 끄는 일이 많다. 하나 고를 때마다 닫으면 다시 열어야 한다.
+});
+
+// '부분 선택' — 목록은 눌렀을 때만 뜬다
+function prSetPickMenu(open) {
+    if (!prPagePicks || !prPickSomeBtn) return;
+    prPagePicks.hidden = !open;
+    prPickSomeBtn.setAttribute('aria-expanded', String(open));
+    prPickSomeBtn.textContent = open ? '부분 선택 ▴' : '부분 선택 ▾';
+}
+prPickSomeBtn?.addEventListener('click', () => prSetPickMenu(prPagePicks?.hidden));
+
+// 바깥을 누르거나 ESC 면 닫는다. 안쪽(체크)을 눌렀을 때는 열어 둔다.
+document.addEventListener('click', (e) => {
+    if (prPagePicks?.hidden) return;
+    if (e.target.closest('.pr-pick-menu')) return;
+    prSetPickMenu(false);
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !prPagePicks?.hidden) {
+        prSetPickMenu(false);
+        prPickSomeBtn?.focus();
+    }
 });
 
 // 전체 선택·해제도 다시 그리지 않는다 — 보고 있던 자리를 잃지 않게
