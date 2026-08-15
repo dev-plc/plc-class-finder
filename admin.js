@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=71';
-import { matches as hangulMatches } from './scripts/hangul.js?v=71';
-import { registerServiceWorker } from './scripts/sw-update.js?v=71';
-import { sbPostGas } from './scripts/supabase-config.js?v=71';
+} from './scripts/members-data.js?v=72';
+import { matches as hangulMatches } from './scripts/hangul.js?v=72';
+import { registerServiceWorker } from './scripts/sw-update.js?v=72';
+import { sbPostGas } from './scripts/supabase-config.js?v=72';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -955,6 +955,34 @@ function prSelectedTeams() {
     return teams.includes(prTeamName) ? [prTeamName] : [];
 }
 
+// 오늘에서 날짜상 가장 가까운 주차.
+//
+// 출석부는 수업 '전에' 뽑는다. 그래서 기본값이 지난 주차면 안 된다 —
+// 수업 전날 인쇄하러 들어오면 지난주 것이 떠서 매번 주차를 바꿔야 했다.
+//
+// 출석 관리 화면은 반대다. 거기는 이미 끝난 수업에 체크하므로 지난 주차가 맞고,
+// 그래서 getCurrentSessionDate(가장 최근 지난 주차)를 그대로 쓴다.
+// 그걸 고치면 출석이 아직 하지도 않은 수업에 찍힌다.
+function prNearestSessionDate() {
+    const sessions = getSessions();
+    if (!sessions.length) return null;
+
+    const t = new Date();
+    const todayIso =
+        `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    const gap = (iso) => Math.abs(Date.parse(iso) - Date.parse(todayIso));
+
+    let best = sessions[0];
+    for (const s of sessions) {
+        // 거리가 같으면 다가오는 쪽 — 인쇄는 앞으로 있을 수업을 위해 한다
+        if (gap(s.session_date) < gap(best.session_date)
+            || (gap(s.session_date) === gap(best.session_date) && s.session_date > best.session_date)) {
+            best = s;
+        }
+    }
+    return best.session_date;
+}
+
 // 그 주차가 해당 월의 마지막 수업인가.
 // 김밥은 다음 달 것을 이때 받으므로 이 주차에만 신청 칸이 필요하다.
 function isLastClassOfMonth(sessionDate) {
@@ -1018,9 +1046,11 @@ function initPrintTab() {
         return `<option value="${x.session_date}">${x.label}${name ? ' · ' + name : ''}</option>`;
     }).join('');
 
+    // 고른 적이 없거나 고른 주차가 사라졌을 때만 기본값을 잡는다.
+    // 매번 다시 잡으면 배경 갱신이 올 때마다 보던 주차가 튕긴다.
     const known = new Set(sessions.map(x => x.session_date));
     if (!prSessionDate || !known.has(prSessionDate)) {
-        prSessionDate = getCurrentSessionDate() || sessions[0]?.session_date || null;
+        prSessionDate = prNearestSessionDate() || sessions[0]?.session_date || null;
     }
     if (prSessionDate) prSessionSelect.value = prSessionDate;
 
