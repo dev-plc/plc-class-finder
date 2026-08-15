@@ -21,8 +21,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=68';
-import { registerServiceWorker } from './scripts/sw-update.js?v=68';
+} from './scripts/members-data.js?v=69';
+import { registerServiceWorker } from './scripts/sw-update.js?v=69';
 
 const SCRIPT_VERSION = 'script.js v62';
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
@@ -1222,7 +1222,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=68';
+                window.location.href = 'admin.html?v=69';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {

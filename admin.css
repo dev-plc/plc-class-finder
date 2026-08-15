@@ -1124,9 +1124,12 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 .pr-summary th, .pr-summary td { padding: 4px 12px; text-align: center; }
 .pr-summary tbody td { height: var(--pr-row, 18mm); }
 .pr-summary thead th { font-size: 14px; padding: 8px 12px; }
-.pr-summary .pr-c-team { width: 22%; }
-.pr-summary .pr-c-loc  { width: 40%; }
-.pr-summary .pr-c-num  { width: 19%; }
+/* 번호는 조원 명단과 같은 자리다 — 표를 나란히 두고 볼 때 눈이 안 헷갈린다.
+   조원 명단의 .pr-c-no 는 26px 고정이지만 여기는 글자가 커서 따로 잡는다. */
+.pr-summary .pr-c-idx  { width: 9%;  color: #667085; }
+.pr-summary .pr-c-team { width: 21%; }
+.pr-summary .pr-c-loc  { width: 36%; }
+.pr-summary .pr-c-num  { width: 17%; }
 .pr-total td { font-weight: 800; background: #f2f4f7 !important; border-top: 1.5px solid #344054; }
 
 /* ── 장마다 붙는 '출력' 체크 (화면 전용) ───────────────────────────── */

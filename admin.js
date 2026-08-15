@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=68';
-import { matches as hangulMatches } from './scripts/hangul.js?v=68';
-import { registerServiceWorker } from './scripts/sw-update.js?v=68';
-import { sbPostGas } from './scripts/supabase-config.js?v=68';
+} from './scripts/members-data.js?v=69';
+import { matches as hangulMatches } from './scripts/hangul.js?v=69';
+import { registerServiceWorker } from './scripts/sw-update.js?v=69';
+import { sbPostGas } from './scripts/supabase-config.js?v=69';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1177,13 +1177,15 @@ function renderPrintPreview() {
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
                 </div>
                 <table class="pr-table pr-summary">
-                    <thead><tr><th class="pr-c-team">조</th><th class="pr-c-loc">장소</th>
+                    <thead><tr><th class="pr-c-idx">No.</th>
+                               <th class="pr-c-team">조</th><th class="pr-c-loc">장소</th>
                                <th class="pr-c-num">인원</th><th class="pr-c-num">김밥</th></tr></thead>
                     <tbody>
-                        ${stats.map(x => `<tr><td>${escapeHtml(x.team)}</td>
+                        ${stats.map((x, i) => `<tr><td class="pr-c-idx">${i + 1}</td>
+                            <td>${escapeHtml(x.team)}</td>
                             <td>${escapeHtml(x.location)}</td>
                             <td>${x.count}</td><td>${x.applied || ''}</td></tr>`).join('')}
-                        <tr class="pr-total"><td>합계</td><td></td><td>${totalN}</td><td>${totalK}</td></tr>
+                        <tr class="pr-total"><td class="pr-c-idx"></td><td>합계</td><td></td><td>${totalN}</td><td>${totalK}</td></tr>
                     </tbody>
                 </table>
                 </section>
