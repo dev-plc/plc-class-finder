@@ -1158,7 +1158,18 @@ body.dark-mode .pr-hint { background: #3a2f1a; border-color: #78350f; color: #fb
     body.printing .pr-sheet.pr-skip,
     body.printing .tab-content:not(#printTab) { display: none !important; }
 
-    body.printing { background: #fff; }
+    /* 감싸고 있는 상자의 여백을 전부 없앤다.
+       .admin-container 의 padding 20px(=5.3mm)가 남아 있으면
+       위 여백이 첫 장을, 아래 여백이 마지막 장을 밀어낸다.
+       줄 높이 계산이 한 장을 269mm 까지(273mm 중 99%) 채우기 때문에
+       5mm 만 끼어들어도 그 장이 통째로 다음 장으로 넘어가고,
+       화면에는 없던 빈 종이가 맨 뒤에 한 장 붙는다.
+       조를 몇 개 빼서 인쇄할 때만 나타나서 원인을 찾기 어려웠다 —
+       마지막에 오는 장이 짧은 조냐 긴 조냐에 따라 갈렸다. */
+    body.printing { background: #fff; margin: 0; padding: 0; }
+    body.printing .admin-container {
+        padding: 0; margin: 0; max-width: none; width: auto; min-height: 0;
+    }
     body.printing .pr-preview { overflow: visible; padding: 0; }
     body.printing .pr-sheet { width: auto; max-width: none; margin: 0; }
     body.printing .pr-page {
