@@ -21,8 +21,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=74';
-import { registerServiceWorker } from './scripts/sw-update.js?v=74';
+} from './scripts/members-data.js?v=75';
+import { registerServiceWorker } from './scripts/sw-update.js?v=75';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -798,14 +798,12 @@ function renderStatusDetail(member) {
 // ============================================================================
 // 6. 조원 목록 (튜터/관리자 뷰)
 // ============================================================================
-const rolePriority = {
-    "관리자": 1,
-    "튜터": 2,
-    "서브튜터": 3,
-    "바나바": 4,
-    "조원": 5,
-    "": 6
-};
+// 조원은 시트에 적힌 순서 그대로 보여 준다 (데이터 계층이 team, team_no 로 준다).
+//
+// 앱에서 다시 세우지 않는다. 시트도 역할값·출석 많은 순으로 정렬돼 있어서
+// 굳이 다시 세울 이유가 없고, 다시 세우면 종이·화면·시트가 제각각이 된다.
+// 여기서 규칙을 흉내 내면 시트를 다시 정렬하거나 사람이 중간에 들어올 때마다
+// 어긋난다 — 순서를 정하는 곳은 시트 한 군데여야 한다.
 
 // 조원 명단이 보고 있는 주차 (YYYY-MM-DD). 튜터가 드롭다운으로 고른다.
 // null 이면 '가장 최근 지난 강의' 로 떨어진다.
@@ -900,12 +898,7 @@ function renderTeamMembers(members, teamName, role) {
     renderTeamSessionBar();
     if (summaryEl) renderTeamSummary(summaryEl, members);
 
-    const sortedMembers = [...members].sort((a, b) => {
-        const priorityA = rolePriority[a.role] || 4;
-        const priorityB = rolePriority[b.role] || 4;
-        if (priorityA !== priorityB) return priorityA - priorityB;
-        return a.name.localeCompare(b.name, 'ko');
-    });
+    const sortedMembers = members;   // 시트 순서 그대로 (위 주석 참고)
 
     const sessionKey = currentSessionKey();
     listElement.innerHTML = sortedMembers.map((m, index) => {
@@ -1079,12 +1072,7 @@ function renderTeamMatrix(teamName, members) {
     if (titleEl) titleEl.textContent = `👥 ${teamName} 전체 현황 (${members.length}명)`;
 
     const cols = buildSessionColumns();
-    const sorted = [...members].sort((a, b) => {
-        const pa = rolePriority[a.role] || 4;
-        const pb = rolePriority[b.role] || 4;
-        if (pa !== pb) return pa - pb;
-        return a.name.localeCompare(b.name, 'ko');
-    });
+    const sorted = members;   // 시트 순서 그대로 — 명단·종이와 줄이 맞아야 한다
 
     const headRow = cols.map(c => `
         <th class="${c.isClass ? '' : 'non-class'}">
@@ -1237,7 +1225,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=74';
+                window.location.href = 'admin.html?v=75';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {
