@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=73';
-import { matches as hangulMatches } from './scripts/hangul.js?v=73';
-import { registerServiceWorker } from './scripts/sw-update.js?v=73';
-import { sbPostGas } from './scripts/supabase-config.js?v=73';
+} from './scripts/members-data.js?v=74';
+import { matches as hangulMatches } from './scripts/hangul.js?v=74';
+import { registerServiceWorker } from './scripts/sw-update.js?v=74';
+import { sbPostGas } from './scripts/supabase-config.js?v=74';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1224,11 +1224,20 @@ function renderPrintPreview() {
     }
 
     for (const st of stats) {
-        const members = [...getTeamMembers(st.team)].sort((a, b) => {
-            const pa = { '튜터': 1, '서브튜터': 2, '조장': 3 }[a.role] || 4;
-            const pb = { '튜터': 1, '서브튜터': 2, '조장': 3 }[b.role] || 4;
-            return pa !== pb ? pa - pb : a.name.localeCompare(b.name, 'ko');
-        });
+        // 시트에 적힌 순서 그대로 둔다.
+        //
+        // 역할순·이름순으로 다시 세우면 종이와 시트를 나란히 놓고 짚어 갈 때
+        // 줄이 어긋난다. 종이에 손으로 적은 걸 시트에 옮기는 일이라
+        // 순서가 다르면 옮겨 적다가 사람을 잘못 찾는다.
+        // (데이터 계층이 team, team_no 로 정렬해 둔다 — 그게 시트 순서다.
+        //  역할은 이름 아래 줄에 나오므로 튜터가 누구인지는 여전히 보인다.)
+        const members = getTeamMembers(st.team);
+
+        // 번호도 시트를 따른다. 전원에게 시트 번호가 있을 때만 그걸 쓰고,
+        // 하나라도 비면 통째로 순번(1,2,3…)으로 간다 —
+        // 섞이면 어느 쪽이 시트 번호인지 알 수 없어 더 헷갈린다.
+        const sheetNos = members.map(m => String(m['no.'] ?? '').trim());
+        const useSheetNo = sheetNos.length > 0 && sheetNos.every(n => n !== '');
 
         // 폭은 CSS 가 칸 종류로 정한다 (table-layout: fixed).
         // 이름 칸만 남는 폭을 먹고, 체크 칸은 항상 좁게 유지된다.
@@ -1256,7 +1265,7 @@ function renderPrintPreview() {
                 ? `<span class="pr-role">${escapeHtml(m.role)}</span>` : '';
             return `
                 <tr>
-                    <td class="pr-c-no">${i + 1}</td>
+                    <td class="pr-c-no">${useSheetNo ? escapeHtml(sheetNos[i]) : i + 1}</td>
                     <td class="pr-c-name">
                         <span class="pr-name-line">${escapeHtml(m.name)}<span class="pr-phone">${escapeHtml(m.phone)}</span></span>${role}
                     </td>
