@@ -21,11 +21,14 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=72';
-import { registerServiceWorker } from './scripts/sw-update.js?v=72';
+} from './scripts/members-data.js?v=73';
+import { registerServiceWorker } from './scripts/sw-update.js?v=73';
 
-const SCRIPT_VERSION = 'script.js v62';
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
+// 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
+// import.meta.url 은 실제로 불러온 주소라 저절로 맞는다.
+const SCRIPT_VERSION =
+    'script.js v' + (new URL(import.meta.url).searchParams.get('v') || '?');
 console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
             'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');
 
@@ -925,7 +928,7 @@ function renderTeamMembers(members, teamName, role) {
             <label class="team-member-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; ${borderStyle} cursor: pointer;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" ${isChecked} class="attendance-check"${locked ? ' disabled' : ''}
-                        data-name="${m.name}" data-phone="${m.phone}" data-initial="${isChecked ? '1' : '0'}"
+                        data-name="${m.name}" data-phone="${m.phone}"
                         data-initial-status="${attendanceRaw}"${locked ? ' data-locked="1"' : ''}
                         style="width: 18px; height: 18px; cursor: ${locked ? 'not-allowed' : 'pointer'};">
                     <span style="font-weight: bold; font-size: 15px; color: var(--text-color);">
@@ -949,10 +952,28 @@ function getAttendanceChecks() {
     return Array.from(document.querySelectorAll('#teamMemberList .attendance-check'));
 }
 
-function countAttendanceChanges() {
+// 체크가 뜻하는 출결 값. 체크=출석, 해제=결석.
+const attTargetStatus = (cb) => (cb.checked ? 'O' : 'X');
+
+// 저장해야 할 사람들.
+//
+// 체크박스의 켜짐/꺼짐만 비교하면 안 된다. 아직 아무 표시도 없는 사람(빈칸)은
+// 화면에서 '해제' 와 똑같이 보이기 때문이다. 그래서 튜터가 출석자만 체크하고
+// 저장하면 O 만 들어가고 나머지는 빈칸으로 남았다 — 결석이 하나도 기록되지 않았다.
+//
+// 값끼리 비교한다. 빈칸('')과 결석('X')은 다른 값이므로 빈칸인 사람도 대상이 된다.
+// 이미 X 인 사람은 그대로라 빠진다 — 보내는 건수는 늘지 않는다.
+// 빈칸이 결석으로 넘어가도 되는 이유: 주차 드롭다운에는 지난(오늘 포함) 주차만
+// 올라온다 (pastSessions). 아직 하지 않은 수업은 고를 수가 없으므로,
+// 여기 보이는 빈칸은 '아직 안 한 수업' 이 아니라 '기록되지 않은 결석' 이다.
+function attendanceEdits() {
     return getAttendanceChecks()
         .filter(cb => !cb.dataset.locked)
-        .filter(cb => (cb.checked ? '1' : '0') !== cb.dataset.initial).length;
+        .filter(cb => attTargetStatus(cb) !== cb.dataset.initialStatus);
+}
+
+function countAttendanceChanges() {
+    return attendanceEdits().length;
 }
 
 function refreshSaveBar() {
@@ -963,10 +984,14 @@ function refreshSaveBar() {
 
     const checks = getAttendanceChecks();
     const checkedCount = checks.filter(cb => cb.checked).length;
+    // 수업없음(−)은 결석이 아니다. 잠긴 사람은 세지 않는다.
+    const absentCount = checks.filter(cb => !cb.checked && !cb.dataset.locked).length;
     const changes = countAttendanceChanges();
 
-    info.textContent = `출석 ${checkedCount} · 결석 ${checks.length - checkedCount}`
-        + (changes ? ` · 변경 ${changes}건` : '');
+    // 저장하면 어떻게 되는지 눌러 보기 전에 보여 준다 —
+    // 체크 안 한 사람이 결석으로 들어간다는 걸 알 수 있어야 한다.
+    info.textContent = `출석 ${checkedCount} · 결석 ${absentCount}`
+        + (changes ? ` · 저장할 것 ${changes}건` : '');
     btn.disabled = changes === 0;
     btn.textContent = changes === 0 ? '변경 사항 없음' : `출석 반영 (${changes}건)`;
     bar.classList.toggle('has-changes', changes > 0);
@@ -988,26 +1013,17 @@ async function saveAttendanceBatch() {
     const info = document.getElementById('attendanceSaveInfo');
     if (!btn) return;
 
-    // 바뀐 사람만 보낸다.
+    // 값이 달라지는 사람만 보낸다.
     //
-    // 전원을 보내면 present ? 'O' : 'X' 로 바뀌면서 ◎(지난 기수 이수)와
-    // −(집계 제외)가 통째로 사라진다. 손대지 않은 사람은 건드리지 않는다.
-    const changed = getAttendanceChecks()
-        .filter(cb => !cb.dataset.locked)
-        .filter(cb => (cb.checked ? '1' : '0') !== cb.dataset.initial);
+    // 전원을 보내면 ◎(지난 기수 이수)와 −(집계 제외)가 통째로 사라진다.
+    // 그 둘은 아예 잠겨 있어(attendanceEdits 가 걸러 낸다) 여기까지 오지 않는다.
+    const changed = attendanceEdits();
     if (changed.length === 0) return;
-
-    // ◎ 를 결석으로 바꾸는 것은 언제나 의심스럽다. 안 나와도 되는 사람이기 때문이다.
-    const demoted = changed.filter(cb => !cb.checked && cb.dataset.initialStatus === '◎');
-    if (demoted.length && !confirm(
-        `지난 기수 이수(◎) ${demoted.length}명을 결석으로 바꿉니다.\n\n` +
-        demoted.map(cb => `${cb.dataset.name}(${cb.dataset.phone})`).join(', ') +
-        `\n\n이분들은 안 나와도 되는 분입니다. 정말 결석으로 기록할까요?`)) return;
 
     const entries = changed.map(cb => ({
         name: cb.dataset.name,
         phone: cb.dataset.phone,
-        present: cb.checked,
+        status: attTargetStatus(cb),
     }));
 
     const prevText = btn.textContent;
@@ -1018,12 +1034,11 @@ async function saveAttendanceBatch() {
         await updateAttendanceBatch(entries, teamSessionDate || undefined);
 
     if (success) {
-        // 저장 성공 → 현재 체크 상태를 새 기준선으로
+        // 저장 성공 → 지금 화면 상태를 새 기준선으로.
+        // 잠긴 사람(◎ · −)은 손대지 않는다 — 그 값은 시트에서만 바뀐다.
         getAttendanceChecks().forEach(cb => {
-            if ((cb.checked ? '1' : '0') !== cb.dataset.initial) {
-                cb.dataset.initialStatus = cb.checked ? 'O' : 'X';
-            }
-            cb.dataset.initial = cb.checked ? '1' : '0';
+            if (cb.dataset.locked) return;
+            cb.dataset.initialStatus = attTargetStatus(cb);
         });
         if (info) {
             info.textContent = `✅ ${session ? session + ' ' : ''}${updated ?? entries.length}건 저장 완료`;
@@ -1222,7 +1237,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=72';
+                window.location.href = 'admin.html?v=73';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {
