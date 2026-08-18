@@ -22,8 +22,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=81';
-import { registerServiceWorker } from './scripts/sw-update.js?v=81';
+} from './scripts/members-data.js?v=82';
+import { registerServiceWorker } from './scripts/sw-update.js?v=82';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -1226,8 +1226,12 @@ function initEventListeners() {
             e.preventDefault();
             const id = document.getElementById('adminId').value;
             const pw = document.getElementById('adminPassword').value;
+            const errorElement = document.getElementById('adminLoginError');
+            if (errorElement) errorElement.style.display = 'none';   // 다시 시도하면 옛 오류를 지운다
+
             if (id === 'plc' && pw === 'plc1234') {
-                alert("로그인 성공!");
+                // 성공은 알리지 않는다. 화면이 넘어가는 것이 곧 성공이다 —
+                // 확인 버튼을 한 번 더 누르게 할 이유가 없다.
                 sessionStorage.setItem('adminLoggedIn', 'true');
                 // 버전을 달고 넘어간다.
                 //
@@ -1238,13 +1242,10 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=81';
-            } else {
-                const errorElement = document.getElementById('adminLoginError');
-                if (errorElement) {
-                    errorElement.style.display = 'block';
-                    errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
-                }
+                window.location.href = 'admin.html?v=82';
+            } else if (errorElement) {
+                errorElement.style.display = 'block';
+                errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
             }
         });
     }

@@ -14,10 +14,10 @@ import {
     getHomeworkList,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=81';
-import { matches as hangulMatches } from './scripts/hangul.js?v=81';
-import { registerServiceWorker } from './scripts/sw-update.js?v=81';
-import { sbPostGas } from './scripts/supabase-config.js?v=81';
+} from './scripts/members-data.js?v=82';
+import { matches as hangulMatches } from './scripts/hangul.js?v=82';
+import { registerServiceWorker } from './scripts/sw-update.js?v=82';
+import { sbPostGas } from './scripts/supabase-config.js?v=82';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -85,7 +85,7 @@ async function loadData() {
         try { renderMembersView(); } catch (e) { console.error(e); }
         try { initAttendanceTab(); } catch (e) { console.error(e); }
         try { initPrintTab(); } catch (e) { console.error(e); }
-        try { initDropoutTab(); } catch (e) { console.error(e); }
+        try { initAbsenceTab(); } catch (e) { console.error(e); }
     }
 }
 
@@ -97,7 +97,7 @@ subscribe((event) => {
         renderMembersView();
         initAttendanceTab();
         initPrintTab();
-        initDropoutTab();
+        initAbsenceTab();
         alert(`${event.to} 명단으로 갱신되었습니다.`);
         return;
     }
@@ -121,7 +121,7 @@ subscribe((event) => {
     // 실제로 ◎ 인 사람이 빈칸으로 보였고, 그 상태에서 '빈칸 → 결석' 을 누르는 바람에
     // 지난 기수 이수자가 결석으로 저장된 일이 있었다.
     try { initPrintTab(); } catch (e) { console.error(e); }
-    try { initDropoutTab(); } catch (e) { console.error(e); }
+    try { initAbsenceTab(); } catch (e) { console.error(e); }
 
     if (attChanges().length === 0) {
         initAttendanceTab();
@@ -1405,156 +1405,221 @@ document.getElementById('prPrintBtn')?.addEventListener('click', () => {
 
 
 // ============================================================================
-// 하차 검토
+// 결석 현황
 //
 // 규칙 (새가족교육 안내문 4항):
 //   3회 결석까지 — 과제 및 소감문 제출로 대체 가능
 //   4회 결석    — 다음 기수에 재수강
 //
-// 그래서 보는 값은 '두 달 안에 몇 번' 이 아니라 '기수 전체에서 몇 번' 이다.
-// 판정 자체는 DB 뷰(v_completion_status)에 있고 여기서는 읽기만 한다 —
-// 대체 인정은 과제 제출 기록과 맞춰 봐야 하는데, 그 규칙이 두 군데 있으면
-// 화면과 수료 판정이 서로 다른 말을 하게 된다.
+// ⚠️ 기준 주차까지만 센다.
 //
-// 이 화면은 재수강을 시키지 않는다. 볼 사람을 추려 줄 뿐이다 —
+// 지난 기수 참석자는 시트에 앞으로의 주차까지 X 가 미리 들어 있는 경우가 있다.
+// 기수 전체를 세면 아직 하지도 않은 수업이 결석으로 잡혀, 실제로는 한 번도
+// 안 빠진 사람이 '4회 이상' 으로 떴다 (이현주 사례).
+// 아직 하지 않은 수업은 결석이 아니다.
+//
+// 이 화면은 아무것도 고치지 않는다. 볼 사람을 추려 줄 뿐이다 —
 // 사정을 미리 알린 사람, 담당 교역자와 의논 중인 사람이 섞여 있다.
-// 그래서 고치는 버튼도 저장도 없다.
 // ============================================================================
-const DO_RETAKE_AT = 4;    // 이 횟수부터 재수강 (안내문 4항)
-const DO_EDGE_AT   = 3;    // 대체로 메울 수 있는 마지막 횟수
+const AB_RETAKE_AT = 4;                  // 이 횟수부터 재수강 (안내문 4항)
+const AB_THRESHOLDS = [2, 3, 4];
+const AB_STREAK_MIN = 2;                 // 이 횟수부터 '연속' 이라고 표시한다
 
-const doSessionSelect = document.getElementById('doSession');
-const doTeamSelect    = document.getElementById('doTeam');
-const doFilters       = document.getElementById('doFilters');
-const doRangeNote     = document.getElementById('doRangeNote');
-const doList          = document.getElementById('doList');
+const abSessionSelect = document.getElementById('abSession');
+const abTeamSelect    = document.getElementById('abTeam');
+const abPastorSelect  = document.getElementById('abPastor');
+const abWeekBadge     = document.getElementById('abWeekBadge');
+const abWeekNote      = document.getElementById('abWeekNote');
+const abWeekList      = document.getElementById('abWeekList');
+const abTotalBadge    = document.getElementById('abTotalBadge');
+const abTotalNote     = document.getElementById('abTotalNote');
+const abTotalList     = document.getElementById('abTotalList');
+const abThresholds    = document.getElementById('abThresholds');
 
-let doSessionDate = null;
-let doTeamName = TEAM_ALL;
-let doFilter = 'retake';
+const AB_PASTOR_ALL = '__all__';
 
-const DO_FILTERS = [
-    { key: 'retake',    label: `결석 ${DO_RETAKE_AT}회 이상` },
-    { key: 'edge',      label: `결석 ${DO_EDGE_AT}회` },
-    { key: 'some',      label: '결석 1~2회' },
-    { key: 'thisWeek',  label: '해당 주차 결석' },
-    { key: 'all',       label: '전체' },
-];
+let abSessionDate = null;
+let abTeamName = TEAM_ALL;
+let abPastor = AB_PASTOR_ALL;
+let abMin = 2;
+let abLastRows = { week: [], total: [] };   // 명단 복사가 쓴다
 
-// 결석한 주차 목록. 판정에는 쓰지 않고 '언제 빠졌나' 를 보여 주는 데만 쓴다.
-function doAbsentWeeks(member) {
-    const out = [];
-    for (const s of getSessions()) {
-        const key = getSessionKey(s.session_date);
-        if (key && normStatus(member[key]) === 'X') out.push(s);
-    }
-    return out;
+// 기준 주차까지의 강의 주차. 여기가 이 화면의 핵심이다.
+// is_class 가 아닌 주차(교제·나눔)는 수료 집계에서 빠지므로 여기서도 뺀다.
+function abSessionsUpTo(dateIso) {
+    return getSessions().filter(s => s.is_class !== false && s.session_date <= dateIso);
 }
 
-function initDropoutTab() {
-    if (!doSessionSelect || !doTeamSelect) return;
+const abPastorOf = (m) => String(m['담당교역자'] || '').trim();
 
-    const sessions = getSessions();
-    doSessionSelect.innerHTML = sessions.map(s =>
-        `<option value="${s.session_date}">${s.label}${s.label_norm ? ' · ' + s.label_norm : ''}</option>`).join('');
+function abRows() {
+    if (!abSessionDate) return [];
+    const sessions = abSessionsUpTo(abSessionDate);
+    const thisKey = getSessionKey(abSessionDate);
 
-    const known = new Set(sessions.map(s => s.session_date));
-    if (!doSessionDate || !known.has(doSessionDate)) {
-        doSessionDate = getCurrentSessionDate() || sessions[sessions.length - 1]?.session_date || null;
-    }
-    if (doSessionDate) doSessionSelect.value = doSessionDate;
+    let people = (abTeamName === TEAM_ALL ? getMembers() : getTeamMembers(abTeamName));
+    if (abPastor !== AB_PASTOR_ALL) people = people.filter(m => abPastorOf(m) === abPastor);
 
-    const teams = getTeams();
-    doTeamSelect.innerHTML = `<option value="${TEAM_ALL}">전체 (${teams.length}개 조)</option>`
-        + teams.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-    if (doTeamName !== TEAM_ALL && !teams.includes(doTeamName)) doTeamName = TEAM_ALL;
-    doTeamSelect.value = doTeamName;
+    return people.map(m => {
+        const absentWeeks = [];
+        let blank = 0;
+        for (const s of sessions) {
+            const key = getSessionKey(s.session_date);
+            const v = normStatus(key ? m[key] : '');
+            if (v === 'X') absentWeeks.push(s);
+            else if (v === '') blank++;
+        }
 
-    renderDropout();
-}
+        // 연속 결석 — 기준 주차부터 거꾸로 이어지는 X 의 개수.
+        // 빈칸에서 멈춘다. 아직 안 찍은 주차를 결석으로 이어 붙이면 안 된다.
+        let streak = 0;
+        for (let i = sessions.length - 1; i >= 0; i--) {
+            const key = getSessionKey(sessions[i].session_date);
+            if (normStatus(key ? m[key] : '') !== 'X') break;
+            streak++;
+        }
 
-function renderDropout() {
-    if (!doList) return;
-
-    const people = (doTeamName === TEAM_ALL ? getMembers() : getTeamMembers(doTeamName));
-    const thisKey = doSessionDate ? getSessionKey(doSessionDate) : '';
-
-    const rows = people.map(m => {
-        const p = getProgress(m);
-        const weeks = doAbsentWeeks(m);
-        // 판정이 아직 안 들어왔으면(뷰 미갱신) 화면에서 센 값으로 버틴다
-        const absent = p ? p.absentCount : weeks.length;
         return {
-            m, p, weeks, absent,
-            // 결석했는데 과제를 안 낸 건 — 아직 대체로 메울 수 있는 몫
-            unfixed: Math.max(0, absent - (p ? p.makeupAvailable : 0)),
+            m, blank, streak,
+            weeks: absentWeeks,
+            absent: absentWeeks.length,
             thisWeek: normStatus(thisKey ? m[thisKey] : '') === 'X',
         };
     });
-
-    const buckets = {
-        retake:   rows.filter(r => r.absent >= DO_RETAKE_AT),
-        edge:     rows.filter(r => r.absent === DO_EDGE_AT),
-        some:     rows.filter(r => r.absent >= 1 && r.absent < DO_EDGE_AT),
-        thisWeek: rows.filter(r => r.thisWeek),
-        all:      rows,
-    };
-
-    if (doRangeNote) {
-        const unrec = rows.reduce((n, r) => n + (r.p?.unrecordedCount ?? 0), 0);
-        const noView = rows.some(r => !r.p);
-        doRangeNote.innerHTML =
-            `기수 전체 누적 · 대상 ${rows.length}명 · `
-            + `<b>${DO_EDGE_AT}회까지</b> 과제·소감문으로 대체, <b>${DO_RETAKE_AT}회</b>부터 재수강`
-            + (unrec ? ` · <span class="do-warn">아직 기록되지 않은 칸 ${unrec}개 — 결석으로 세지 않았습니다</span>` : '')
-            + (noView ? ` · <span class="do-warn">일부는 수료 판정이 아직 안 들어와 화면 집계로 표시합니다</span>` : '');
-    }
-
-    if (doFilters) {
-        doFilters.innerHTML = DO_FILTERS.map(f => `
-            <button type="button" class="do-chip${doFilter === f.key ? ' on' : ''}" data-filter="${f.key}">
-                ${f.label}<span class="do-chip-n">${buckets[f.key].length}</span>
-            </button>`).join('');
-    }
-
-    const list = [...buckets[doFilter]].sort((a, b) =>
-        b.absent - a.absent || String(a.m.team).localeCompare(String(b.m.team), 'ko'));
-
-    if (list.length === 0) {
-        doList.innerHTML = '<div class="do-empty">해당하는 사람이 없습니다.</div>';
-        return;
-    }
-
-    doList.innerHTML = list.map(r => {
-        const lvl = r.absent >= DO_RETAKE_AT ? 'risk' : r.absent >= DO_EDGE_AT ? 'warn' : 'ok';
-        const weeks = r.weeks.map(s => `<span class="do-week">${s.label}</span>`).join('');
-        const covered = r.p ? Math.min(r.p.makeupAvailable, r.absent) : 0;
-        return `
-            <div class="do-item ${lvl}">
-                <div class="do-who">
-                    <span class="do-team">${escapeHtml(r.m.team || '미편성')}</span>
-                    <span class="do-name">${escapeHtml(r.m.name)}<span class="do-phone">${escapeHtml(r.m.phone)}</span></span>
-                    ${r.m.role && r.m.role !== '조원' ? `<span class="do-role">${escapeHtml(r.m.role)}</span>` : ''}
-                </div>
-                <div class="do-detail">
-                    <span class="do-count">결석 <b>${r.absent}</b></span>
-                    ${covered ? `<span class="do-ok">과제 대체 ${covered}</span>` : ''}
-                    ${r.unfixed ? `<span class="do-need">과제 미제출 ${r.unfixed}</span>` : ''}
-                    ${r.p ? `<span class="do-sub">인정 출석 ${r.p.credited}/${r.p.required}</span>` : ''}
-                    <span class="do-weeks">${weeks}</span>
-                </div>
-            </div>`;
-    }).join('');
 }
 
-doSessionSelect?.addEventListener('change', (e) => { doSessionDate = e.target.value; renderDropout(); });
-doTeamSelect?.addEventListener('change', (e) => { doTeamName = e.target.value; renderDropout(); });
-doFilters?.addEventListener('click', (e) => {
-    const btn = e.target.closest('.do-chip');
+function abPersonHtml(r, extra) {
+    return `
+        <div class="ab-item${r.absent >= AB_RETAKE_AT ? ' risk' : ''}">
+            <span class="ab-team">${escapeHtml(r.m.team || '미편성')}</span>
+            <span class="ab-name">${escapeHtml(r.m.name)}<span class="ab-phone">${escapeHtml(r.m.phone)}</span></span>
+            ${abPastor === AB_PASTOR_ALL && abPastorOf(r.m)
+                ? `<span class="ab-pastor">${escapeHtml(abPastorOf(r.m))}</span>` : ''}
+            <span class="ab-extra">${extra}</span>
+        </div>`;
+}
+
+function initAbsenceTab() {
+    if (!abSessionSelect || !abTeamSelect) return;
+
+    const sessions = getSessions();
+    abSessionSelect.innerHTML = sessions.map(s =>
+        `<option value="${s.session_date}">${s.label}${s.label_norm ? ' · ' + s.label_norm : ''}</option>`).join('');
+
+    const known = new Set(sessions.map(s => s.session_date));
+    if (!abSessionDate || !known.has(abSessionDate)) {
+        // 이미 끝난 수업이 기본값 — 아직 안 한 주차를 기준으로 삼으면 안 된다
+        abSessionDate = getCurrentSessionDate() || sessions[sessions.length - 1]?.session_date || null;
+    }
+    if (abSessionDate) abSessionSelect.value = abSessionDate;
+
+    const teams = getTeams();
+    abTeamSelect.innerHTML = `<option value="${TEAM_ALL}">전체 (${teams.length}개 조)</option>`
+        + teams.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    if (abTeamName !== TEAM_ALL && !teams.includes(abTeamName)) abTeamName = TEAM_ALL;
+    abTeamSelect.value = abTeamName;
+
+    if (abPastorSelect) {
+        const pastors = [...new Set(getMembers().map(abPastorOf).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'ko'));
+        abPastorSelect.innerHTML = `<option value="${AB_PASTOR_ALL}">전체</option>`
+            + pastors.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+        if (abPastor !== AB_PASTOR_ALL && !pastors.includes(abPastor)) abPastor = AB_PASTOR_ALL;
+        abPastorSelect.value = abPastor;
+        abPastorSelect.disabled = pastors.length === 0;
+    }
+
+    renderAbsence();
+}
+
+function renderAbsence() {
+    if (!abWeekList || !abTotalList) return;
+
+    const sessions = abSessionsUpTo(abSessionDate || '');
+    const session = getSessions().find(s => s.session_date === abSessionDate);
+    const rows = abRows();
+
+    // ── 이 주차 결석자
+    const week = rows.filter(r => r.thisWeek)
+        .sort((a, b) => b.streak - a.streak
+            || String(a.m.team).localeCompare(String(b.m.team), 'ko'));
+    abLastRows.week = week;
+
+    if (abWeekBadge) {
+        abWeekBadge.textContent = session ? `${session.label} · ${week.length}명` : '';
+    }
+    if (abWeekNote) {
+        // 이 주차에 아직 아무 표시도 없는 사람 (결석이 아니라 미기록이다)
+        const thisKey = abSessionDate ? getSessionKey(abSessionDate) : '';
+        const unset = rows.filter(r => normStatus(thisKey ? r.m[thisKey] : '') === '').length;
+        abWeekNote.textContent = unset
+            ? `※ ${unset}명은 아직 기록이 없습니다 — 결석으로 세지 않았습니다.`
+            : '';
+        abWeekNote.style.display = unset ? '' : 'none';
+    }
+    abWeekList.innerHTML = week.length
+        ? week.map(r => abPersonHtml(r,
+            r.streak >= AB_STREAK_MIN ? `<span class="ab-streak">${r.streak}주 연속</span>` : '')).join('')
+        : '<div class="ab-empty">이 주차 결석자가 없습니다.</div>';
+
+    // ── 누적 결석자
+    const total = rows.filter(r => r.absent >= abMin)
+        .sort((a, b) => b.absent - a.absent
+            || String(a.m.team).localeCompare(String(b.m.team), 'ko'));
+    abLastRows.total = total;
+
+    if (abThresholds) {
+        abThresholds.innerHTML = AB_THRESHOLDS.map(n => `
+            <button type="button" class="ab-th${abMin === n ? ' on' : ''}" data-min="${n}">
+                ${n}회 이상${n === AB_RETAKE_AT ? ' <span class="ab-th-tag">재수강</span>' : ''}
+            </button>`).join('');
+    }
+    if (abTotalBadge) abTotalBadge.textContent = `${total.length}명`;
+    if (abTotalNote) {
+        abTotalNote.textContent =
+            `강의 ${sessions.length}회차 기준 · 결석(X)만 셉니다 (빈칸 · ◎ · − 은 제외)`;
+    }
+    abTotalList.innerHTML = total.length
+        ? total.map(r => abPersonHtml(r,
+            `<span class="ab-count">${r.absent}회</span>`
+            + `<span class="ab-weeks">${r.weeks.map(s => `<span class="ab-week">${s.label}</span>`).join('')}</span>`)).join('')
+        : `<div class="ab-empty">${abMin}회 이상 결석한 사람이 없습니다.</div>`;
+}
+
+abSessionSelect?.addEventListener('change', (e) => { abSessionDate = e.target.value; renderAbsence(); });
+abTeamSelect?.addEventListener('change', (e) => { abTeamName = e.target.value; renderAbsence(); });
+abPastorSelect?.addEventListener('change', (e) => { abPastor = e.target.value; renderAbsence(); });
+abThresholds?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.ab-th');
     if (!btn) return;
-    doFilter = btn.dataset.filter;
-    renderDropout();
+    abMin = Number(btn.dataset.min);
+    renderAbsence();
 });
+
+// 명단 복사 — 조별방에 그대로 붙여 넣을 수 있게 한 줄에 한 사람씩.
+document.getElementById('absenceTab')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.ab-copy');
+    if (!btn) return;
+    const which = btn.dataset.copy;
+    const rows = abLastRows[which] || [];
+    if (!rows.length) { btn.textContent = '복사할 명단 없음'; }
+    else {
+        const text = rows.map(r =>
+            `${r.m.team || ''} ${r.m.name}(${r.m.phone})`
+            + (which === 'total' ? ` 결석 ${r.absent}회` : '')).join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = `✅ ${rows.length}명 복사됨`;
+        } catch {
+            // 클립보드를 막아 둔 환경(비 HTTPS 등)에서도 손으로 긁어갈 수 있게
+            window.prompt('복사할 명단입니다 (Ctrl+C)', text);
+            btn.textContent = '📋 명단 복사';
+            return;
+        }
+    }
+    setTimeout(() => { btn.textContent = '📋 명단 복사'; }, 2000);
+});
+
 // ============================================================================
 // 시트에서 지금 가져오기
 //

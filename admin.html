@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=81">
-    <link rel="stylesheet" href="admin.css?v=81">
+    <link rel="stylesheet" href="style.css?v=82">
+    <link rel="stylesheet" href="admin.css?v=82">
 </head>
 <body>
     <div class="admin-container">
@@ -60,7 +60,7 @@
             <button class="tab-btn" data-tab="search">검색 모드</button>
             <button class="tab-btn" data-tab="teams">조별 보기</button>
             <button class="tab-btn" data-tab="members">개인별 보기</button>
-            <button class="tab-btn" data-tab="dropout">하차 검토</button>
+            <button class="tab-btn" data-tab="absence">결석 현황</button>
             <button class="tab-btn" data-tab="print">출석부 출력</button>
         </nav>
 
@@ -104,28 +104,47 @@
             </div>
         </div>
 
-        <!-- 하차 검토
-             규칙: 3회 결석까지는 과제·소감문으로 대체 가능, 4회 결석이면 다음 기수 재수강.
-             판단은 사람이 한다 — 여기서는 볼 사람을 추려 줄 뿐이다. -->
-        <div class="tab-content" id="dropoutTab">
-            <div class="do-panel">
-                <div class="do-row">
-                    <div class="do-field">
-                        <label for="doSession">기준 주차 <span class="do-label-sub">(해당 주차 결석용)</span></label>
-                        <select id="doSession"></select>
+        <!-- 결석 현황
+             결석(X)만 센다. 기준 주차까지만 센다 — 아직 하지 않은 수업은 결석이 아니다.
+             (지난 기수 참석자의 시트에 앞 주차 X 가 미리 들어 있어 4회로 잡힌 적이 있다) -->
+        <div class="tab-content" id="absenceTab">
+            <div class="ab-panel">
+                <div class="ab-row">
+                    <div class="ab-field">
+                        <label for="abSession">주차</label>
+                        <select id="abSession"></select>
                     </div>
-                    <div class="do-field">
-                        <label for="doTeam">조</label>
-                        <select id="doTeam"></select>
+                    <div class="ab-field">
+                        <label for="abTeam">조</label>
+                        <select id="abTeam"></select>
                     </div>
-                </div>
-                <div class="do-hint" id="doRangeNote"></div>
-                <div class="do-row do-row-filters">
-                    <span class="do-row-label">보기</span>
-                    <div class="do-chips" id="doFilters"></div>
+                    <div class="ab-field">
+                        <label for="abPastor">담당교역자</label>
+                        <select id="abPastor"></select>
+                    </div>
                 </div>
             </div>
-            <div class="do-list" id="doList"></div>
+
+            <section class="ab-card">
+                <div class="ab-card-head">
+                    <h3>이 주차 결석자</h3>
+                    <span class="ab-badge" id="abWeekBadge"></span>
+                    <button type="button" class="ab-copy" data-copy="week">📋 명단 복사</button>
+                </div>
+                <p class="ab-note" id="abWeekNote"></p>
+                <div class="ab-list" id="abWeekList"></div>
+            </section>
+
+            <section class="ab-card">
+                <div class="ab-card-head">
+                    <h3>누적 결석자</h3>
+                    <span class="ab-badge" id="abTotalBadge"></span>
+                    <div class="ab-thresholds" id="abThresholds"></div>
+                    <button type="button" class="ab-copy" data-copy="total">📋 명단 복사</button>
+                </div>
+                <p class="ab-note" id="abTotalNote"></p>
+                <div class="ab-list" id="abTotalList"></div>
+            </section>
         </div>
 
         <!-- 출석부 출력 (인쇄용) -->
@@ -277,7 +296,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=81"></script>
+    <script type="module" src="admin.js?v=82"></script>
 </body>
 </html>
 
