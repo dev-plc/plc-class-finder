@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=77">
-    <link rel="stylesheet" href="admin.css?v=77">
+    <link rel="stylesheet" href="style.css?v=78">
+    <link rel="stylesheet" href="admin.css?v=78">
 </head>
 <body>
     <div class="admin-container">
@@ -105,21 +105,14 @@
         </div>
 
         <!-- 하차 검토
-             규칙: 두 달에 2회 이상 결석하면 하차.
+             규칙: 3회 결석까지는 과제·소감문으로 대체 가능, 4회 결석이면 다음 기수 재수강.
              판단은 사람이 한다 — 여기서는 볼 사람을 추려 줄 뿐이다. -->
         <div class="tab-content" id="dropoutTab">
             <div class="do-panel">
                 <div class="do-row">
                     <div class="do-field">
-                        <label for="doSession">기준 주차</label>
+                        <label for="doSession">기준 주차 <span class="do-label-sub">(해당 주차 결석용)</span></label>
                         <select id="doSession"></select>
-                    </div>
-                    <div class="do-field">
-                        <label for="doRange">집계 기간</label>
-                        <select id="doRange">
-                            <option value="2m">최근 두 달 (하차 규칙)</option>
-                            <option value="all">전체 기간</option>
-                        </select>
                     </div>
                     <div class="do-field">
                         <label for="doTeam">조</label>
@@ -284,7 +277,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=77"></script>
+    <script type="module" src="admin.js?v=78"></script>
 </body>
 </html>
 

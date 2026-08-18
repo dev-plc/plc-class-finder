@@ -1325,6 +1325,17 @@ body.dark-mode .sync-info { color: #9ca3af; }
 .do-item.warn .do-count b { color: #b54708; }
 .do-item.ok   .do-count b { color: #667085; }
 .do-sub { font-size: 12px; color: #667085; }
+/* 과제로 메운 결석과, 아직 못 메운 결석은 성격이 다르다 —
+   앞은 이미 처리된 것, 뒤는 지금 연락해야 할 것이다. */
+.do-ok {
+    font-size: 12px; font-weight: 700; color: #027a48;
+    background: #ecfdf3; border: 1px solid #abefc6; border-radius: 6px; padding: 2px 7px;
+}
+.do-need {
+    font-size: 12px; font-weight: 700; color: #b54708;
+    background: #fffaeb; border: 1px solid #fedf89; border-radius: 6px; padding: 2px 7px;
+}
+.do-label-sub { font-weight: 500; color: #98a2b3; }
 .do-weeks { display: flex; flex-wrap: wrap; gap: 4px; }
 .do-week {
     font-size: 11px; font-weight: 700; color: #b42318;
