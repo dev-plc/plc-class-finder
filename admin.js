@@ -13,10 +13,10 @@ import {
     getKimbapDetail,
     getHomeworkList,
     subscribe,
-} from './scripts/members-data.js?v=75';
-import { matches as hangulMatches } from './scripts/hangul.js?v=75';
-import { registerServiceWorker } from './scripts/sw-update.js?v=75';
-import { sbPostGas } from './scripts/supabase-config.js?v=75';
+} from './scripts/members-data.js?v=76';
+import { matches as hangulMatches } from './scripts/hangul.js?v=76';
+import { registerServiceWorker } from './scripts/sw-update.js?v=76';
+import { sbPostGas } from './scripts/supabase-config.js?v=76';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -84,6 +84,7 @@ async function loadData() {
         try { renderMembersView(); } catch (e) { console.error(e); }
         try { initAttendanceTab(); } catch (e) { console.error(e); }
         try { initPrintTab(); } catch (e) { console.error(e); }
+        try { initDropoutTab(); } catch (e) { console.error(e); }
     }
 }
 
@@ -95,6 +96,7 @@ subscribe((event) => {
         renderMembersView();
         initAttendanceTab();
         initPrintTab();
+        initDropoutTab();
         alert(`${event.to} 명단으로 갱신되었습니다.`);
         return;
     }
@@ -118,6 +120,7 @@ subscribe((event) => {
     // 실제로 ◎ 인 사람이 빈칸으로 보였고, 그 상태에서 '빈칸 → 결석' 을 누르는 바람에
     // 지난 기수 이수자가 결석으로 저장된 일이 있었다.
     try { initPrintTab(); } catch (e) { console.error(e); }
+    try { initDropoutTab(); } catch (e) { console.error(e); }
 
     if (attChanges().length === 0) {
         initAttendanceTab();
@@ -1397,6 +1400,179 @@ document.getElementById('prPrintBtn')?.addEventListener('click', () => {
     document.body.classList.add('printing');
     window.print();
     setTimeout(() => document.body.classList.remove('printing'), 0);
+});
+
+
+// ============================================================================
+// 하차 검토
+//
+// 규칙: 두 달에 2회 이상 결석하면 하차한다.
+//
+// 이 화면은 하차를 시키지 않는다. 볼 사람을 추려 줄 뿐이다 —
+// 사정이 있어 미리 알린 사람, 담당 교역자와 의논 중인 사람이 섞여 있으므로
+// 명단을 그대로 집행하면 안 된다. 그래서 버튼도 없고 저장도 없다.
+//
+// 세는 규칙:
+//   X        결석으로 센다
+//   O · ◎    출석 (◎ 는 예습과제·소감문을 낸 대체 출석이다)
+//   −        수업이 없던 주차. 분모에서도 뺀다
+//   빈칸      아직 기록되지 않은 것이지 결석이 아니다. 따로 세어 알려 준다
+// ============================================================================
+const DO_ABSENT_LIMIT = 2;          // 두 달에 이 횟수 이상이면 하차 대상
+
+const doSessionSelect = document.getElementById('doSession');
+const doRangeSelect   = document.getElementById('doRange');
+const doTeamSelect    = document.getElementById('doTeam');
+const doFilters       = document.getElementById('doFilters');
+const doRangeNote     = document.getElementById('doRangeNote');
+const doList          = document.getElementById('doList');
+
+let doSessionDate = null;
+let doRange = '2m';
+let doTeamName = TEAM_ALL;
+let doFilter = 'risk';              // risk | absentThisWeek | one | all
+
+const DO_FILTERS = [
+    { key: 'risk',            label: `결석 ${DO_ABSENT_LIMIT}회 이상`, hint: '하차 대상' },
+    { key: 'one',             label: '결석 1회',                      hint: '주의' },
+    { key: 'absentThisWeek',  label: '해당 주차 결석',                 hint: '' },
+    { key: 'all',             label: '전체',                          hint: '' },
+];
+
+// 집계에 넣을 주차들. '최근 두 달' 은 기준 주차가 속한 달과 그 직전 달이다.
+// 규칙이 달 단위로 쓰여 있어(8월 하차 → 10월 재신청) 날짜가 아니라 달로 자른다.
+function doSessionsInRange() {
+    const all = getSessions().filter(s => s.session_date <= doSessionDate);
+    if (doRange === 'all') return all;
+
+    const [y, m] = doSessionDate.split('-').map(Number);
+    const prev = new Date(Date.UTC(y, m - 2, 1));   // 직전 달 1일
+    const from = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    return all.filter(s => s.session_date >= from);
+}
+
+// 한 사람의 결석 내역
+function doTally(member, sessions) {
+    const absent = [];
+    let present = 0, blank = 0, off = 0;
+    for (const s of sessions) {
+        const key = getSessionKey(s.session_date);
+        const v = normStatus(key ? member[key] : '');
+        if (v === 'X') absent.push(s);
+        else if (v === 'O' || v === '◎') present++;
+        else if (v === '-') off++;
+        else blank++;
+    }
+    return { absent, present, blank, off };
+}
+
+function initDropoutTab() {
+    if (!doSessionSelect || !doTeamSelect) return;
+
+    const sessions = getSessions();
+    doSessionSelect.innerHTML = sessions.map(s =>
+        `<option value="${s.session_date}">${s.label}${s.label_norm ? ' · ' + s.label_norm : ''}</option>`).join('');
+
+    const known = new Set(sessions.map(s => s.session_date));
+    if (!doSessionDate || !known.has(doSessionDate)) {
+        // 하차 판단은 이미 끝난 수업으로 한다 — 아직 안 한 주차는 결석이 아니다
+        doSessionDate = getCurrentSessionDate() || sessions[sessions.length - 1]?.session_date || null;
+    }
+    if (doSessionDate) doSessionSelect.value = doSessionDate;
+
+    const teams = getTeams();
+    doTeamSelect.innerHTML = `<option value="${TEAM_ALL}">전체 (${teams.length}개 조)</option>`
+        + teams.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    if (doTeamName !== TEAM_ALL && !teams.includes(doTeamName)) doTeamName = TEAM_ALL;
+    doTeamSelect.value = doTeamName;
+    if (doRangeSelect) doRangeSelect.value = doRange;
+
+    renderDropout();
+}
+
+function renderDropout() {
+    if (!doList) return;
+
+    const sessions = doSessionsInRange();
+    if (!doSessionDate || sessions.length === 0) {
+        doList.innerHTML = '<div class="do-empty">기준 주차를 고르세요.</div>';
+        if (doFilters) doFilters.innerHTML = '';
+        if (doRangeNote) doRangeNote.textContent = '';
+        return;
+    }
+
+    const people = (doTeamName === TEAM_ALL ? getMembers() : getTeamMembers(doTeamName));
+    const thisKey = getSessionKey(doSessionDate);
+
+    const rows = people.map(m => {
+        const t = doTally(m, sessions);
+        return {
+            m,
+            ...t,
+            absentThisWeek: normStatus(thisKey ? m[thisKey] : '') === 'X',
+        };
+    });
+
+    const buckets = {
+        risk:           rows.filter(r => r.absent.length >= DO_ABSENT_LIMIT),
+        one:            rows.filter(r => r.absent.length === 1),
+        absentThisWeek: rows.filter(r => r.absentThisWeek),
+        all:            rows,
+    };
+
+    if (doRangeNote) {
+        const first = sessions[0], last = sessions[sessions.length - 1];
+        const blanks = rows.reduce((n, r) => n + r.blank, 0);
+        doRangeNote.innerHTML =
+            `<b>${first.label} ~ ${last.label}</b> ${sessions.length}개 주차 기준 · 대상 ${rows.length}명`
+            + (blanks ? ` · <span class="do-warn">아직 기록되지 않은 칸 ${blanks}개 — 결석으로 세지 않았습니다</span>` : '');
+    }
+
+    if (doFilters) {
+        doFilters.innerHTML = DO_FILTERS.map(f => `
+            <button type="button" class="do-chip${doFilter === f.key ? ' on' : ''}" data-filter="${f.key}">
+                ${f.label}<span class="do-chip-n">${buckets[f.key].length}</span>
+            </button>`).join('');
+    }
+
+    const list = [...buckets[doFilter]].sort((a, b) =>
+        b.absent.length - a.absent.length
+        || String(a.m.team).localeCompare(String(b.m.team), 'ko'));
+
+    if (list.length === 0) {
+        doList.innerHTML = '<div class="do-empty">해당하는 사람이 없습니다.</div>';
+        return;
+    }
+
+    doList.innerHTML = list.map(r => {
+        const lvl = r.absent.length >= DO_ABSENT_LIMIT ? 'risk' : r.absent.length === 1 ? 'warn' : 'ok';
+        const weeks = r.absent.map(s => `<span class="do-week">${s.label}</span>`).join('');
+        const denom = r.present + r.absent.length + r.blank;   // 수업없음(−)은 뺀다
+        return `
+            <div class="do-item ${lvl}">
+                <div class="do-who">
+                    <span class="do-team">${escapeHtml(r.m.team || '미편성')}</span>
+                    <span class="do-name">${escapeHtml(r.m.name)}<span class="do-phone">${escapeHtml(r.m.phone)}</span></span>
+                    ${r.m.role && r.m.role !== '조원' ? `<span class="do-role">${escapeHtml(r.m.role)}</span>` : ''}
+                </div>
+                <div class="do-detail">
+                    <span class="do-count">결석 <b>${r.absent.length}</b></span>
+                    <span class="do-sub">출석 ${r.present}/${denom}</span>
+                    ${r.blank ? `<span class="do-sub do-warn">미기록 ${r.blank}</span>` : ''}
+                    <span class="do-weeks">${weeks}</span>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+doSessionSelect?.addEventListener('change', (e) => { doSessionDate = e.target.value; renderDropout(); });
+doRangeSelect?.addEventListener('change', (e) => { doRange = e.target.value; renderDropout(); });
+doTeamSelect?.addEventListener('change', (e) => { doTeamName = e.target.value; renderDropout(); });
+doFilters?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.do-chip');
+    if (!btn) return;
+    doFilter = btn.dataset.filter;
+    renderDropout();
 });
 
 
