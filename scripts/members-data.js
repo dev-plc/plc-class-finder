@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=79';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=79';
+import { matches as hangulMatches } from './hangul.js?v=80';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=80';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -438,17 +438,17 @@ export function isOnlineLocation(location) {
 /**
  * 안내할 전체 안내방.
  *
- * 온라인 전체방이 아직 없으면 현장 방으로 물러서되, label 도 같이 되돌린다 —
+ * 온라인 전체방이 아직 없으면 현장 방으로 물러서되, name 도 같이 되돌린다 —
  * '온라인' 이라고 적어 놓고 현장 방을 열어 주면 안 뜨는 것보다 나쁘다.
  *
- * @returns {{url: string|null, label: string, online: boolean}}
+ * @returns {{url: string|null, name: string, online: boolean}}
  */
 export function getAnnouncementRoom(location) {
   if (isOnlineLocation(location)) {
     const url = findRoomUrl(ROOM_ONLINE_KEYS);
-    if (url) return { url, label: '온라인 새가족교육 안내방', online: true };
+    if (url) return { url, name: '온라인새가족교육안내방', online: true };
   }
-  return { url: findRoomUrl(ROOM_GENERAL_KEYS), label: '새가족교육안내방', online: false };
+  return { url: findRoomUrl(ROOM_GENERAL_KEYS), name: '새가족교육안내방', online: false };
 }
 
 /** 전체 안내방으로 쓰이는 줄인가 (조별방 목록에서 걸러낼 때 쓴다) */
