@@ -22,8 +22,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=79';
-import { registerServiceWorker } from './scripts/sw-update.js?v=79';
+} from './scripts/members-data.js?v=80';
+import { registerServiceWorker } from './scripts/sw-update.js?v=80';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -276,6 +276,13 @@ function displayResult(member) {
 
             if (!row) return;
 
+            // 라벨은 만들 때만 넣으면 안 된다.
+            // 이 행은 한 번 만들어 두고 계속 재사용하는데(조회할 때마다 지웠다
+            // 다시 만들지 않는다), 그러면 맨 처음 조회한 사람의 라벨이 그대로 굳는다.
+            // 실제로 온라인 조원을 먼저 조회하면 그 뒤로 현장 조원한테도
+            // '온라인 새가족교육 안내방' 이라고 붙어 있었다.
+            if (row.children[0]) row.children[0].textContent = labelText;
+
             const linkEl = row.querySelector('a.telegram-btn');
             const textEl = row.querySelector('.tg-text');
 
@@ -288,14 +295,14 @@ function displayResult(member) {
             }
         }
 
-        // 전체 안내방 — 현장은 '새가족교육안내방', 온라인은 '온라인 새가족교육'.
-        // 위치로 갈린다.
+        // 전체 안내방. 왼쪽 칸은 '안내방' 으로 고정하고, 어느 방인지는 버튼에 적는다 —
+        // 방 이름을 라벨에 넣으면 칸이 좁아 두 줄로 접힌다.
         const room = getAnnouncementRoom(member.location);
         ensureTelegramRow(
             'newFamilyRow',
-            room.label,
+            '안내방',
             room.url,
-            `${room.label} 입장하기`
+            `${room.name} 입장하기`
         );
 
         // 본인 소속 조 안내방.
@@ -1231,7 +1238,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=79';
+                window.location.href = 'admin.html?v=80';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {
