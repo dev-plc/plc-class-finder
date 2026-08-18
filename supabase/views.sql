@@ -66,7 +66,8 @@ scored as (
     att.*,
     -- 출석 인정 (현장 O / 지난 기수 이수 ◎)
     (raw_status in ('O', '◎'))                          as present,
-    -- 결석 (미기록도 결석. '-'는 어느 쪽도 아님 → 무시)
+    -- 결석은 X 만. 빈칸은 아직 기록되지 않은 것이라 unrecorded_count 로 따로 센다
+    -- ('-' 는 어느 쪽도 아님 → 무시)
     (raw_status = 'X')                                  as absent,
     -- '-' : 하차·중도합류·휴강 등 사유를 구분하지 않고 집계에서 제외
     (raw_status = '-')                                  as skipped,

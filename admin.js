@@ -12,11 +12,12 @@ import {
     refresh,
     getKimbapDetail,
     getHomeworkList,
+    getProgress,
     subscribe,
-} from './scripts/members-data.js?v=77';
-import { matches as hangulMatches } from './scripts/hangul.js?v=77';
-import { registerServiceWorker } from './scripts/sw-update.js?v=77';
-import { sbPostGas } from './scripts/supabase-config.js?v=77';
+} from './scripts/members-data.js?v=78';
+import { matches as hangulMatches } from './scripts/hangul.js?v=78';
+import { registerServiceWorker } from './scripts/sw-update.js?v=78';
+import { sbPostGas } from './scripts/supabase-config.js?v=78';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1406,64 +1407,48 @@ document.getElementById('prPrintBtn')?.addEventListener('click', () => {
 // ============================================================================
 // 하차 검토
 //
-// 규칙: 두 달에 2회 이상 결석하면 하차한다.
+// 규칙 (새가족교육 안내문 4항):
+//   3회 결석까지 — 과제 및 소감문 제출로 대체 가능
+//   4회 결석    — 다음 기수에 재수강
 //
-// 이 화면은 하차를 시키지 않는다. 볼 사람을 추려 줄 뿐이다 —
-// 사정이 있어 미리 알린 사람, 담당 교역자와 의논 중인 사람이 섞여 있으므로
-// 명단을 그대로 집행하면 안 된다. 그래서 버튼도 없고 저장도 없다.
+// 그래서 보는 값은 '두 달 안에 몇 번' 이 아니라 '기수 전체에서 몇 번' 이다.
+// 판정 자체는 DB 뷰(v_completion_status)에 있고 여기서는 읽기만 한다 —
+// 대체 인정은 과제 제출 기록과 맞춰 봐야 하는데, 그 규칙이 두 군데 있으면
+// 화면과 수료 판정이 서로 다른 말을 하게 된다.
 //
-// 세는 규칙:
-//   X        결석으로 센다
-//   O · ◎    출석 (◎ 는 예습과제·소감문을 낸 대체 출석이다)
-//   −        수업이 없던 주차. 분모에서도 뺀다
-//   빈칸      아직 기록되지 않은 것이지 결석이 아니다. 따로 세어 알려 준다
+// 이 화면은 재수강을 시키지 않는다. 볼 사람을 추려 줄 뿐이다 —
+// 사정을 미리 알린 사람, 담당 교역자와 의논 중인 사람이 섞여 있다.
+// 그래서 고치는 버튼도 저장도 없다.
 // ============================================================================
-const DO_ABSENT_LIMIT = 2;          // 두 달에 이 횟수 이상이면 하차 대상
+const DO_RETAKE_AT = 4;    // 이 횟수부터 재수강 (안내문 4항)
+const DO_EDGE_AT   = 3;    // 대체로 메울 수 있는 마지막 횟수
 
 const doSessionSelect = document.getElementById('doSession');
-const doRangeSelect   = document.getElementById('doRange');
 const doTeamSelect    = document.getElementById('doTeam');
 const doFilters       = document.getElementById('doFilters');
 const doRangeNote     = document.getElementById('doRangeNote');
 const doList          = document.getElementById('doList');
 
 let doSessionDate = null;
-let doRange = '2m';
 let doTeamName = TEAM_ALL;
-let doFilter = 'risk';              // risk | absentThisWeek | one | all
+let doFilter = 'retake';
 
 const DO_FILTERS = [
-    { key: 'risk',            label: `결석 ${DO_ABSENT_LIMIT}회 이상`, hint: '하차 대상' },
-    { key: 'one',             label: '결석 1회',                      hint: '주의' },
-    { key: 'absentThisWeek',  label: '해당 주차 결석',                 hint: '' },
-    { key: 'all',             label: '전체',                          hint: '' },
+    { key: 'retake',    label: `결석 ${DO_RETAKE_AT}회 이상` },
+    { key: 'edge',      label: `결석 ${DO_EDGE_AT}회` },
+    { key: 'some',      label: '결석 1~2회' },
+    { key: 'thisWeek',  label: '해당 주차 결석' },
+    { key: 'all',       label: '전체' },
 ];
 
-// 집계에 넣을 주차들. '최근 두 달' 은 기준 주차가 속한 달과 그 직전 달이다.
-// 규칙이 달 단위로 쓰여 있어(8월 하차 → 10월 재신청) 날짜가 아니라 달로 자른다.
-function doSessionsInRange() {
-    const all = getSessions().filter(s => s.session_date <= doSessionDate);
-    if (doRange === 'all') return all;
-
-    const [y, m] = doSessionDate.split('-').map(Number);
-    const prev = new Date(Date.UTC(y, m - 2, 1));   // 직전 달 1일
-    const from = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, '0')}-01`;
-    return all.filter(s => s.session_date >= from);
-}
-
-// 한 사람의 결석 내역
-function doTally(member, sessions) {
-    const absent = [];
-    let present = 0, blank = 0, off = 0;
-    for (const s of sessions) {
+// 결석한 주차 목록. 판정에는 쓰지 않고 '언제 빠졌나' 를 보여 주는 데만 쓴다.
+function doAbsentWeeks(member) {
+    const out = [];
+    for (const s of getSessions()) {
         const key = getSessionKey(s.session_date);
-        const v = normStatus(key ? member[key] : '');
-        if (v === 'X') absent.push(s);
-        else if (v === 'O' || v === '◎') present++;
-        else if (v === '-') off++;
-        else blank++;
+        if (key && normStatus(member[key]) === 'X') out.push(s);
     }
-    return { absent, present, blank, off };
+    return out;
 }
 
 function initDropoutTab() {
@@ -1475,7 +1460,6 @@ function initDropoutTab() {
 
     const known = new Set(sessions.map(s => s.session_date));
     if (!doSessionDate || !known.has(doSessionDate)) {
-        // 하차 판단은 이미 끝난 수업으로 한다 — 아직 안 한 주차는 결석이 아니다
         doSessionDate = getCurrentSessionDate() || sessions[sessions.length - 1]?.session_date || null;
     }
     if (doSessionDate) doSessionSelect.value = doSessionDate;
@@ -1485,7 +1469,6 @@ function initDropoutTab() {
         + teams.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
     if (doTeamName !== TEAM_ALL && !teams.includes(doTeamName)) doTeamName = TEAM_ALL;
     doTeamSelect.value = doTeamName;
-    if (doRangeSelect) doRangeSelect.value = doRange;
 
     renderDropout();
 }
@@ -1493,39 +1476,38 @@ function initDropoutTab() {
 function renderDropout() {
     if (!doList) return;
 
-    const sessions = doSessionsInRange();
-    if (!doSessionDate || sessions.length === 0) {
-        doList.innerHTML = '<div class="do-empty">기준 주차를 고르세요.</div>';
-        if (doFilters) doFilters.innerHTML = '';
-        if (doRangeNote) doRangeNote.textContent = '';
-        return;
-    }
-
     const people = (doTeamName === TEAM_ALL ? getMembers() : getTeamMembers(doTeamName));
-    const thisKey = getSessionKey(doSessionDate);
+    const thisKey = doSessionDate ? getSessionKey(doSessionDate) : '';
 
     const rows = people.map(m => {
-        const t = doTally(m, sessions);
+        const p = getProgress(m);
+        const weeks = doAbsentWeeks(m);
+        // 판정이 아직 안 들어왔으면(뷰 미갱신) 화면에서 센 값으로 버틴다
+        const absent = p ? p.absentCount : weeks.length;
         return {
-            m,
-            ...t,
-            absentThisWeek: normStatus(thisKey ? m[thisKey] : '') === 'X',
+            m, p, weeks, absent,
+            // 결석했는데 과제를 안 낸 건 — 아직 대체로 메울 수 있는 몫
+            unfixed: Math.max(0, absent - (p ? p.makeupAvailable : 0)),
+            thisWeek: normStatus(thisKey ? m[thisKey] : '') === 'X',
         };
     });
 
     const buckets = {
-        risk:           rows.filter(r => r.absent.length >= DO_ABSENT_LIMIT),
-        one:            rows.filter(r => r.absent.length === 1),
-        absentThisWeek: rows.filter(r => r.absentThisWeek),
-        all:            rows,
+        retake:   rows.filter(r => r.absent >= DO_RETAKE_AT),
+        edge:     rows.filter(r => r.absent === DO_EDGE_AT),
+        some:     rows.filter(r => r.absent >= 1 && r.absent < DO_EDGE_AT),
+        thisWeek: rows.filter(r => r.thisWeek),
+        all:      rows,
     };
 
     if (doRangeNote) {
-        const first = sessions[0], last = sessions[sessions.length - 1];
-        const blanks = rows.reduce((n, r) => n + r.blank, 0);
+        const unrec = rows.reduce((n, r) => n + (r.p?.unrecordedCount ?? 0), 0);
+        const noView = rows.some(r => !r.p);
         doRangeNote.innerHTML =
-            `<b>${first.label} ~ ${last.label}</b> ${sessions.length}개 주차 기준 · 대상 ${rows.length}명`
-            + (blanks ? ` · <span class="do-warn">아직 기록되지 않은 칸 ${blanks}개 — 결석으로 세지 않았습니다</span>` : '');
+            `기수 전체 누적 · 대상 ${rows.length}명 · `
+            + `<b>${DO_EDGE_AT}회까지</b> 과제·소감문으로 대체, <b>${DO_RETAKE_AT}회</b>부터 재수강`
+            + (unrec ? ` · <span class="do-warn">아직 기록되지 않은 칸 ${unrec}개 — 결석으로 세지 않았습니다</span>` : '')
+            + (noView ? ` · <span class="do-warn">일부는 수료 판정이 아직 안 들어와 화면 집계로 표시합니다</span>` : '');
     }
 
     if (doFilters) {
@@ -1536,8 +1518,7 @@ function renderDropout() {
     }
 
     const list = [...buckets[doFilter]].sort((a, b) =>
-        b.absent.length - a.absent.length
-        || String(a.m.team).localeCompare(String(b.m.team), 'ko'));
+        b.absent - a.absent || String(a.m.team).localeCompare(String(b.m.team), 'ko'));
 
     if (list.length === 0) {
         doList.innerHTML = '<div class="do-empty">해당하는 사람이 없습니다.</div>';
@@ -1545,9 +1526,9 @@ function renderDropout() {
     }
 
     doList.innerHTML = list.map(r => {
-        const lvl = r.absent.length >= DO_ABSENT_LIMIT ? 'risk' : r.absent.length === 1 ? 'warn' : 'ok';
-        const weeks = r.absent.map(s => `<span class="do-week">${s.label}</span>`).join('');
-        const denom = r.present + r.absent.length + r.blank;   // 수업없음(−)은 뺀다
+        const lvl = r.absent >= DO_RETAKE_AT ? 'risk' : r.absent >= DO_EDGE_AT ? 'warn' : 'ok';
+        const weeks = r.weeks.map(s => `<span class="do-week">${s.label}</span>`).join('');
+        const covered = r.p ? Math.min(r.p.makeupAvailable, r.absent) : 0;
         return `
             <div class="do-item ${lvl}">
                 <div class="do-who">
@@ -1556,9 +1537,10 @@ function renderDropout() {
                     ${r.m.role && r.m.role !== '조원' ? `<span class="do-role">${escapeHtml(r.m.role)}</span>` : ''}
                 </div>
                 <div class="do-detail">
-                    <span class="do-count">결석 <b>${r.absent.length}</b></span>
-                    <span class="do-sub">출석 ${r.present}/${denom}</span>
-                    ${r.blank ? `<span class="do-sub do-warn">미기록 ${r.blank}</span>` : ''}
+                    <span class="do-count">결석 <b>${r.absent}</b></span>
+                    ${covered ? `<span class="do-ok">과제 대체 ${covered}</span>` : ''}
+                    ${r.unfixed ? `<span class="do-need">과제 미제출 ${r.unfixed}</span>` : ''}
+                    ${r.p ? `<span class="do-sub">인정 출석 ${r.p.credited}/${r.p.required}</span>` : ''}
                     <span class="do-weeks">${weeks}</span>
                 </div>
             </div>`;
@@ -1566,7 +1548,6 @@ function renderDropout() {
 }
 
 doSessionSelect?.addEventListener('change', (e) => { doSessionDate = e.target.value; renderDropout(); });
-doRangeSelect?.addEventListener('change', (e) => { doRange = e.target.value; renderDropout(); });
 doTeamSelect?.addEventListener('change', (e) => { doTeamName = e.target.value; renderDropout(); });
 doFilters?.addEventListener('click', (e) => {
     const btn = e.target.closest('.do-chip');
@@ -1574,8 +1555,6 @@ doFilters?.addEventListener('click', (e) => {
     doFilter = btn.dataset.filter;
     renderDropout();
 });
-
-
 // ============================================================================
 // 시트에서 지금 가져오기
 //
