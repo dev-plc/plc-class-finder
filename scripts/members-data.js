@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=76';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=76';
+import { matches as hangulMatches } from './hangul.js?v=77';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=77';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -404,8 +404,33 @@ export function getTeamLink(teamName) {
   return state.teamLinks[teamName] || null;
 }
 
-export function getGeneralAnnouncementLink() {
-  return state.teamLinks['새가족교육안내방'] || null;
+// 새가족교육 안내방.
+//
+// 온라인 조는 방이 따로 있다. 현장 조와 같은 방을 알려 주면
+// 엉뚱한 방으로 들어가고, 정작 자기 안내는 못 받는다.
+//
+// team_links 에 team = '온라인새가족교육안내방' 으로 한 줄 넣어 두면 그걸 쓴다.
+// 없으면 현장 방으로 물러선다 — 링크가 아예 안 뜨는 것보다 낫다.
+// 그래서 되돌려 주는 label 은 '실제로 고른 방' 의 이름이다.
+// 온라인이라고 적어 놓고 현장 방을 열어 주면 그게 더 나쁘다.
+const ROOM_ONLINE  = '온라인새가족교육안내방';
+const ROOM_GENERAL = '새가족교육안내방';
+
+/** 위치 문자열이 온라인인가. '온라인', '온라인2' 등 모두 걸린다. */
+export function isOnlineLocation(location) {
+  return /온라인/.test(String(location ?? ''));
+}
+
+/**
+ * 안내할 새가족교육 안내방.
+ * @returns {{url: string|null, label: string, online: boolean}}
+ */
+export function getAnnouncementRoom(location) {
+  if (isOnlineLocation(location)) {
+    const url = state.teamLinks[ROOM_ONLINE];
+    if (url) return { url, label: '온라인 새가족교육 안내방', online: true };
+  }
+  return { url: state.teamLinks[ROOM_GENERAL] || null, label: ROOM_GENERAL, online: false };
 }
 
 /**
