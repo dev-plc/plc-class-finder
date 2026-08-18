@@ -1275,6 +1275,15 @@ body.dark-mode .sync-info { color: #9ca3af; }
     border: 1px solid #d0d5dd; border-radius: 8px; background: #fff;
 }
 .ab-field select:disabled { background: #f9fafb; color: #98a2b3; }
+/* 정렬 기준과 방향은 한 쌍이라 붙여 둔다 */
+.ab-sort { display: flex; gap: 6px; }
+.ab-sort select { flex: 1 1 auto; min-width: 0; }
+.ab-dir {
+    flex: 0 0 auto; height: 38px; padding: 0 11px;
+    font-size: 13px; font-family: inherit; color: #475467; cursor: pointer;
+    background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; white-space: nowrap;
+}
+.ab-dir:hover { background: #f9fafb; }
 
 .ab-card {
     background: #fff; border: 1px solid #e6e8ec; border-radius: 12px;
@@ -1358,6 +1367,7 @@ body.dark-mode .ab-item { border-top-color: #374151; }
 body.dark-mode .ab-item.risk { background: #2a1a1a; }
 body.dark-mode .ab-team { background: #374151; color: #d1d5db; }
 body.dark-mode .ab-th,
+body.dark-mode .ab-dir,
 body.dark-mode .ab-copy { background: #111827; border-color: #4b5563; color: #d1d5db; }
 body.dark-mode .ab-th.on { background: #1e3a8a; border-color: #3b82f6; color: #dbeafe; }
 body.dark-mode .ab-week { background: #111827; border-color: #4b5563; color: #9ca3af; }
