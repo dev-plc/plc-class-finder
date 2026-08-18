@@ -8,6 +8,7 @@ import {
     getLocationImage,
     getTeamLink,
     getAnnouncementRoom,
+    isAnnouncementRoomName,
     getKimbapDetail,
     getHomeworkList,
     getSessions,
@@ -21,8 +22,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=78';
-import { registerServiceWorker } from './scripts/sw-update.js?v=78';
+} from './scripts/members-data.js?v=79';
+import { registerServiceWorker } from './scripts/sw-update.js?v=79';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -287,8 +288,8 @@ function displayResult(member) {
             }
         }
 
-        // 새가족교육 안내방 (모든 사용자에게 노출).
-        // 온라인 조는 방이 따로 있다 — 위치로 갈린다.
+        // 전체 안내방 — 현장은 '새가족교육안내방', 온라인은 '온라인 새가족교육'.
+        // 위치로 갈린다.
         const room = getAnnouncementRoom(member.location);
         ensureTelegramRow(
             'newFamilyRow',
@@ -297,8 +298,11 @@ function displayResult(member) {
             `${room.label} 입장하기`
         );
 
-        // 본인 소속 조 안내방
-        const myTeamLink = (member.team && member.team !== '새가족교육안내방')
+        // 본인 소속 조 안내방.
+        //
+        // 위 전체방과 서로를 막지 않는다. 조별방이 아직 없는 조(새O1~O4 등)는
+        // 이 줄만 숨고 전체방은 그대로 뜬다.
+        const myTeamLink = (member.team && !isAnnouncementRoomName(member.team))
             ? getTeamLink(member.team)
             : null;
         ensureTelegramRow(
@@ -1227,7 +1231,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=78';
+                window.location.href = 'admin.html?v=79';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {
