@@ -14,10 +14,10 @@ import {
     getHomeworkList,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=82';
-import { matches as hangulMatches } from './scripts/hangul.js?v=82';
-import { registerServiceWorker } from './scripts/sw-update.js?v=82';
-import { sbPostGas } from './scripts/supabase-config.js?v=82';
+} from './scripts/members-data.js?v=83';
+import { matches as hangulMatches } from './scripts/hangul.js?v=83';
+import { registerServiceWorker } from './scripts/sw-update.js?v=83';
+import { sbPostGas } from './scripts/supabase-config.js?v=83';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1435,12 +1435,24 @@ const abTotalBadge    = document.getElementById('abTotalBadge');
 const abTotalNote     = document.getElementById('abTotalNote');
 const abTotalList     = document.getElementById('abTotalList');
 const abThresholds    = document.getElementById('abThresholds');
+const abSortSelect    = document.getElementById('abSort');
+const abDirBtn        = document.getElementById('abDir');
 
 const AB_PASTOR_ALL = '__all__';
+
+// 정렬. '결석' 은 누적 명단에서는 누적 횟수, 이 주차 명단에서는 연속 주차를 뜻한다 —
+// 두 장이 보는 숫자가 다르므로 각자 자기 숫자로 세운다.
+const AB_SORTS = [
+    { key: 'absent', label: '결석 순' },
+    { key: 'team',   label: '조' },
+    { key: 'pastor', label: '담당교역자' },
+];
 
 let abSessionDate = null;
 let abTeamName = TEAM_ALL;
 let abPastor = AB_PASTOR_ALL;
+let abSort = 'absent';
+let abDesc = true;              // 결석은 많은 쪽이 먼저 보여야 한다
 let abMin = 2;
 let abLastRows = { week: [], total: [] };   // 명단 복사가 쓴다
 
@@ -1493,10 +1505,24 @@ function abPersonHtml(r, extra) {
         <div class="ab-item${r.absent >= AB_RETAKE_AT ? ' risk' : ''}">
             <span class="ab-team">${escapeHtml(r.m.team || '미편성')}</span>
             <span class="ab-name">${escapeHtml(r.m.name)}<span class="ab-phone">${escapeHtml(r.m.phone)}</span></span>
-            ${abPastor === AB_PASTOR_ALL && abPastorOf(r.m)
-                ? `<span class="ab-pastor">${escapeHtml(abPastorOf(r.m))}</span>` : ''}
+            ${abPastorOf(r.m) ? `<span class="ab-pastor">${escapeHtml(abPastorOf(r.m))}</span>` : ''}
             <span class="ab-extra">${extra}</span>
         </div>`;
+}
+
+const abText = (x, y) => String(x || '').localeCompare(String(y || ''), 'ko');
+
+// useStreak: 이 주차 명단은 '연속 주차' 가 그 사람의 숫자다.
+function abSorter(useStreak) {
+    return (a, b) => {
+        let d;
+        if (abSort === 'team')        d = abText(a.m.team, b.m.team);
+        else if (abSort === 'pastor') d = abText(abPastorOf(a.m), abPastorOf(b.m));
+        else d = (useStreak ? a.streak - b.streak : a.absent - b.absent);
+        if (abDesc) d = -d;
+        // 같은 값이면 조 → 이름 순으로 굳힌다. 안 그러면 다시 그릴 때마다 순서가 흔들린다.
+        return d || abText(a.m.team, b.m.team) || abText(a.m.name, b.m.name);
+    };
 }
 
 function initAbsenceTab() {
@@ -1529,6 +1555,13 @@ function initAbsenceTab() {
         abPastorSelect.disabled = pastors.length === 0;
     }
 
+    if (abSortSelect && !abSortSelect.options.length) {
+        abSortSelect.innerHTML = AB_SORTS.map(o =>
+            `<option value="${o.key}">${o.label}</option>`).join('');
+    }
+    if (abSortSelect) abSortSelect.value = abSort;
+    updateAbDirBtn();
+
     renderAbsence();
 }
 
@@ -1540,9 +1573,7 @@ function renderAbsence() {
     const rows = abRows();
 
     // ── 이 주차 결석자
-    const week = rows.filter(r => r.thisWeek)
-        .sort((a, b) => b.streak - a.streak
-            || String(a.m.team).localeCompare(String(b.m.team), 'ko'));
+    const week = rows.filter(r => r.thisWeek).sort(abSorter(true));
     abLastRows.week = week;
 
     if (abWeekBadge) {
@@ -1563,9 +1594,7 @@ function renderAbsence() {
         : '<div class="ab-empty">이 주차 결석자가 없습니다.</div>';
 
     // ── 누적 결석자
-    const total = rows.filter(r => r.absent >= abMin)
-        .sort((a, b) => b.absent - a.absent
-            || String(a.m.team).localeCompare(String(b.m.team), 'ko'));
+    const total = rows.filter(r => r.absent >= abMin).sort(abSorter(false));
     abLastRows.total = total;
 
     if (abThresholds) {
@@ -1589,6 +1618,21 @@ function renderAbsence() {
 abSessionSelect?.addEventListener('change', (e) => { abSessionDate = e.target.value; renderAbsence(); });
 abTeamSelect?.addEventListener('change', (e) => { abTeamName = e.target.value; renderAbsence(); });
 abPastorSelect?.addEventListener('change', (e) => { abPastor = e.target.value; renderAbsence(); });
+abSortSelect?.addEventListener('change', (e) => {
+    abSort = e.target.value;
+    // 기준을 바꾸면 그 기준에 맞는 방향으로 시작한다 —
+    // 결석은 많은 쪽부터, 조·이름은 가나다순이 자연스럽다.
+    abDesc = (abSort === 'absent');
+    updateAbDirBtn();
+    renderAbsence();
+});
+abDirBtn?.addEventListener('click', () => { abDesc = !abDesc; updateAbDirBtn(); renderAbsence(); });
+
+function updateAbDirBtn() {
+    if (!abDirBtn) return;
+    abDirBtn.textContent = abDesc ? '↓ 내림차순' : '↑ 오름차순';
+    abDirBtn.title = abDesc ? '큰 값·나중 글자부터' : '작은 값·앞 글자부터';
+}
 abThresholds?.addEventListener('click', (e) => {
     const btn = e.target.closest('.ab-th');
     if (!btn) return;
@@ -1604,9 +1648,13 @@ document.getElementById('absenceTab')?.addEventListener('click', async (e) => {
     const rows = abLastRows[which] || [];
     if (!rows.length) { btn.textContent = '복사할 명단 없음'; }
     else {
-        const text = rows.map(r =>
-            `${r.m.team || ''} ${r.m.name}(${r.m.phone})`
-            + (which === 'total' ? ` 결석 ${r.absent}회` : '')).join('\n');
+        const text = rows.map(r => [
+            r.m.team || '',
+            `${r.m.name}(${r.m.phone})`,
+            abPastorOf(r.m),
+            which === 'total' ? `결석 ${r.absent}회`
+                              : (r.streak >= AB_STREAK_MIN ? `${r.streak}주 연속` : ''),
+        ].filter(Boolean).join(' ')).join('\n');
         try {
             await navigator.clipboard.writeText(text);
             btn.textContent = `✅ ${rows.length}명 복사됨`;
