@@ -22,8 +22,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=80';
-import { registerServiceWorker } from './scripts/sw-update.js?v=80';
+} from './scripts/members-data.js?v=81';
+import { registerServiceWorker } from './scripts/sw-update.js?v=81';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -302,7 +302,7 @@ function displayResult(member) {
             'newFamilyRow',
             '안내방',
             room.url,
-            `${room.name} 입장하기`
+            room.name
         );
 
         // 본인 소속 조 안내방.
@@ -316,7 +316,7 @@ function displayResult(member) {
             'telegramRow',
             '조별 안내방',
             myTeamLink,
-            member.team ? `${member.team} 안내방 입장하기` : ''
+            member.team ? `${member.team} 안내방` : ''
         );
 
         // 본인 안내 (수료 진행률·제출 필요 과제)
@@ -1238,7 +1238,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=80';
+                window.location.href = 'admin.html?v=81';
             } else {
                 const errorElement = document.getElementById('adminLoginError');
                 if (errorElement) {
