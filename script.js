@@ -300,9 +300,9 @@ function displayResult(member) {
         const room = getAnnouncementRoom(member.location);
         ensureTelegramRow(
             'newFamilyRow',
-            '안내방 입장하기',
+            '안내방',
             room.url,
-            room.name
+            `${room.name} 입장하기`
         );
 
         // 본인 소속 조 안내방.
@@ -314,9 +314,9 @@ function displayResult(member) {
             : null;
         ensureTelegramRow(
             'telegramRow',
-            '조별 안내방 입장하기',
+            '조별 안내방',
             myTeamLink,
-            member.team ? `${member.team} 안내방` : ''
+            member.team ? `${member.team} 입장하기` : ''
         );
 
         // 본인 안내 (수료 진행률·제출 필요 과제)
