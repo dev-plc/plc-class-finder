@@ -14,10 +14,10 @@ import {
     getHomeworkList,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=84';
-import { matches as hangulMatches } from './scripts/hangul.js?v=84';
-import { registerServiceWorker } from './scripts/sw-update.js?v=84';
-import { sbPostGas } from './scripts/supabase-config.js?v=84';
+} from './scripts/members-data.js?v=85';
+import { matches as hangulMatches } from './scripts/hangul.js?v=85';
+import { registerServiceWorker } from './scripts/sw-update.js?v=85';
+import { sbPostGas } from './scripts/supabase-config.js?v=85';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {

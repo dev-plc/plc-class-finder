@@ -1605,3 +1605,22 @@ body.dark-mode .team-session-note {
     color: #fbbf24;
     background: #3a2f1a;
 }
+
+/* 안내방 두 줄 (전체방 · 조별방).
+   버튼 글자가 길다 — '온라인새가족교육안내방 입장하기'.
+   좁은 화면에서 이 버튼이 자리를 다 먹으면 두 가지가 한꺼번에 망가졌다.
+     · 라벨이 '안내 / 방' 으로 쪼개진다
+     · 버튼이 제 칸을 넘어 왼쪽으로 삐져나와 라벨을 덮는다
+   라벨은 쪼개지지 않게 못 박고, 자리가 모자라면 버튼을 아랫줄로 내린다.
+   버튼이 두 줄이 되는 건 읽히지만, 라벨을 덮는 건 못 읽는다. */
+#newFamilyRow,
+#telegramRow { flex-wrap: wrap; row-gap: 6px; }
+
+#newFamilyRow > :first-child,
+#telegramRow > :first-child { flex: 0 0 auto; white-space: nowrap; }
+
+#newFamilyRow > :last-child,
+#telegramRow > :last-child { min-width: 0; margin-left: auto; }
+
+#newFamilyRow .telegram-btn,
+#telegramRow .telegram-btn { max-width: 100%; }
