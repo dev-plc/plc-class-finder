@@ -22,8 +22,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=83';
-import { registerServiceWorker } from './scripts/sw-update.js?v=83';
+} from './scripts/members-data.js?v=84';
+import { registerServiceWorker } from './scripts/sw-update.js?v=84';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -300,7 +300,7 @@ function displayResult(member) {
         const room = getAnnouncementRoom(member.location);
         ensureTelegramRow(
             'newFamilyRow',
-            '안내방',
+            '안내방 입장하기',
             room.url,
             room.name
         );
@@ -314,7 +314,7 @@ function displayResult(member) {
             : null;
         ensureTelegramRow(
             'telegramRow',
-            '조별 안내방',
+            '조별 안내방 입장하기',
             myTeamLink,
             member.team ? `${member.team} 안내방` : ''
         );
@@ -742,22 +742,24 @@ function renderStatusDetail(member) {
                 bySession[key].push(hw);
             }
 
-            // 세션명 → 김밥 세션 날짜 매핑 (정렬용)
+            // 세션명 → 실제 강의 날짜 (정렬용).
+            //
+            // 강의 일정(sessions)이 원본이다. 예전에는 김밥 신청 내역에서 날짜를
+            // 찾았는데, 김밥을 한 번도 신청하지 않은 사람은 날짜를 못 찾아
+            // 강 번호로만 세워졌다. 과제를 낸 것과 김밥을 신청한 것은 별개다.
             const sessionDateOf = (sessName) => {
                 const target = normalizeSessionKey(sessName);
-                for (const [rawName, info] of Object.entries(kimbapDetail)) {
-                    if (normalizeSessionKey(prettySessionName(rawName)) === target) {
-                        return mmddSortValue(info.date);
-                    }
-                }
-                return -1;
+                const hit = getSessions().find(
+                    x => normalizeSessionKey(x.label_norm || '') === target);
+                return hit ? hit.session_date : '';
             };
 
             // 최근(오늘에 가까운) 순으로 내림차순
             const sortedEntries = Object.entries(bySession).sort(([a], [b]) => {
                 const da = sessionDateOf(a);
                 const db = sessionDateOf(b);
-                if (da !== db) return db - da;
+                if (da && db) { if (da !== db) return db.localeCompare(da); }
+                else if (da !== db) return db ? 1 : -1;   // 날짜를 아는 쪽을 위로
                 return sessionOrdinal(b) - sessionOrdinal(a);
             });
 
@@ -1242,7 +1244,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=83';
+                window.location.href = 'admin.html?v=84';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
