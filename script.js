@@ -22,8 +22,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=88';
-import { registerServiceWorker } from './scripts/sw-update.js?v=88';
+} from './scripts/members-data.js?v=89';
+import { registerServiceWorker } from './scripts/sw-update.js?v=89';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -924,12 +924,12 @@ function renderTeamMembers(members, teamName, role) {
         const attendanceRaw = attendanceOf(m, sessionKey);
         const isChecked = (attendanceRaw === 'O' || attendanceRaw === '◎') ? 'checked' : '';
 
-        // ◎(지난 기수 이수)·−(집계 제외)는 튜터가 정하는 값이 아니다.
+        // ◎(출석 인정)·−(집계 제외)는 튜터가 정하는 값이 아니다.
         // ◎ 는 이월 스크립트가 지난 기수 기록에서 뽑고, − 는 수업이 없는 주차다.
         // 체크를 풀 수 있게 두면 이수자가 결석으로 저장된다 — 실제로 그렇게 사고가 났다.
         // 보여만 주고 잠근다. 고쳐야 하면 시트에서 고친다.
         const locked = (attendanceRaw === '◎' || attendanceRaw === '-');
-        const mark = attendanceRaw === '◎' ? ' <span title="지난 기수 이수 — 시트에서만 고칩니다" style="color:#7c3aed;">◎</span>'
+        const mark = attendanceRaw === '◎' ? ' <span title="출석 인정 — 지난 기수 이수 또는 과제·소감문 대체. 시트에서만 고칩니다" style="color:#7c3aed;">◎</span>'
                    : attendanceRaw === '-' ? ' <span title="집계 제외 — 시트에서만 고칩니다" style="color:#888;">−</span>' : '';
 
         return `
@@ -1023,7 +1023,7 @@ async function saveAttendanceBatch() {
 
     // 값이 달라지는 사람만 보낸다.
     //
-    // 전원을 보내면 ◎(지난 기수 이수)와 −(집계 제외)가 통째로 사라진다.
+    // 전원을 보내면 ◎(출석 인정)와 −(집계 제외)가 통째로 사라진다.
     // 그 둘은 아예 잠겨 있어(attendanceEdits 가 걸러 낸다) 여기까지 오지 않는다.
     const changed = attendanceEdits();
     if (changed.length === 0) return;
@@ -1244,7 +1244,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=88';
+                window.location.href = 'admin.html?v=89';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

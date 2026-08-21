@@ -14,10 +14,10 @@ import {
     getHomeworkList,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=88';
-import { matches as hangulMatches } from './scripts/hangul.js?v=88';
-import { registerServiceWorker } from './scripts/sw-update.js?v=88';
-import { sbPostGas } from './scripts/supabase-config.js?v=88';
+} from './scripts/members-data.js?v=89';
+import { matches as hangulMatches } from './scripts/hangul.js?v=89';
+import { registerServiceWorker } from './scripts/sw-update.js?v=89';
+import { sbPostGas } from './scripts/supabase-config.js?v=89';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -357,7 +357,8 @@ memberFilter?.addEventListener('input', (e) => {
 
 // 관리자가 찍는 값은 둘뿐이다.
 //
-// ◎(지난 기수 이수)는 이월 스크립트가 지난 기수 기록에서 뽑고,
+// ◎(출석 인정)는 이월 스크립트가 지난 기수 기록에서 뽑거나,
+// 결석했지만 과제·소감문을 내서 대체 인정된 경우다.
 // −(집계 제외)는 커리큘럼상 수업이 없는 주차다. 둘 다 사람이 판단할 값이 아니다.
 // 손으로 찍게 두면 근거 없는 이수 인정이 생기고, 반대로 이미 붙은 ◎ 를
 // 실수로 지우는 일이 난다 — 실제로 이수자 8명이 결석으로 저장된 적이 있다.
@@ -369,7 +370,7 @@ const ATT_STATES = [
 // 보기 전용. 이 값이 들어 있는 줄은 아예 손댈 수 없게 한다.
 // 고쳐야 하면 시트에서 고친다 (출결의 원본은 시트다).
 const ATT_LOCKED = {
-    '◎': { label: '◎', title: '지난 기수에 이수 — 시트에서만 고칩니다' },
+    '◎': { label: '◎', title: '출석 인정 — 지난 기수 이수 또는 과제·소감문 대체. 시트에서만 고칩니다' },
     '-': { label: '−', title: '집계 제외 — 시트에서만 고칩니다' },
 };
 
@@ -699,7 +700,7 @@ attSaveBtn?.addEventListener('click', async () => {
     const demoted = changes.filter(c =>
         attBaseline.get(c.memberUuid) === '◎' && c.status === 'X');
     if (demoted.length && !confirm(
-        `지난 기수 이수(◎) ${demoted.length}명을 결석으로 바꿉니다.\n\n` +
+        `출석 인정(◎) ${demoted.length}명을 결석으로 바꿉니다.\n\n` +
         `${attNamesOf(demoted.map(c => c.memberUuid))}\n\n` +
         `이분들은 안 나와도 되는 분입니다. 정말 결석으로 기록할까요?`)) return;
 
@@ -854,15 +855,18 @@ function openMemberDetail(member) {
     const bits = [`진행 ${done.length}회차`];
     if (counts.O)     bits.push(`출석 ${counts.O}`);
     if (counts.X)     bits.push(`결석 ${counts.X}`);
-    if (counts['◎'])  bits.push(`이수 ${counts['◎']}`);
+    if (counts['◎'])  bits.push(`인정 ${counts['◎']}`);
     if (counts[''])   bits.push(`미기록 ${counts['']}`);
     if (counts['-'])  bits.push(`수업없음 ${counts['-']}`);
     if (soon)         bits.push(`예정 ${soon}`);
     const attSummary = bits.join(' · ');
 
-    // 지난 기수 이수자는 ◎ 가 대부분이라 그리드만 봐서는 티가 안 난다.
-    // 제목 옆에 한 번 짚어 준다 — 이 사람은 이번 기수에 새로 다 들을 필요가 없다.
-    const carryOver = counts['◎'];
+    // ◎ 가 많은 사람은 그리드만 봐서는 티가 안 난다. 제목 옆에 한 번 짚어 준다.
+    //
+    // ◎ 는 두 가지다 — 지난 기수에 이수했거나, 결석했지만 과제·소감문을 내서
+    // 대체 인정받았거나. 시트에는 둘 다 같은 ◎ 로 들어와 여기서는 구분할 수 없다.
+    // 그래서 '지난 기수 이수' 라고 단정하지 않고 '인정 출석' 이라고만 적는다.
+    const credited = counts['◎'];
 
     // ── 김밥 : 신청한 주차만, 최근부터
     const kb = getKimbapDetail(member.id) || {};
@@ -885,7 +889,9 @@ function openMemberDetail(member) {
         `${member.name} (${member.phone}) · ${member.team || '미편성'} · ${member.location || ''}`;
 
     mdBody.innerHTML =
-        mdSection('📋', carryOver ? `<span class="md-carry">◎ 지난 기수 이수 ${carryOver}</span>` : '',
+        mdSection('📋', credited
+                    ? `<span class="md-carry" title="지난 기수 이수 또는 과제·소감문 대체">◎ 인정 출석 ${credited}</span>`
+                    : '',
                   attSummary, `<div class="md-grid">${attGrid}</div>`)
       + mdSection('🍙', '', kbRows.length ? `총 ${kbRows.length}회 신청` : '신청 내역 없음',
                   kbRows.length
