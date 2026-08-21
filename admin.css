@@ -1002,7 +1002,27 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
     background: #fef3f2; border-color: #fda29b; color: #b42318;
 }
 
+/* 인쇄 · 항목 · 출력을 한 줄에.
+   자리가 모자라면 묶음 단위로 접힌다 — 라벨만 남고 버튼이 다음 줄로 가면
+   무슨 라벨인지 알 수 없다. .pr-group 이 라벨과 제 버튼들을 함께 데려간다. */
+.pr-bar { align-items: center; gap: 10px 14px; }
+.pr-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pr-group .pr-row-label { margin-right: 2px; }
+.pr-bar .pr-info { margin-left: auto; }
+
 .pr-row-actions { gap: 8px; }
+
+/* 좁은 화면.
+   조작부가 화면에 붙어 있으면(sticky) 여기서는 도움이 아니라 방해다 —
+   441px 짜리가 계속 떠 있으면 정작 봐야 할 출석부가 손바닥만큼만 남는다.
+   좁을 때는 붙이지 않는다. 항목을 정한 뒤 내리면 화면 전체가 출석부가 된다. */
+@media (max-width: 768px) {
+    .pr-panel { position: static; padding: 12px 14px; margin-bottom: 14px; }
+    .pr-bar { gap: 8px 10px; }
+    .pr-chip { height: 28px; padding: 0 10px; font-size: 12px; gap: 5px; }
+    .pr-sub-btn, .pr-print-btn { height: 32px; }
+    .pr-bar .pr-info { margin-left: 0; }        /* 오른쪽 끝에 혼자 떨어져 있지 않게 */
+}
 .pr-print-btn {
     height: 38px; padding: 0 18px;
     font-size: 14px; font-weight: 700; font-family: inherit;
