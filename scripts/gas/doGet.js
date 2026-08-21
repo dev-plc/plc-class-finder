@@ -90,6 +90,29 @@ var SHEET_ID = "12fuduQjWE00i3-t9vYe7eh0TEoQ9tsX2hb1TQzxmDQM";
 var TAB_ROSTER   = "출석부(DB)";
 var TAB_KIMBAP   = "김밥";
 var TAB_HOMEWORK = "과제";
+
+// ============================================================================
+// 아이디 정형화
+//
+// 아이디는 '이름 + 전화 뒷 4자리' 다. 사람이 손으로도 적고 구글 폼으로도
+// 들어와서 실제로는 제각각이다 —
+//   '김도현 5326'  '김도현-5326'  '김도현(5326)'  '김도현.5326'  '김도현５３２６'
+//
+// 한글·영문·숫자만 남기고 나머지는 버린다. 전각 숫자는 반각으로 바꾼다.
+//
+// ⚠️ 양쪽을 같은 규칙으로 다듬어야 한다.
+//    한쪽(과제 탭)만 다듬으면 명단 쪽 아이디에 기호가 있을 때 오히려 어긋난다.
+//    그래서 이 함수를 아이디를 만들고 맞추는 모든 자리에서 쓴다.
+// ============================================================================
+function plcNormalizeId_(v) {
+  return String(v == null ? "" : v)
+    .replace(/[\uFF10-\uFF19]/g, function (d) {          // 전각 0-9 → 반각
+      return String.fromCharCode(d.charCodeAt(0) - 0xFEE0);
+    })
+    .replace(/[^0-9A-Za-z\uAC00-\uD7A3]/g, "");          // 한글·영문·숫자만
+}
+
+
 var TAB_LINKS    = "새가족링크";
 
 // 가장 최근 지난 (오늘 포함) 세션 컬럼 index. 없으면 -1.
@@ -195,7 +218,7 @@ function plcRefs_() {
 
   var byId = {};
   for (var i = 0; i < members.length; i++) {
-    var k = (String(members[i].name || "") + String(members[i].phone || "")).replace(/\s/g, "");
+    var k = plcNormalizeId_(String(members[i].name || "") + String(members[i].phone || ""));
     if (k) byId[k] = members[i].id;
   }
   var dates = {};   // MM/DD → YYYY-MM-DD
@@ -457,7 +480,7 @@ function doPost(e) {
     var idValues = sheet.getRange(headerRow + 1, idCol, rowCount, 1).getValues();
     var idToRow = {};
     for (var i = 0; i < idValues.length; i++) {
-      var key = String(idValues[i][0]).replace(/\s/g, '');
+      var key = plcNormalizeId_(idValues[i][0]);
       if (key) idToRow[key] = headerRow + 1 + i;
     }
 
@@ -467,8 +490,7 @@ function doPost(e) {
     var wrote = [];       // DB 로 넘길 목록
     for (var j = 0; j < entries.length; j++) {
       var en = entries[j] || {};
-      var targetId = String(en.name || "").replace(/\s/g, '') +
-                     String(en.phone || "").replace(/[^0-9]/g, '');
+      var targetId = plcNormalizeId_(String(en.name || "") + String(en.phone || ""));
       var rowNum = idToRow[targetId];
       if (!rowNum) { notFound.push(targetId); continue; }
       colValues[rowNum - (headerRow + 1)][0] = en.status;
@@ -676,7 +698,7 @@ function doGet(e) {
         var dataStartRow = Math.max(kbHeaderRow, bestSessionIdx, bestDateIdx) + 1;
         for (var r = dataStartRow; r < kbData.length; r++) {
           var row = kbData[r];
-          var id = String(row[idCol] || "").replace(/\s/g, '');
+          var id = plcNormalizeId_(row[idCol]);
           if (!id) continue;
 
           var detail = {};
@@ -723,7 +745,7 @@ function doGet(e) {
         if (idIdx !== -1) {
           for (var i = 1; i < hwData.length; i++) {
             var row = hwData[i];
-            var id = String(row[idIdx] || "").replace(/\s/g, '');
+            var id = plcNormalizeId_(row[idIdx]);
             if (!id) continue;
 
             var sub = {
@@ -860,7 +882,7 @@ function doGet(e) {
 
     var jsonData = [];
     for (var i = headerRowIdx + 1; i < data.length; i++) {
-      var rawId = String(data[i][idIdx]).replace(/\s/g, '');
+      var rawId = plcNormalizeId_(data[i][idIdx]);
       if (!rawId) continue;
 
       var obj = {};

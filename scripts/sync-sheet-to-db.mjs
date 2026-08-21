@@ -756,10 +756,21 @@ const savedMembers = await upsert(
   // 다시 시트에 나타난 사람은 위 upsert에서 status='active'로 복귀됨
 }
 const keyToUuid = new Map();
+// 아이디 정형화 — GAS 의 plcNormalizeId_ 와 같은 규칙이어야 한다.
+//
+// 아이디는 '이름 + 전화 뒷 4자리' 이고, 손입력·폼 응답이 섞여 들어와
+// 띄어쓰기·괄호·하이픈·전각 숫자가 제각각 붙는다.
+// 맞추는 양쪽을 같은 규칙으로 다듬지 않으면 짝이 안 맞아 조용히 버려진다.
+function normalizeId(v) {
+  return String(v ?? '')
+    .replace(/[\uFF10-\uFF19]/g, d => String.fromCharCode(d.charCodeAt(0) - 0xFEE0))
+    .replace(/[^0-9A-Za-z\uAC00-\uD7A3]/g, '');
+}
+
 const gasIdToUuid = new Map();
 for (const m of savedMembers) {
   keyToUuid.set(`${m.name}|${m.phone || ''}`, m.id);
-  gasIdToUuid.set(`${m.name}${m.phone || ''}`, m.id);
+  gasIdToUuid.set(normalizeId(`${m.name}${m.phone || ''}`), m.id);
 }
 console.log(`   ${savedMembers.length}명`);
 
@@ -819,7 +830,7 @@ if (kimbapRows.length) {
   const kbSkipped = new Set();
   const kb = kimbapRows
     .map(({ _gasId, ...k }) => {
-      const uuid = gasIdToUuid.get(String(_gasId).replace(/\s/g, ''));
+      const uuid = gasIdToUuid.get(normalizeId(_gasId));
       if (!uuid) { kbSkipped.add(_gasId); return null; }
       return { ...k, member_id: uuid };
     })
@@ -836,7 +847,7 @@ if (homeworkRows.length) {
   const hwSkipped = new Set();
   const hw = homeworkRows
     .map(({ _gasId, ...h }) => {
-      const uuid = gasIdToUuid.get(String(_gasId).replace(/\s/g, ''));
+      const uuid = gasIdToUuid.get(normalizeId(_gasId));
       if (!uuid) { hwSkipped.add(_gasId); return null; }
       return { ...h, member_id: uuid };
     })
