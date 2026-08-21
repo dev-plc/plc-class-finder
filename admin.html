@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=86">
-    <link rel="stylesheet" href="admin.css?v=86">
+    <link rel="stylesheet" href="style.css?v=87">
+    <link rel="stylesheet" href="admin.css?v=87">
 </head>
 <body>
     <div class="admin-container">
@@ -56,9 +56,9 @@
 
         <!-- 탭 네비게이션 -->
         <nav class="tab-nav">
-            <button class="tab-btn active" data-tab="attendance">출석 관리</button>
+            <button class="tab-btn active" data-tab="members">개인별 보기</button>
             <button class="tab-btn" data-tab="teams">조별 보기</button>
-            <button class="tab-btn" data-tab="members">개인별 보기</button>
+            <button class="tab-btn" data-tab="attendance">출석 관리</button>
             <button class="tab-btn" data-tab="absence">결석 현황</button>
             <button class="tab-btn" data-tab="print">출석부 출력</button>
         </nav>
@@ -71,7 +71,7 @@
         </div>
 
         <!-- 출석 관리 (DB 가 원본. 시트에서 고치지 않는다) -->
-        <div class="tab-content active" id="attendanceTab">
+        <div class="tab-content" id="attendanceTab">
             <div class="att-picker">
                 <div class="att-field">
                     <label for="attSession">주차</label>
@@ -167,34 +167,33 @@
                     </div>
                 </div>
 
-                <div class="pr-row pr-row-opts">
-                    <span class="pr-row-label">표시할 칸</span>
-                    <label class="pr-chip"><input type="checkbox" id="prKimbapStatus" checked><span>김밥 현황</span></label>
-                    <label class="pr-chip"><input type="checkbox" id="prKimbap"><span>김밥신청</span></label>
-                    <label class="pr-chip"><input type="checkbox" id="prHomework"><span>과제</span></label>
-                    <label class="pr-chip"><input type="checkbox" id="prMemo" checked><span>메모</span></label>
-                    <label class="pr-chip"><input type="checkbox" id="prSummary" checked><span>조별 집계표</span></label>
-                </div>
-                <div class="pr-hint" id="prHint"></div>
-
-                <!-- 출력할 장을 여기서 고른다.
-                     장마다 붙은 체크로도 되지만, 13장이면 스크롤을 오르내려야 한다.
-                     목록은 접어 둔다 — 조가 많으면 늘 펼쳐 두기엔 자리를 너무 먹는다. -->
-                <div class="pr-row pr-row-pages">
-                    <span class="pr-row-label">출력할 장</span>
-                    <button type="button" id="prPickAll" class="pr-sub-btn">전체 선택</button>
-                    <button type="button" id="prPickNone" class="pr-sub-btn">전체 해제</button>
-                    <div class="pr-pick-menu">
-                        <button type="button" id="prPickSomeBtn" class="pr-sub-btn"
-                                aria-expanded="false" aria-controls="prPagePicks">부분 선택 ▾</button>
-                        <div class="pr-page-picks" id="prPagePicks" hidden></div>
-                    </div>
-                </div>
-
-                <div class="pr-row pr-row-actions">
+                <!-- 인쇄 · 항목 · 출력을 한 줄에. 자리가 모자라면 알아서 접힌다.
+                     조작부가 두꺼우면 아래 출석부를 보기 불편하다. -->
+                <div class="pr-row pr-bar">
                     <button type="button" id="prPrintBtn" class="pr-print-btn">🖨️ 인쇄</button>
+
+                    <span class="pr-group">
+                        <span class="pr-row-label">항목</span>
+                        <label class="pr-chip"><input type="checkbox" id="prKimbapStatus" checked><span>김밥 현황</span></label>
+                        <label class="pr-chip"><input type="checkbox" id="prKimbap"><span>김밥신청</span></label>
+                        <label class="pr-chip"><input type="checkbox" id="prHomework"><span>과제</span></label>
+                        <label class="pr-chip"><input type="checkbox" id="prMemo" checked><span>메모</span></label>
+                        <label class="pr-chip"><input type="checkbox" id="prSummary" checked><span>집계표</span></label>
+                    </span>
+
+                    <span class="pr-group">
+                        <span class="pr-row-label">출력</span>
+                        <button type="button" id="prPickToggle" class="pr-sub-btn">전체 해제</button>
+                        <div class="pr-pick-menu">
+                            <button type="button" id="prPickSomeBtn" class="pr-sub-btn"
+                                    aria-expanded="false" aria-controls="prPagePicks">부분 선택 ▾</button>
+                            <div class="pr-page-picks" id="prPagePicks" hidden></div>
+                        </div>
+                    </span>
+
                     <span class="pr-info" id="prInfo"></span>
                 </div>
+                <div class="pr-hint" id="prHint"></div>
             </div>
 
             <div class="pr-preview" id="prPreview"></div>
@@ -217,7 +216,7 @@
         </div>
 
         <!-- 개인별 보기 -->
-        <div class="tab-content" id="membersTab">
+        <div class="tab-content active" id="membersTab">
             <div class="filter-section">
                 <input 
                     type="text" 
@@ -258,7 +257,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=86"></script>
+    <script type="module" src="admin.js?v=87"></script>
 </body>
 </html>
 

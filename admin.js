@@ -14,10 +14,10 @@ import {
     getHomeworkList,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=86';
-import { matches as hangulMatches } from './scripts/hangul.js?v=86';
-import { registerServiceWorker } from './scripts/sw-update.js?v=86';
-import { sbPostGas } from './scripts/supabase-config.js?v=86';
+} from './scripts/members-data.js?v=87';
+import { matches as hangulMatches } from './scripts/hangul.js?v=87';
+import { registerServiceWorker } from './scripts/sw-update.js?v=87';
+import { sbPostGas } from './scripts/supabase-config.js?v=87';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -897,6 +897,8 @@ const prSessionSelect = document.getElementById('prSession');
 const prTeamSelect    = document.getElementById('prTeam');
 const prPreview       = document.getElementById('prPreview');
 const prPagePicks     = document.getElementById('prPagePicks');
+// updatePrintInfo 가 이 값을 읽는다. 선언이 뒤에 있으면 첫 렌더에서 TDZ 로 터진다.
+const prPickToggle    = document.getElementById('prPickToggle');
 const prPickSomeBtn   = document.getElementById('prPickSomeBtn');
 const prInfo          = document.getElementById('prInfo');
 const prHint          = document.getElementById('prHint');
@@ -1354,6 +1356,7 @@ function renderPrintPreview() {
 }
 
 function updatePrintInfo() {
+    updatePrPickToggle();          // 켜고 끌 때마다 버튼이 지금 상태의 반대를 보여야 한다
     if (!prInfo || !prPreview) return;
     const pages = prPreview.querySelectorAll('.pr-sheet');
     const on = prPreview.querySelectorAll('.pr-sheet:not(.pr-skip)').length;
@@ -1399,13 +1402,21 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// 전체 선택·해제도 다시 그리지 않는다 — 보고 있던 자리를 잃지 않게
-document.getElementById('prPickAll')?.addEventListener('click', () => {
-    prPageKeys.forEach(k => prSetPageOn(k, true));
-    updatePrintInfo();
-});
-document.getElementById('prPickNone')?.addEventListener('click', () => {
-    prPageKeys.forEach(k => prSetPageOn(k, false));
+// 전체 선택·해제는 버튼 하나로.
+//
+// 두 버튼을 나란히 두면 늘 하나는 눌러도 아무 일이 없다.
+// 지금 상태의 반대만 보여 준다 — 다 켜져 있으면 '전체 해제', 하나라도 꺼져
+// 있으면 '전체 선택'. 다시 그리지 않으므로 보고 있던 자리를 잃지 않는다.
+function updatePrPickToggle() {
+    if (!prPickToggle) return;
+    const allOn = prPageKeys.length > 0 && prPageKeys.every(k => !prSkip.has(k));
+    prPickToggle.textContent = allOn ? '전체 해제' : '전체 선택';
+    prPickToggle.disabled = prPageKeys.length === 0;
+}
+
+prPickToggle?.addEventListener('click', () => {
+    const allOn = prPageKeys.every(k => !prSkip.has(k));
+    prPageKeys.forEach(k => prSetPageOn(k, !allOn));
     updatePrintInfo();
 });
 
