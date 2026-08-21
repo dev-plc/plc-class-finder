@@ -14,10 +14,10 @@ import {
     getHomeworkList,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=85';
-import { matches as hangulMatches } from './scripts/hangul.js?v=85';
-import { registerServiceWorker } from './scripts/sw-update.js?v=85';
-import { sbPostGas } from './scripts/supabase-config.js?v=85';
+} from './scripts/members-data.js?v=86';
+import { matches as hangulMatches } from './scripts/hangul.js?v=86';
+import { registerServiceWorker } from './scripts/sw-update.js?v=86';
+import { sbPostGas } from './scripts/supabase-config.js?v=86';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -43,14 +43,6 @@ const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
 // 검색 모드
-const searchNameInput = document.getElementById('searchName');
-const adminSearchBtn = document.getElementById('adminSearchBtn');
-const duplicateContainer = document.getElementById('duplicateContainer');
-const duplicateList = document.getElementById('duplicateList');
-const searchResultContainer = document.getElementById('searchResultContainer');
-const searchCloseBtn = document.getElementById('searchCloseBtn');
-const searchErrorMessage = document.getElementById('searchErrorMessage');
-const searchErrorText = document.getElementById('searchErrorText');
 
 // 조별/개인별 보기
 const teamsGrid = document.getElementById('teamsGrid');
@@ -170,7 +162,7 @@ function attachClearButton(input) {
     });
 }
 
-[searchNameInput, teamFilter, memberFilter].forEach(attachClearButton);
+[teamFilter, memberFilter].forEach(attachClearButton);
 
 // ============================================================================
 // 테마 / 로그아웃 / 탭
@@ -196,100 +188,6 @@ tabBtns.forEach(btn => {
         document.getElementById(`${tabName}Tab`).classList.add('active');
     });
 });
-
-// ============================================================================
-// 검색 모드
-// ============================================================================
-function searchMember() {
-    const name = searchNameInput.value.trim();
-
-    if (!name) {
-        showSearchError('이름을 입력해주세요.');
-        searchNameInput.focus();
-        return;
-    }
-
-    // 1) 완전 일치 우선. 2) 없으면 초성/부분 매칭 (자모 검색 UX #3)
-    let results = getMembers().filter(m => m.name === name);
-    if (results.length === 0) {
-        results = getMembers().filter(m => hangulMatches(m.name, name));
-    }
-
-    if (results.length === 0) {
-        showSearchError('일치하는 정보를 찾을 수 없습니다.');
-    } else if (results.length === 1) {
-        showSearchResult(results[0]);
-    } else {
-        showDuplicateSelection(results);
-    }
-}
-
-function showDuplicateSelection(members) {
-    hideSearchError();
-    searchResultContainer.style.display = 'none';
-
-    duplicateList.innerHTML = '';
-    members.forEach(member => {
-        const item = document.createElement('div');
-        item.className = 'duplicate-item';
-        item.innerHTML = `
-            <div class="duplicate-item-id">${member.name}${member.phone}</div>
-            <div class="duplicate-item-info">${member.team} · ${member.location} · ${member.age}세</div>
-        `;
-        item.addEventListener('click', () => {
-            showSearchResult(member);
-            duplicateContainer.style.display = 'none';
-        });
-        duplicateList.appendChild(item);
-    });
-
-    duplicateContainer.style.display = 'block';
-    setTimeout(() => {
-        duplicateContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
-}
-
-function showSearchResult(member) {
-    hideSearchError();
-    duplicateContainer.style.display = 'none';
-
-    document.getElementById('searchResultName').textContent = `${member.name}${member.phone}`;
-    document.getElementById('searchResultTeam').textContent = member.team;
-    document.getElementById('searchResultLocation').textContent = member.location;
-
-    searchResultContainer.style.display = 'block';
-    setTimeout(() => {
-        searchResultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
-}
-
-function showSearchError(message) {
-    searchErrorText.textContent = message;
-    searchErrorMessage.style.display = 'flex';
-    searchResultContainer.style.display = 'none';
-    duplicateContainer.style.display = 'none';
-    setTimeout(() => {
-        searchErrorMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
-}
-
-function hideSearchError() {
-    searchErrorMessage.style.display = 'none';
-}
-
-function closeSearchResult() {
-    searchResultContainer.style.display = 'none';
-    duplicateContainer.style.display = 'none';
-    searchNameInput.value = '';
-    searchNameInput.focus();
-}
-
-adminSearchBtn?.addEventListener('click', searchMember);
-searchCloseBtn?.addEventListener('click', closeSearchResult);
-searchNameInput?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') searchMember();
-});
-searchNameInput?.addEventListener('input', hideSearchError);
 
 // ============================================================================
 // 조별 보기
@@ -440,6 +338,7 @@ function renderMembersView(filterText = '') {
                 </div>
             </div>
         `;
+        card.addEventListener('click', () => openMemberDetail(member));
         membersGrid.appendChild(card);
     });
 }
@@ -843,17 +742,146 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+
+// ============================================================================
+// 개인 상세 (개인별 보기에서 카드를 누르면)
+//
+// 출석·김밥·과제를 한 화면에서 본다. 셋 다 최근 것부터 보여 주고,
+// 처음에는 앞의 몇 개만 편다 — 20주차·24건씩 늘어놓으면 훑을 수가 없다.
+//
+// 여기서는 아무것도 고치지 않는다. 고치는 곳은 출석 관리 탭이다.
+// ============================================================================
+const MD_KEEP = 4;           // 출석 그리드에서 먼저 보여 줄 칸 수
+const MD_HW_KEEP = 5;        // 과제 목록에서 먼저 보여 줄 줄 수
+
+const memberModal = document.getElementById('memberModal');
+const mdTitle     = document.getElementById('mdTitle');
+const mdBody      = document.getElementById('mdBody');
+
+const MD_MARK = {
+    'O': { cls: 'o', txt: 'O' },
+    '◎': { cls: 'd', txt: '◎' },
+    'X': { cls: 'x', txt: 'X' },
+    '-': { cls: 'n', txt: '−' },
+    '':  { cls: 'b', txt: '·' },
+};
+
+// 접었다 폈다 하는 묶음. 처음 keep 개만 보이고 나머지는 버튼을 눌러야 나온다.
+function mdFoldable(items, keep, renderFn, unit) {
+    if (items.length <= keep) return items.map(renderFn).join('');
+    const rest = items.length - keep;
+    return items.slice(0, keep).map(renderFn).join('')
+        + `<div class="md-rest" hidden>${items.slice(keep).map(renderFn).join('')}</div>`
+        + `<button type="button" class="md-more" data-rest="${rest}" data-unit="${unit}">더보기 (${rest}${unit})</button>`;
+}
+
+function mdSection(icon, title, right, inner, extraClass = '') {
+    return `
+        <section class="md-sec ${extraClass}">
+            <div class="md-sec-head"><span class="md-ico">${icon}</span>
+                <span class="md-sec-title">${title}</span>
+                <span class="md-sec-right">${right}</span></div>
+            ${inner}
+        </section>`;
+}
+
+function openMemberDetail(member) {
+    if (!memberModal || !mdBody) return;
+
+    // ── 출석 : 최근 주차부터
+    const sessions = [...getSessions()].reverse();
+    const counts = { O: 0, '◎': 0, X: 0, '-': 0, '': 0 };
+    const cells = sessions.map(sx => {
+        const key = getSessionKey(sx.session_date);
+        const v = normStatus(key ? member[key] : '');
+        counts[v in counts ? v : ''] += 1;
+        return { sx, v };
+    });
+    const other = counts['◎'] + counts['-'] + counts[''];
+    const attGrid = mdFoldable(cells, MD_KEEP, ({ sx, v }) => {
+        const m = MD_MARK[v] || MD_MARK[''];
+        return `<div class="md-cell s-${m.cls}">
+            <span class="md-cell-date">${escapeHtml(sx.label)}</span>
+            <span class="md-cell-name">${escapeHtml(sx.label_norm || '')}</span>
+            <span class="md-cell-mark">${m.txt}</span>
+        </div>`;
+    }, '개');
+
+    // ── 김밥 : 신청한 주차만, 최근부터
+    const kb = getKimbapDetail(member.id) || {};
+    const kbRows = Object.entries(kb)
+        .filter(([, info]) => info?.applied === 1)
+        .map(([name, info]) => ({ name, date: info.date || '' }))
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    // ── 과제 : 최근 낸 것부터. 날짜는 강의 일정에서 읽는다
+    const hw = getHomeworkList(member.id) || [];
+    const dateOf = (sess) => {
+        const target = prNormalizeSession(sess);
+        const hit = getSessions().find(x => prNormalizeSession(x.label_norm || '') === target);
+        return hit ? hit.session_date : '';
+    };
+    const hwRows = hw.map(h => ({ ...h, when: h.submittedAt || dateOf(h.session) }))
+        .sort((a, b) => String(b.when).localeCompare(String(a.when)));
+
+    mdTitle.textContent =
+        `${member.name} (${member.phone}) · ${member.team || '미편성'} · ${member.location || ''}`;
+
+    mdBody.innerHTML =
+        mdSection('📋', '', `총 ${sessions.length}회차 · 출석 ${counts.O} · 결석 ${counts.X} · 그 외 ${other}`,
+                  `<div class="md-grid">${attGrid}</div>`)
+      + mdSection('🍙', '', kbRows.length ? `총 ${kbRows.length}회 신청` : '신청 내역 없음',
+                  kbRows.length
+                    ? `<div class="md-rows">${mdFoldable(kbRows, MD_HW_KEEP, r =>
+                        `<div class="md-row"><span class="md-row-key">${escapeHtml(r.name)}</span>
+                         <span class="md-row-when">${escapeHtml(r.date)}</span></div>`, '개')}</div>`
+                    : '')
+      + mdSection('📝', '', hwRows.length ? `총 ${hwRows.length}건 제출` : '제출 내역 없음',
+                  hwRows.length
+                    ? `<div class="md-rows">${mdFoldable(hwRows, MD_HW_KEEP, r =>
+                        `<div class="md-row"><span class="md-row-key">${escapeHtml(r.session || '(미기재)')}</span>
+                         <span class="md-row-type">${escapeHtml(r.type || '')}</span>
+                         <span class="md-row-when">${escapeHtml(String(r.when).slice(0, 10))}</span>
+                         ${r.url ? `<a class="md-row-link" href="${encodeURI(r.url)}" target="_blank" rel="noopener">🔗</a>` : ''}
+                         </div>`, '개')}</div>`
+                    : '');
+
+    memberModal.classList.add('active');
+    memberModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMemberDetail() {
+    if (!memberModal) return;
+    memberModal.classList.remove('active');
+    memberModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
+
+document.getElementById('mdClose')?.addEventListener('click', closeMemberDetail);
+memberModal?.addEventListener('click', (e) => { if (e.target === memberModal) closeMemberDetail(); });
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && memberModal?.classList.contains('active')) closeMemberDetail();
+});
+
+// 더보기 — 눌린 묶음만 편다
+mdBody?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.md-more');
+    if (!btn) return;
+    const rest = btn.previousElementSibling;
+    if (!rest?.classList.contains('md-rest')) return;
+    const open = rest.hasAttribute('hidden');
+    rest.toggleAttribute('hidden', !open);
+    btn.textContent = open ? '접기' : `더보기 (${btn.dataset.rest}${btn.dataset.unit})`;
+});
+
 // ============================================================================
 // 페이지 로드
 // ============================================================================
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        loadData();
-        searchNameInput?.focus();
-    });
+    document.addEventListener('DOMContentLoaded', loadData);
 } else {
     loadData();
-    searchNameInput?.focus();
 }
 
 // ============================================================================
@@ -949,14 +977,29 @@ function prTeamLocation(team) {
 }
 
 // 지금 고른 범위에 드는 조 목록
-function prSelectedTeams() {
-    const teams = getTeams();
-    if (prTeamName === TEAM_ALL) return teams;
-    if (prTeamName.startsWith(PR_LOC_PREFIX)) {
-        const loc = prTeamName.slice(PR_LOC_PREFIX.length);
-        return teams.filter(t => prTeamLocation(t) === loc);
+// 조·장소 고르기는 '거르기' 가 아니라 '찾아가기' 다.
+//
+// 예전에는 고른 조만 남기고 나머지를 지웠다. 그러면 집계표가 그 조 하나짜리가
+// 되어 아무 뜻이 없고, 다른 조를 보려면 다시 전체로 돌아와야 했다.
+// 무엇을 인쇄할지는 '출력할 장 → 부분 선택' 이 정한다. 여기서는 자리만 옮긴다.
+function prScrollToTeam(value) {
+    let key = value;
+    if (value === TEAM_ALL) {
+        key = PR_SUMMARY_KEY;                       // 전체는 맨 위 집계표로
+    } else if (String(value).startsWith(PR_LOC_PREFIX)) {
+        const loc = value.slice(PR_LOC_PREFIX.length);
+        key = getTeams().find(t => prTeamLocation(t) === loc);   // 그 장소의 첫 조
     }
-    return teams.includes(prTeamName) ? [prTeamName] : [];
+    // 조가 하나뿐이면 집계표가 없다. 그때는 첫 장으로 간다.
+    const el = (key && prPreview?.querySelector(`.pr-sheet[data-page="${CSS.escape(key)}"]`))
+             || (value === TEAM_ALL ? prPreview?.querySelector('.pr-sheet') : null);
+    if (!el) return;
+
+    // 조작부가 화면에 붙어 있어(sticky) 그 높이만큼 위를 가린다. 그만큼 덜 내린다.
+    const panel = document.querySelector('.pr-panel');
+    const gap = (panel?.getBoundingClientRect().height || 0) + 12;
+    const y = window.scrollY + el.getBoundingClientRect().top - gap;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 }
 
 // 오늘에서 날짜상 가장 가까운 주차.
@@ -1178,7 +1221,7 @@ function renderPrintPreview() {
         return;
     }
 
-    const teams = prSelectedTeams();
+    const teams = getTeams();   // 항상 전부 그린다 (고르기는 찾아가기다)
     const cols = {
         status:   !!prOpt.status?.checked,     // 김밥 현황 (데이터)
         kimbap:   !!prOpt.kimbap?.checked,     // 김밥신청 (빈칸)
@@ -1373,10 +1416,10 @@ prSessionSelect?.addEventListener('change', (e) => {
     syncKimbapDefault();
     renderPrintPreview();
 });
+// 다시 그리지 않는다 — 그리는 내용이 같고, 다시 그리면 빼 둔 장 선택이 날아간다
 prTeamSelect?.addEventListener('change', (e) => {
     prTeamName = e.target.value;
-    prSkip.clear();
-    renderPrintPreview();
+    prScrollToTeam(prTeamName);
 });
 // 김밥신청은 '이 주차에 대해' 정한 것으로 남긴다 (자동 판단을 죽이지 않는다)
 prOpt.kimbap?.addEventListener('change', () => {

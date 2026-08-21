@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=85">
-    <link rel="stylesheet" href="admin.css?v=85">
+    <link rel="stylesheet" href="style.css?v=86">
+    <link rel="stylesheet" href="admin.css?v=86">
 </head>
 <body>
     <div class="admin-container">
@@ -57,7 +57,6 @@
         <!-- 탭 네비게이션 -->
         <nav class="tab-nav">
             <button class="tab-btn active" data-tab="attendance">출석 관리</button>
-            <button class="tab-btn" data-tab="search">검색 모드</button>
             <button class="tab-btn" data-tab="teams">조별 보기</button>
             <button class="tab-btn" data-tab="members">개인별 보기</button>
             <button class="tab-btn" data-tab="absence">결석 현황</button>
@@ -163,7 +162,7 @@
                         <select id="prSession"></select>
                     </div>
                     <div class="pr-field">
-                        <label for="prTeam">조 · 장소</label>
+                        <label for="prTeam">조 · 장소로 이동</label>
                         <select id="prTeam"></select>
                     </div>
                 </div>
@@ -199,62 +198,6 @@
             </div>
 
             <div class="pr-preview" id="prPreview"></div>
-        </div>
-
-        <!-- 검색 모드 -->
-        <div class="tab-content" id="searchTab">
-            <div class="search-section">
-                <div class="search-box">
-                    <div class="input-group">
-                        <label for="searchName">이름</label>
-                        <input 
-                            type="text" 
-                            id="searchName" 
-                            placeholder="이름을 입력하세요"
-                            autocomplete="off"
-                        >
-                    </div>
-                    <button class="search-btn" id="adminSearchBtn">
-                        <span class="btn-text">검색하기</span>
-                    </button>
-                </div>
-
-                <!-- 동명이인 선택 -->
-                <div class="duplicate-container" id="duplicateContainer" style="display: none;">
-                    <h3 class="duplicate-title">동일한 이름이 여러 명 있습니다. 선택해주세요:</h3>
-                    <div class="duplicate-list" id="duplicateList"></div>
-                </div>
-
-                <!-- 검색 결과 -->
-                <div class="result-container" id="searchResultContainer" style="display: none;">
-                    <div class="result-card">
-                        <div class="result-header">
-                            <h2 class="result-title">조원 정보</h2>
-                            <button class="close-btn" id="searchCloseBtn">✕</button>
-                        </div>
-                        <div class="result-content">
-                            <div class="info-row">
-                                <span class="info-label">아이디</span>
-                                <span class="info-value" id="searchResultName">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">조</span>
-                                <span class="info-value highlight" id="searchResultTeam">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">위치</span>
-                                <span class="info-value" id="searchResultLocation">-</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 에러 메시지 -->
-                <div class="error-message" id="searchErrorMessage" style="display: none;">
-                    <span class="error-icon">⚠</span>
-                    <span class="error-text" id="searchErrorText"></span>
-                </div>
-            </div>
         </div>
 
         <!-- 조별 보기 -->
@@ -303,7 +246,19 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=85"></script>
+    <!-- 개인 상세 — 카드를 누르면 뜬다.
+         출석·김밥·과제를 한 화면에서 본다. 최근 것부터, 나머지는 접어 둔다. -->
+    <div class="md-modal" id="memberModal" aria-hidden="true">
+        <div class="md-inner" role="dialog" aria-modal="true" aria-labelledby="mdTitle">
+            <div class="md-head">
+                <h2 id="mdTitle"></h2>
+                <button type="button" class="md-close" id="mdClose" aria-label="닫기">✕</button>
+            </div>
+            <div class="md-body" id="mdBody"></div>
+        </div>
+    </div>
+
+    <script type="module" src="admin.js?v=86"></script>
 </body>
 </html>
 

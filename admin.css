@@ -1379,3 +1379,110 @@ body.dark-mode .ab-note { background: #3a2f1a; color: #fbbf24; }
     .ab-extra { width: 100%; margin-left: 0; justify-content: flex-start; }
     .ab-thresholds { margin-left: 0; }
 }
+
+/* ============================================================================
+   개인 상세 모달
+
+   출석·김밥·과제를 한 화면에서 본다. 보기만 하는 화면이라 입력 요소가 없다.
+   ============================================================================ */
+.md-modal {
+    display: none;
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(16, 24, 40, 0.55);
+    align-items: center; justify-content: center;
+    padding: 20px;
+}
+.md-modal.active { display: flex; }
+.md-inner {
+    background: #fff; border-radius: 16px;
+    width: 100%; max-width: 520px; max-height: 88vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 48px rgba(16, 24, 40, 0.28);
+}
+.md-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 18px; border-bottom: 1px solid #eceef1;
+}
+.md-head h2 { margin: 0; font-size: 16px; font-weight: 800; color: #101828; }
+.md-close {
+    margin-left: auto; width: 32px; height: 32px; flex: 0 0 auto;
+    border: none; border-radius: 8px; background: #f2f4f7;
+    color: #667085; font-size: 16px; cursor: pointer;
+}
+.md-close:hover { background: #e4e7ec; color: #101828; }
+.md-body { padding: 8px 18px 18px; overflow-y: auto; }
+
+.md-sec { padding-top: 16px; }
+.md-sec + .md-sec { border-top: 1px solid #f1f2f4; margin-top: 16px; }
+.md-sec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.md-ico { font-size: 15px; }
+.md-sec-title { font-size: 14px; font-weight: 700; color: #101828; }
+.md-sec-right { margin-left: auto; font-size: 12px; font-weight: 600; color: #667085; }
+
+/* 출석 — 주차 칸. 최근이 왼쪽 위 */
+.md-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.md-rest { display: contents; }        /* 접힌 칸도 같은 격자에 놓인다 */
+.md-cell {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 10px 6px; border-radius: 10px;
+    background: #f9fafb; border: 1px solid #eceef1;
+}
+.md-cell-date { font-size: 11px; color: #667085; }
+.md-cell-name { font-size: 11px; font-weight: 700; color: #475467; }
+.md-cell-mark { font-size: 17px; font-weight: 800; line-height: 1.1; }
+.md-cell.s-o { background: #ecfdf3; border-color: #abefc6; }
+.md-cell.s-o .md-cell-mark { color: #027a48; }
+.md-cell.s-d { background: #f4f3ff; border-color: #d9d6fe; }
+.md-cell.s-d .md-cell-mark { color: #5925dc; }
+.md-cell.s-x { background: #fef3f2; border-color: #fecdca; }
+.md-cell.s-x .md-cell-mark { color: #b42318; }
+.md-cell.s-n .md-cell-mark,
+.md-cell.s-b .md-cell-mark { color: #98a2b3; }
+
+/* 김밥 · 과제 — 한 줄에 하나 */
+.md-rows { display: flex; flex-direction: column; gap: 6px; }
+.md-rows .md-rest { display: flex; flex-direction: column; gap: 6px; }
+
+/* 접힌 묶음은 반드시 숨는다.
+   display:contents / flex 가 [hidden] 의 display:none 을 이겨서
+   접어 둔 칸이 그대로 보였다. 선택자를 한 단계 더 준다. */
+.md-sec .md-rest[hidden] { display: none; }
+.md-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px; border-radius: 9px;
+    background: #f9fafb; border: 1px solid #eceef1;
+}
+.md-row-key { font-size: 13px; font-weight: 700; color: #b54708; }
+.md-row-type { font-size: 12px; color: #475467; margin-left: auto; }
+.md-row-when { font-size: 12px; color: #667085; }
+.md-row-type + .md-row-when { margin-left: 0; }
+.md-row-when:first-of-type:not(.md-row-type + *) { margin-left: auto; }
+.md-row-link { text-decoration: none; font-size: 13px; }
+
+.md-more {
+    width: 100%; margin-top: 8px; padding: 9px;
+    font-size: 13px; font-family: inherit; color: #475467; cursor: pointer;
+    background: #fff; border: 1px solid #d0d5dd; border-radius: 9px;
+}
+.md-more:hover { background: #f9fafb; }
+/* 격자 안에서는 버튼이 한 줄을 통째로 쓴다 */
+.md-grid > .md-more { grid-column: 1 / -1; }
+
+/* 카드가 눌린다는 것을 보여 준다 */
+.member-card { cursor: pointer; }
+
+body.dark-mode .md-inner { background: #1f2937; }
+body.dark-mode .md-head { border-bottom-color: #374151; }
+body.dark-mode .md-head h2,
+body.dark-mode .md-sec-title { color: #f3f4f6; }
+body.dark-mode .md-sec + .md-sec { border-top-color: #374151; }
+body.dark-mode .md-cell,
+body.dark-mode .md-row { background: #111827; border-color: #374151; }
+body.dark-mode .md-more { background: #111827; border-color: #4b5563; color: #d1d5db; }
+body.dark-mode .md-close { background: #374151; color: #d1d5db; }
+
+@media (max-width: 480px) {
+    .md-modal { padding: 10px; }
+    .md-inner { max-height: 92vh; }
+    .md-head h2 { font-size: 15px; }
+}
