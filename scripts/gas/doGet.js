@@ -10,6 +10,13 @@
 //    승인 창을 띄울 자리가 없고, 권한이 없으면 조용히 실패한다.
 //    승인 → 재배포 순서를 지킬 것.
 //
+// 핵심 변경 (v30): 아이디를 한 규칙으로 다듬는다 (plcNormalizeId_)
+//   과제 탭 아이디는 손입력과 폼 응답이 섞여 '김도현 5326' · '김도현-5326' ·
+//   '김도현(5326)' · '김도현５３２６' 처럼 제각각 들어온다. 띄어쓰기만 지우고
+//   있어서 기호가 붙은 건은 명단과 짝이 안 맞아 조용히 버려졌다.
+//   한글·영문·숫자만 남기고 전각 숫자는 반각으로 바꾼다.
+//   ⚠️ 한쪽만 다듬으면 오히려 어긋난다. 아이디를 만들고 맞추는 6곳에 모두 넣었다.
+//
 // 핵심 변경 (v29): plcAuthorize 가 GitHub 토큰·저장소·워크플로까지 실제로 확인한다
 //
 // 핵심 변경 (v28):
@@ -390,7 +397,7 @@ function plcAuthorize() {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 29;
+  var currentVersion = 30;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -567,7 +574,7 @@ function plcCheckToken_(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 29; // + doGet 토큰 · 권한 점검
+  var currentVersion = 30; // + doGet 토큰 · 권한 점검 · 아이디 정형화
 
   if (!plcCheckToken_(e)) {
     return output.setContent(JSON.stringify({
@@ -922,7 +929,7 @@ function doGet(e) {
     }));
   } catch (e) {
     return output.setContent(JSON.stringify({
-      success: false, version: 26, message: e.message
+      success: false, version: currentVersion, message: e.message
     }));
   }
 }
