@@ -14,10 +14,10 @@ import {
     getHomeworkList,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=87';
-import { matches as hangulMatches } from './scripts/hangul.js?v=87';
-import { registerServiceWorker } from './scripts/sw-update.js?v=87';
-import { sbPostGas } from './scripts/supabase-config.js?v=87';
+} from './scripts/members-data.js?v=88';
+import { matches as hangulMatches } from './scripts/hangul.js?v=88';
+import { registerServiceWorker } from './scripts/sw-update.js?v=88';
+import { sbPostGas } from './scripts/supabase-config.js?v=88';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -788,24 +788,81 @@ function mdSection(icon, title, right, inner, extraClass = '') {
 function openMemberDetail(member) {
     if (!memberModal || !mdBody) return;
 
-    // ── 출석 : 최근 주차부터
-    const sessions = [...getSessions()].reverse();
-    const counts = { O: 0, '◎': 0, X: 0, '-': 0, '': 0 };
-    const cells = sessions.map(sx => {
+    // ── 출석
+    //
+    // 지난 주차를 최근 것부터, 그 다음에 앞으로의 주차를 가까운 것부터 놓는다.
+    // 예전에는 그냥 뒤집어서 12월 강의가 맨 앞에 왔다 — 아직 하지도 않은 주차라
+    // 정작 봐야 할 '방금 끝난 수업' 이 한참 아래에 있었다.
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+                   + `-${String(today.getDate()).padStart(2, '0')}`;
+    const all = getSessions();
+    const done   = all.filter(s => s.session_date <= todayIso).reverse();   // 최근부터
+    const coming = all.filter(s => s.session_date >  todayIso);             // 가까운 것부터
+
+    // 그 주차에 과제를 냈나 · 김밥을 신청했나
+    const kbMap = getKimbapDetail(member.id) || {};
+    const hwSet = new Set((getHomeworkList(member.id) || [])
+        .map(h => prNormalizeSession(h.session)).filter(Boolean));
+    const marksOf = (sx) => {
+        const norm = prNormalizeSession(sx.label_norm || '');
+        return {
+            hw: hwSet.has(norm),
+            kb: kbMap[sx.label_norm]?.applied === 1,
+        };
+    };
+
+    const statusOf = (sx) => {
         const key = getSessionKey(sx.session_date);
-        const v = normStatus(key ? member[key] : '');
+        return normStatus(key ? member[key] : '');
+    };
+
+    // ◎ 는 앞으로의 주차에도 붙는다.
+    //
+    // 지난 기수 이수자는 시트에 남은 주차까지 미리 ◎ 가 찍혀 있다.
+    // '아직 안 한 수업' 이라고 예정으로 묶어 버리면 신규 등록자와 구분이 안 된다.
+    // ◎ 는 예측이 아니라 이미 지난 기수에서 들었다는 사실이므로 그대로 센다.
+    // O·X·미기록은 지난 주차에서만 센다 — 그건 아직 일어나지 않은 일이다.
+    const counts = { O: 0, '◎': 0, X: 0, '-': 0, '': 0 };
+    let soon = 0;
+
+    const cells = done.map(sx => {
+        const v = statusOf(sx);
         counts[v in counts ? v : ''] += 1;
-        return { sx, v };
-    });
-    const other = counts['◎'] + counts['-'] + counts[''];
-    const attGrid = mdFoldable(cells, MD_KEEP, ({ sx, v }) => {
-        const m = MD_MARK[v] || MD_MARK[''];
-        return `<div class="md-cell s-${m.cls}">
+        return { sx, v, ...marksOf(sx) };
+    }).concat(coming.map(sx => {
+        const v = statusOf(sx);
+        if (v === '◎') { counts['◎'] += 1; return { sx, v, ...marksOf(sx) }; }
+        soon += 1;
+        return { sx, v: null, ...marksOf(sx) };        // v=null → 예정
+    }));
+
+    const attGrid = mdFoldable(cells, MD_KEEP, ({ sx, v, hw, kb }) => {
+        const m = v === null ? null : (MD_MARK[v] || MD_MARK['']);
+        const marks = (hw ? '<span title="과제 제출">📝</span>' : '')
+                    + (kb ? '<span title="김밥 신청">🍙</span>' : '');
+        return `<div class="md-cell ${m ? 's-' + m.cls : 'is-soon'}">
             <span class="md-cell-date">${escapeHtml(sx.label)}</span>
             <span class="md-cell-name">${escapeHtml(sx.label_norm || '')}</span>
-            <span class="md-cell-mark">${m.txt}</span>
+            <span class="md-cell-mark">${m ? m.txt : '예정'}</span>
+            ${marks ? `<span class="md-cell-marks">${marks}</span>` : ''}
         </div>`;
     }, '개');
+
+    // 요약. 0 인 항목은 빼서 눈에 걸리는 것만 남긴다 —
+    // '그 외 17' 처럼 뭉뚱그리면 그게 미기록인지 이수인지 알 수가 없다.
+    const bits = [`진행 ${done.length}회차`];
+    if (counts.O)     bits.push(`출석 ${counts.O}`);
+    if (counts.X)     bits.push(`결석 ${counts.X}`);
+    if (counts['◎'])  bits.push(`이수 ${counts['◎']}`);
+    if (counts[''])   bits.push(`미기록 ${counts['']}`);
+    if (counts['-'])  bits.push(`수업없음 ${counts['-']}`);
+    if (soon)         bits.push(`예정 ${soon}`);
+    const attSummary = bits.join(' · ');
+
+    // 지난 기수 이수자는 ◎ 가 대부분이라 그리드만 봐서는 티가 안 난다.
+    // 제목 옆에 한 번 짚어 준다 — 이 사람은 이번 기수에 새로 다 들을 필요가 없다.
+    const carryOver = counts['◎'];
 
     // ── 김밥 : 신청한 주차만, 최근부터
     const kb = getKimbapDetail(member.id) || {};
@@ -828,8 +885,8 @@ function openMemberDetail(member) {
         `${member.name} (${member.phone}) · ${member.team || '미편성'} · ${member.location || ''}`;
 
     mdBody.innerHTML =
-        mdSection('📋', '', `총 ${sessions.length}회차 · 출석 ${counts.O} · 결석 ${counts.X} · 그 외 ${other}`,
-                  `<div class="md-grid">${attGrid}</div>`)
+        mdSection('📋', carryOver ? `<span class="md-carry">◎ 지난 기수 이수 ${carryOver}</span>` : '',
+                  attSummary, `<div class="md-grid">${attGrid}</div>`)
       + mdSection('🍙', '', kbRows.length ? `총 ${kbRows.length}회 신청` : '신청 내역 없음',
                   kbRows.length
                     ? `<div class="md-rows">${mdFoldable(kbRows, MD_HW_KEEP, r =>

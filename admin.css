@@ -1458,6 +1458,16 @@ body.dark-mode .ab-note { background: #3a2f1a; color: #fbbf24; }
 .md-cell.s-x .md-cell-mark { color: #b42318; }
 .md-cell.s-n .md-cell-mark,
 .md-cell.s-b .md-cell-mark { color: #98a2b3; }
+/* 아직 하지 않은 주차 — 찍을 것이 없으니 옅게 두고 '예정' 이라고 적는다 */
+.md-cell.is-soon { background: #fff; border-style: dashed; }
+.md-cell.is-soon .md-cell-mark { font-size: 11px; font-weight: 700; color: #98a2b3; }
+/* 과제·김밥은 칸 안에 작게. 출결 기호를 가리지 않는다 */
+.md-cell-marks { font-size: 11px; line-height: 1; letter-spacing: 1px; }
+/* 지난 기수 이수자임을 제목 옆에 한 번 짚어 준다 */
+.md-carry {
+    font-size: 12px; font-weight: 700; color: #5925dc;
+    background: #f4f3ff; border: 1px solid #d9d6fe; border-radius: 999px; padding: 2px 9px;
+}
 
 /* 김밥 · 과제 — 한 줄에 하나 */
 .md-rows { display: flex; flex-direction: column; gap: 6px; }
