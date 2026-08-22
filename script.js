@@ -23,8 +23,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=90';
-import { registerServiceWorker } from './scripts/sw-update.js?v=90';
+} from './scripts/members-data.js?v=91';
+import { registerServiceWorker } from './scripts/sw-update.js?v=91';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -361,8 +361,10 @@ function displayResult(member) {
 // 판정은 DB 뷰(v_completion_status)가 하고 여기서는 표시만 한다.
 // 당사자가 스스로 알면 관리자가 찾아 알릴 일이 줄어든다.
 // ============================================================================
-const HOMEWORK_FORM_URL =
-    'https://docs.google.com/forms/d/e/1FAIpQLSex87UOQx7C9-9H1MJtrY-rLfNh_wfQWVVQ66-1XnY6YJ2M9A/viewform';
+// '제출하기 →' 가 가리키는 곳. 과제·소감문 제출 폼이다.
+// 한동안 index.html 푸터의 문의 폼 주소가 그대로 들어가 있었다 —
+// 과제를 내려던 사람이 문의 폼으로 갔다.
+const HOMEWORK_FORM_URL = 'https://forms.gle/2FpEX6gYhF9Xcd5w8';
 
 function renderMyStatus(member) {
     const el = document.getElementById('myStatusCard');
@@ -1249,7 +1251,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=90';
+                window.location.href = 'admin.html?v=91';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
