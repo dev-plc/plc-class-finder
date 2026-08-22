@@ -1002,12 +1002,15 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
     background: #fef3f2; border-color: #fda29b; color: #b42318;
 }
 
-/* 인쇄 · 항목 · 출력을 한 줄에.
+/* 항목 · 출력 · 인쇄를 한 줄에. 하는 일의 차례대로 왼쪽에서 오른쪽.
    자리가 모자라면 묶음 단위로 접힌다 — 라벨만 남고 버튼이 다음 줄로 가면
    무슨 라벨인지 알 수 없다. .pr-group 이 라벨과 제 버튼들을 함께 데려간다. */
 .pr-bar { align-items: center; gap: 10px 14px; }
 .pr-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pr-group .pr-row-label { margin-right: 2px; }
+
+/* 남는 자리를 여기서 다 먹어 장수와 인쇄 버튼을 오른쪽 끝으로 민다.
+   장수가 아직 비어 있어도(첫 렌더 전) 밀어내는 몫은 그대로다. */
 .pr-bar .pr-info { margin-left: auto; }
 
 .pr-row-actions { gap: 8px; }
@@ -1022,6 +1025,8 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
     .pr-chip { height: 28px; padding: 0 10px; font-size: 12px; gap: 5px; }
     .pr-sub-btn, .pr-print-btn { height: 32px; }
     .pr-bar .pr-info { margin-left: 0; }        /* 오른쪽 끝에 혼자 떨어져 있지 않게 */
+    /* 좁으면 줄이 접힌다. 인쇄는 마지막 줄 오른쪽 끝에 붙여 엄지에 닿게 둔다 */
+    .pr-bar .pr-print-btn { margin-left: auto; }
 }
 .pr-print-btn {
     height: 38px; padding: 0 18px;
