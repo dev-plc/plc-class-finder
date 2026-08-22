@@ -150,9 +150,47 @@ function gasFailHint(status) {
   }
 }
 
-const res = await fetch(GAS_API_URL + '?t=' + Date.now());
+// 한 번 실패했다고 하루치를 버리지 않는다.
+//
+// 2026-08-21 정오 실행이 GAS 404 로 죽었다. 재시도도 알림도 없어서
+// 그날 낸 과제가 다음 날 사람이 손으로 동기화할 때까지 안 들어왔다.
+//
+// Apps Script 는 재배포하는 동안, 그리고 앞단이 붐빌 때 잠깐씩 404·5xx 를
+// 낸다. 그 순간에 크론이 걸리면 하루를 통째로 잃는다. 그래서 몇 번 더 본다.
+// 배포가 정말 사라진 경우라면 몇 번을 봐도 404 라 결론은 같다 — 늦어질 뿐이다.
+//
+// 응답이 아예 안 오고 매달리는 경우도 있어 시도마다 시간을 끊는다
+// (실패한 그 요청은 404 를 받기까지 55초를 썼다).
+const GAS_TRIES = 3;
+const GAS_TRY_TIMEOUT_MS = 90_000;
+const RETRIABLE = new Set([404, 408, 429, 500, 502, 503, 504]);
+
+let res = null;
+for (let attempt = 1; attempt <= GAS_TRIES; attempt++) {
+  let why = '';
+  try {
+    res = await fetch(GAS_API_URL + '?t=' + Date.now(),
+                      { signal: AbortSignal.timeout(GAS_TRY_TIMEOUT_MS) });
+    if (res.ok) break;
+    why = `HTTP ${res.status}`;
+    if (!RETRIABLE.has(res.status)) break;   // 401·403 은 다시 물어도 같다
+  } catch (e) {
+    res = null;
+    why = e?.name === 'TimeoutError' ? `${GAS_TRY_TIMEOUT_MS / 1000}초 안에 응답 없음` : String(e?.message || e);
+  }
+  if (attempt === GAS_TRIES) break;
+  const waitMs = 5000 * attempt;            // 5초 → 10초
+  console.log(`   ↻ ${attempt}/${GAS_TRIES} 실패 (${why}) — ${waitMs / 1000}초 후 다시 시도`);
+  await new Promise(r => setTimeout(r, waitMs));
+}
+
+if (!res) {
+  console.error(`❌ GAS 에 ${GAS_TRIES}번 요청했지만 응답을 받지 못했습니다.`);
+  gasFailHint(0);
+  process.exit(1);
+}
 if (!res.ok) {
-  console.error(`❌ GAS 응답 실패: HTTP ${res.status}`);
+  console.error(`❌ GAS 응답 실패: HTTP ${res.status} (${GAS_TRIES}번 시도)`);
   gasFailHint(res.status);
   process.exit(1);
 }
