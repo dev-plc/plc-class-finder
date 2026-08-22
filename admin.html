@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=94">
-    <link rel="stylesheet" href="admin.css?v=94">
+    <link rel="stylesheet" href="style.css?v=95">
+    <link rel="stylesheet" href="admin.css?v=95">
 </head>
 <body>
     <div class="admin-container">
@@ -60,6 +60,7 @@
             <button class="tab-btn" data-tab="teams">조별 보기</button>
             <button class="tab-btn" data-tab="attendance">출석 관리</button>
             <button class="tab-btn" data-tab="absence">결석 현황</button>
+            <button class="tab-btn" data-tab="completion">수료 현황</button>
             <button class="tab-btn" data-tab="print">출석부 출력</button>
         </nav>
 
@@ -150,6 +151,52 @@
                 </div>
                 <p class="ab-note" id="abTotalNote"></p>
                 <div class="ab-list" id="abTotalList"></div>
+            </section>
+        </div>
+
+        <!-- 수료 현황
+             결석 현황이 '지금 문제인 사람' 이라면 여기는 '끝까지 갈 사람' 이다.
+             판정 숫자는 전부 v_completion_status 에서 온다 (규칙은 SQL 한 곳에만).
+             여기서 더하는 것은 '앞으로 남은 강의가 몇 회인가' 하나뿐이다 —
+             그건 판정이 아니라 달력이다. -->
+        <div class="tab-content" id="completionTab">
+            <div class="ab-panel">
+                <div class="ab-row">
+                    <div class="ab-field">
+                        <label for="cpTeam">조</label>
+                        <select id="cpTeam"></select>
+                    </div>
+                    <div class="ab-field">
+                        <label for="cpPastor">담당교역자</label>
+                        <select id="cpPastor"></select>
+                    </div>
+                    <div class="ab-field">
+                        <label for="cpSort">정렬</label>
+                        <div class="ab-sort">
+                            <select id="cpSort"></select>
+                            <button type="button" id="cpDir" class="ab-dir"></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <section class="ab-card">
+                <div class="ab-card-head">
+                    <h3>한눈에</h3>
+                    <span class="ab-badge" id="cpBadge"></span>
+                </div>
+                <p class="ab-note" id="cpWarn"></p>
+                <div class="cp-buckets" id="cpBuckets"></div>
+            </section>
+
+            <section class="ab-card">
+                <div class="ab-card-head">
+                    <h3 id="cpListTitle">명단</h3>
+                    <span class="ab-badge" id="cpListBadge"></span>
+                    <button type="button" class="ab-copy" data-copy="cp">📋 명단 복사</button>
+                </div>
+                <p class="ab-note" id="cpNote"></p>
+                <div class="ab-list" id="cpList"></div>
             </section>
         </div>
 
@@ -261,7 +308,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=94"></script>
+    <script type="module" src="admin.js?v=95"></script>
 </body>
 </html>
 

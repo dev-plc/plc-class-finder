@@ -1382,6 +1382,69 @@ body.dark-mode .sync-info { color: #9ca3af; }
     background: #f9fafb; border: 1px solid #e6e8ec; border-radius: 5px; padding: 1px 5px;
 }
 
+/* ── 수료 현황 ──────────────────────────────────────────────────────────
+   패널·카드·명단은 결석 현황(.ab-*)을 그대로 쓴다. 같은 모양인데 이름만
+   바꿔 90줄을 복사하면, 한쪽만 고치는 날이 온다.
+   여기 있는 것은 수료 현황에만 있는 것들이다. */
+.cp-buckets {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    gap: 8px; padding: 14px 16px;
+}
+.cp-bucket {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 12px 8px; font-family: inherit; cursor: pointer;
+    background: #fff; border: 1px solid #e6e8ec; border-radius: 10px;
+    transition: border-color .15s, background .15s;
+}
+.cp-bucket:hover { background: #f9fafb; }
+.cp-bucket-n { font-size: 22px; font-weight: 800; line-height: 1.1; }
+.cp-bucket-l { font-size: 12px; font-weight: 600; color: #667085; white-space: nowrap; }
+
+/* 고른 칸만 색이 산다. 다섯 칸이 다 칠해져 있으면 어디를 보는지 알 수 없다. */
+.cp-bucket.on { border-width: 2px; }
+.cp-bucket .cp-bucket-n { color: #475467; }
+.cp-bucket.on.cp-done { border-color: #12b76a; background: #f6fef9; }
+.cp-bucket.on.cp-ok   { border-color: #2563eb; background: #eff4ff; }
+.cp-bucket.on.cp-warn { border-color: #f79009; background: #fffaeb; }
+.cp-bucket.on.cp-bad  { border-color: #d92d20; background: #fffbfa; }
+.cp-bucket.on.cp-ask  { border-color: #7c3aed; background: #f9f5ff; }
+.cp-bucket.on.cp-done .cp-bucket-n { color: #027a48; }
+.cp-bucket.on.cp-ok   .cp-bucket-n { color: #1849a9; }
+.cp-bucket.on.cp-warn .cp-bucket-n { color: #b54708; }
+.cp-bucket.on.cp-bad  .cp-bucket-n { color: #b42318; }
+.cp-bucket.on.cp-ask  .cp-bucket-n { color: #6941c6; }
+
+/* 명단 줄 — 왼쪽 띠로 어느 갈래인지 표시한다 */
+.cp-item.cp-done { box-shadow: inset 4px 0 0 #12b76a; }
+.cp-item.cp-ok   { box-shadow: inset 4px 0 0 #2563eb; }
+.cp-item.cp-warn { box-shadow: inset 4px 0 0 #f79009; background: #fffcf5; }
+.cp-item.cp-bad  { box-shadow: inset 4px 0 0 #d92d20; background: #fffbfa; }
+
+.cp-score { font-size: 15px; font-weight: 800; color: #101828; white-space: nowrap; }
+.cp-of { font-size: 12px; font-weight: 600; color: #98a2b3; }
+.cp-todo {
+    font-size: 12px; color: #475467; text-align: right;
+    background: #f9fafb; border: 1px solid #e6e8ec; border-radius: 6px; padding: 2px 7px;
+}
+.cp-flag {
+    font-size: 11px; font-weight: 700; color: #6941c6;
+    background: #f9f5ff; border: 1px solid #d6bbfb; border-radius: 5px; padding: 1px 6px;
+}
+
+body.dark-mode .cp-bucket { background: #111827; border-color: #374151; }
+body.dark-mode .cp-bucket:hover { background: #1f2937; }
+body.dark-mode .cp-bucket .cp-bucket-n { color: #d1d5db; }
+body.dark-mode .cp-bucket-l { color: #9ca3af; }
+body.dark-mode .cp-bucket.on.cp-done { background: #10241a; }
+body.dark-mode .cp-bucket.on.cp-ok   { background: #111c33; }
+body.dark-mode .cp-bucket.on.cp-warn { background: #2a2113; }
+body.dark-mode .cp-bucket.on.cp-bad  { background: #2a1a1a; }
+body.dark-mode .cp-bucket.on.cp-ask  { background: #1e1630; }
+body.dark-mode .cp-item.cp-warn { background: #2a2113; }
+body.dark-mode .cp-item.cp-bad  { background: #2a1a1a; }
+body.dark-mode .cp-score { color: #f3f4f6; }
+body.dark-mode .cp-todo { background: #1f2937; border-color: #374151; color: #d1d5db; }
+
 body.dark-mode .ab-panel,
 body.dark-mode .ab-card { background: #1f2937; border-color: #374151; }
 body.dark-mode .ab-field select { background: #111827; color: #e5e7eb; border-color: #4b5563; }

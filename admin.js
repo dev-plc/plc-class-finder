@@ -15,10 +15,10 @@ import {
     splitLinks,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=94';
-import { matches as hangulMatches } from './scripts/hangul.js?v=94';
-import { registerServiceWorker } from './scripts/sw-update.js?v=94';
-import { sbPostGas } from './scripts/supabase-config.js?v=94';
+} from './scripts/members-data.js?v=95';
+import { matches as hangulMatches } from './scripts/hangul.js?v=95';
+import { registerServiceWorker } from './scripts/sw-update.js?v=95';
+import { sbPostGas } from './scripts/supabase-config.js?v=95';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -79,6 +79,7 @@ async function loadData() {
         try { initAttendanceTab(); } catch (e) { console.error(e); }
         try { initPrintTab(); } catch (e) { console.error(e); }
         try { initAbsenceTab(); } catch (e) { console.error(e); }
+        try { initCompletionTab(); } catch (e) { console.error(e); }
     }
 }
 
@@ -1787,6 +1788,263 @@ document.getElementById('absenceTab')?.addEventListener('click', async (e) => {
             btn.textContent = `✅ ${rows.length}명 복사됨`;
         } catch {
             // 클립보드를 막아 둔 환경(비 HTTPS 등)에서도 손으로 긁어갈 수 있게
+            window.prompt('복사할 명단입니다 (Ctrl+C)', text);
+            btn.textContent = '📋 명단 복사';
+            return;
+        }
+    }
+    setTimeout(() => { btn.textContent = '📋 명단 복사'; }, 2000);
+});
+
+// ============================================================================
+// 수료 현황 — 다 채운 사람, 이대로 가면 채울 사람, 지금 챙기면 살릴 사람
+//
+// 결석 현황이 '지금 문제인 사람' 이라면 여기는 '끝까지 갈 사람' 이다.
+//
+// 판정 숫자(credited·absent·makeup)는 전부 v_completion_status 에서 온다.
+// 여기서 다시 세지 않는다 — 규칙이 두 곳에 있으면 반드시 어긋난다.
+// 이 화면이 더하는 것은 '앞으로 남은 강의가 몇 회인가' 하나뿐이고,
+// 그건 판정이 아니라 달력이다.
+//
+// 산수가 안내문과 저절로 맞는다:
+//   결석 3회 → 13 + 보충 3 = 16  ✅
+//   결석 4회 → 12 + 보충 3 = 15  ❌  ← 안내문 4항 '4회 결석 시 재수강'
+// 그래서 결석 현황 탭의 AB_RETAKE_AT 과 여기가 같은 답을 낸다.
+// ============================================================================
+const CP_BUCKETS = [
+    { key: 'done',    label: '수료',      tone: 'done', desc: '요건을 다 채웠습니다. 더 나오지 않아도 됩니다.' },
+    { key: 'ontrack', label: '수료 예정',  tone: 'ok',   desc: '남은 강의를 나오면 채워집니다. 보충이 없어도 됩니다.' },
+    { key: 'atrisk',  label: '아슬아슬',   tone: 'warn', desc: '남은 강의를 다 나오고 과제·소감문까지 내야 채워집니다. 지금 연락하면 결과가 바뀝니다.' },
+    { key: 'gone',    label: '수료 불가',  tone: 'bad',  desc: '남은 강의를 다 나와도 요건에 못 미칩니다. 다음 기수 재수강 안내 대상입니다.' },
+    { key: 'review',  label: '관리자 확인', tone: 'ask', desc: '보충이 한도를 넘었습니다. 참작 사유가 있는지 사람이 판단해야 합니다.' },
+];
+
+const CP_SORTS = [
+    { key: 'short',  label: '남은 횟수' },
+    { key: 'team',   label: '조' },
+    { key: 'pastor', label: '담당교역자' },
+    { key: 'name',   label: '이름' },
+];
+
+const cpTeamSelect   = document.getElementById('cpTeam');
+const cpPastorSelect = document.getElementById('cpPastor');
+const cpSortSelect   = document.getElementById('cpSort');
+const cpDirBtn       = document.getElementById('cpDir');
+const cpBadge        = document.getElementById('cpBadge');
+const cpWarn         = document.getElementById('cpWarn');
+const cpBucketsEl    = document.getElementById('cpBuckets');
+const cpListTitle    = document.getElementById('cpListTitle');
+const cpListBadge    = document.getElementById('cpListBadge');
+const cpNote         = document.getElementById('cpNote');
+const cpListEl       = document.getElementById('cpList');
+
+let cpTeamName = TEAM_ALL;
+let cpPastor   = AB_PASTOR_ALL;
+let cpSort     = 'short';
+let cpDesc     = false;          // 남은 횟수는 적은 쪽(곧 끝나는 쪽)이 먼저
+let cpBucket   = 'atrisk';       // 이 탭을 여는 이유가 여기 있다
+let cpLastRows = [];             // 명단 복사가 쓴다
+
+function cpTodayIso() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// 아직 하지 않은 강의. 오늘 것은 아직 찍기 전일 수 있으므로 남은 쪽에 넣는다.
+function cpRemainingSessions() {
+    const today = cpTodayIso();
+    return getSessions().filter(s => s.is_class !== false && s.session_date >= today).length;
+}
+
+function cpRows() {
+    const remain = cpRemainingSessions();
+
+    let people = (cpTeamName === TEAM_ALL ? getMembers() : getTeamMembers(cpTeamName));
+    if (cpPastor !== AB_PASTOR_ALL) people = people.filter(m => abPastorOf(m) === cpPastor);
+
+    const out = [];
+    for (const m of people) {
+        const p = getProgress(m);
+        if (!p) continue;                       // 판정 자료가 아직 안 온 사람
+
+        // 앞으로 보충으로 더 받을 수 있는 몫 — 이미 과제를 낸 결석분은 credited 에
+        // 들어가 있으므로 '결석했지만 아직 안 낸' 주차만 남는다.
+        const notYet     = Math.max(0, p.absentCount - p.makeupAvailable);
+        const makeupRoom = Math.min(p.makeupLeft, notYet);
+        const maxReach   = p.credited + remain + makeupRoom;
+        const gap        = Math.max(0, p.required - p.credited);   // 더 채워야 할 수
+
+        let bucket;
+        if (p.credited >= p.required)                bucket = 'done';
+        else if (maxReach < p.required)              bucket = 'gone';
+        else if (p.credited + remain >= p.required)  bucket = 'ontrack';
+        else                                         bucket = 'atrisk';
+
+        // 보충 한도 초과는 위 분류와 별개다 — 사람이 봐야 하는 건이라 따로 모은다
+        out.push({ m, p, remain, gap, maxReach, makeupRoom, bucket,
+                   needsReview: p.makeupOverflow > 0,
+                   needHomework: Math.max(0, gap - remain) });
+    }
+    return out;
+}
+
+// 무엇을 하면 되는지. 숫자만 보여 주면 결국 사람이 다시 계산한다.
+function cpTodo(r) {
+    if (r.bucket === 'done')    return '요건 충족';
+    if (r.bucket === 'gone')    return `최대 ${r.maxReach}회까지만 가능`;
+    if (r.bucket === 'ontrack') return `남은 ${r.remain}회 중 ${r.gap}회 출석`;
+    return `남은 ${r.remain}회 전부 + 과제·소감문 ${r.needHomework}건`;
+}
+
+function cpPersonHtml(r) {
+    const b = CP_BUCKETS.find(x => x.key === r.bucket);
+    return `
+        <div class="ab-item cp-item cp-${b.tone}">
+            <span class="ab-team">${escapeHtml(r.m.team || '미편성')}</span>
+            <span class="ab-name">${escapeHtml(r.m.name)}<span class="ab-phone">${escapeHtml(r.m.phone)}</span></span>
+            ${abPastorOf(r.m) ? `<span class="ab-pastor">${escapeHtml(abPastorOf(r.m))}</span>` : ''}
+            <span class="ab-extra">
+                ${r.needsReview ? '<span class="cp-flag">확인</span>' : ''}
+                <span class="cp-score">${r.p.credited}<span class="cp-of">/${r.p.required}</span></span>
+                <span class="cp-todo">${escapeHtml(cpTodo(r))}</span>
+            </span>
+        </div>`;
+}
+
+function cpSorter() {
+    return (a, b) => {
+        let d;
+        if (cpSort === 'team')        d = abText(a.m.team, b.m.team);
+        else if (cpSort === 'pastor') d = abText(abPastorOf(a.m), abPastorOf(b.m));
+        else if (cpSort === 'name')   d = abText(a.m.name, b.m.name);
+        else d = a.gap - b.gap;
+        if (cpDesc) d = -d;
+        // 같은 값이면 조 → 이름으로 굳힌다. 안 그러면 다시 그릴 때마다 순서가 흔들린다.
+        return d || abText(a.m.team, b.m.team) || abText(a.m.name, b.m.name);
+    };
+}
+
+function initCompletionTab() {
+    if (!cpTeamSelect || !cpListEl) return;
+
+    const teams = getTeams();
+    cpTeamSelect.innerHTML = `<option value="${TEAM_ALL}">전체 (${teams.length}개 조)</option>`
+        + teams.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    if (cpTeamName !== TEAM_ALL && !teams.includes(cpTeamName)) cpTeamName = TEAM_ALL;
+    cpTeamSelect.value = cpTeamName;
+
+    if (cpPastorSelect) {
+        const pastors = [...new Set(getMembers().map(abPastorOf).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'ko'));
+        cpPastorSelect.innerHTML = `<option value="${AB_PASTOR_ALL}">전체</option>`
+            + pastors.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+        if (cpPastor !== AB_PASTOR_ALL && !pastors.includes(cpPastor)) cpPastor = AB_PASTOR_ALL;
+        cpPastorSelect.value = cpPastor;
+        cpPastorSelect.disabled = pastors.length === 0;
+    }
+
+    if (cpSortSelect && !cpSortSelect.options.length) {
+        cpSortSelect.innerHTML = CP_SORTS.map(o =>
+            `<option value="${o.key}">${o.label}</option>`).join('');
+    }
+    if (cpSortSelect) cpSortSelect.value = cpSort;
+    updateCpDirBtn();
+
+    renderCompletion();
+}
+
+function renderCompletion() {
+    if (!cpListEl) return;
+
+    const rows = cpRows();
+    const remain = cpRemainingSessions();
+
+    const count = k => k === 'review'
+        ? rows.filter(r => r.needsReview).length
+        : rows.filter(r => r.bucket === k).length;
+
+    if (cpBadge) {
+        cpBadge.textContent = rows.length ? `${rows.length}명 · 남은 강의 ${remain}회` : '';
+    }
+    if (cpBucketsEl) {
+        cpBucketsEl.innerHTML = CP_BUCKETS.map(b => `
+            <button type="button" class="cp-bucket cp-${b.tone}${cpBucket === b.key ? ' on' : ''}"
+                    data-bucket="${b.key}" title="${escapeHtml(b.desc)}">
+                <span class="cp-bucket-n">${count(b.key)}</span>
+                <span class="cp-bucket-l">${b.label}</span>
+            </button>`).join('');
+    }
+
+    // 아직 하지 않은 주차에 X 가 미리 들어 있으면 판정이 낮게 잡힌다.
+    // 지난 기수 참석자에게 실제로 있었던 일이라(이현주 5630) 조용히 두지 않는다.
+    if (cpWarn) {
+        const today = cpTodayIso();
+        const future = getSessions().filter(s => s.is_class !== false && s.session_date > today);
+        const bad = rows.filter(r => future.some(s => {
+            const k = getSessionKey(s.session_date);
+            return normStatus(k ? r.m[k] : '') === 'X';
+        })).length;
+        cpWarn.textContent = bad
+            ? `※ ${bad}명은 아직 하지 않은 주차에 X 가 들어 있습니다. `
+              + '그만큼 수료 판정이 실제보다 낮게 잡힙니다 — 시트에서 그 칸을 비워 주세요.'
+            : '';
+        cpWarn.style.display = bad ? '' : 'none';
+    }
+
+    const b = CP_BUCKETS.find(x => x.key === cpBucket) || CP_BUCKETS[0];
+    const list = (cpBucket === 'review'
+        ? rows.filter(r => r.needsReview)
+        : rows.filter(r => r.bucket === cpBucket)).sort(cpSorter());
+    cpLastRows = list;
+
+    if (cpListTitle) cpListTitle.textContent = b.label;
+    if (cpListBadge) cpListBadge.textContent = `${list.length}명`;
+    if (cpNote) { cpNote.textContent = b.desc; cpNote.style.display = ''; }
+
+    cpListEl.innerHTML = list.length
+        ? list.map(cpPersonHtml).join('')
+        : '<div class="ab-empty">해당하는 사람이 없습니다.</div>';
+}
+
+function updateCpDirBtn() {
+    if (!cpDirBtn) return;
+    cpDirBtn.textContent = cpDesc ? '↓ 내림차순' : '↑ 오름차순';
+    cpDirBtn.title = cpDesc ? '큰 값·나중 글자부터' : '작은 값·앞 글자부터';
+}
+
+cpTeamSelect?.addEventListener('change', (e) => { cpTeamName = e.target.value; renderCompletion(); });
+cpPastorSelect?.addEventListener('change', (e) => { cpPastor = e.target.value; renderCompletion(); });
+cpSortSelect?.addEventListener('change', (e) => {
+    cpSort = e.target.value;
+    cpDesc = false;                 // 남은 횟수도 조·이름도 작은 쪽부터가 자연스럽다
+    updateCpDirBtn();
+    renderCompletion();
+});
+cpDirBtn?.addEventListener('click', () => { cpDesc = !cpDesc; updateCpDirBtn(); renderCompletion(); });
+cpBucketsEl?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.cp-bucket');
+    if (!btn) return;
+    cpBucket = btn.dataset.bucket;
+    renderCompletion();
+});
+
+// 명단 복사 — 결석 현황과 같은 모양. 교역자에게 그대로 넘기게 할 일까지 적는다.
+document.getElementById('completionTab')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.ab-copy');
+    if (!btn) return;
+    if (!cpLastRows.length) { btn.textContent = '복사할 명단 없음'; }
+    else {
+        const text = cpLastRows.map(r => [
+            r.m.team || '',
+            `${r.m.name}(${r.m.phone})`,
+            abPastorOf(r.m),
+            `${r.p.credited}/${r.p.required}`,
+            cpTodo(r),
+        ].filter(Boolean).join(' ')).join('\n');
+        try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = `✅ ${cpLastRows.length}명 복사됨`;
+        } catch {
             window.prompt('복사할 명단입니다 (Ctrl+C)', text);
             btn.textContent = '📋 명단 복사';
             return;
