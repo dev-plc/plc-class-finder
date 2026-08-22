@@ -1487,7 +1487,9 @@ body.dark-mode .ab-note { background: #3a2f1a; color: #fbbf24; }
 .md-row-when { font-size: 12px; color: #667085; }
 .md-row-type + .md-row-when { margin-left: 0; }
 .md-row-when:first-of-type:not(.md-row-type + *) { margin-left: auto; }
-.md-row-link { text-decoration: none; font-size: 13px; }
+/* 파일을 둘 낸 과제는 🔗1 🔗2 로 나란히 선다. 붙어 버리지 않게 띄운다. */
+.md-row-link { text-decoration: none; font-size: 13px; white-space: nowrap; }
+.md-row-link + .md-row-link { margin-left: 4px; }
 
 .md-more {
     width: 100%; margin-top: 8px; padding: 9px;
