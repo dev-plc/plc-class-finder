@@ -23,16 +23,23 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=92';
-import { registerServiceWorker } from './scripts/sw-update.js?v=92';
+} from './scripts/members-data.js?v=93';
+import { registerServiceWorker } from './scripts/sw-update.js?v=93';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
 // import.meta.url 은 실제로 불러온 주소라 저절로 맞는다.
-const SCRIPT_VERSION =
-    'script.js v' + (new URL(import.meta.url).searchParams.get('v') || '?');
+const APP_VERSION = new URL(import.meta.url).searchParams.get('v') || '?';
+const SCRIPT_VERSION = 'script.js v' + APP_VERSION;
 console.log('%c🔖 ' + SCRIPT_VERSION + ' / ' + MODULE_VERSION,
             'background:#1B3B6F;color:#fff;padding:2px 8px;border-radius:4px');
+
+// 푸터에도 같은 번호를 띄운다. 참여자가 새로고침 한 번으로 최신인지 볼 수 있다.
+// (모듈 스크립트는 defer 라 이 시점에 이미 DOM 이 있다)
+{
+    const el = document.getElementById('footerVersion');
+    if (el) el.textContent = 'v' + APP_VERSION;
+}
 
 // ============================================================================
 // 1. 내 정보 기억 (localStorage) — UX #2
@@ -1251,7 +1258,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=92';
+                window.location.href = 'admin.html?v=93';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

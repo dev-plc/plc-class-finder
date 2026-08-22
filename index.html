@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 
-    <link rel="stylesheet" href="style.css?v=92">
+    <link rel="stylesheet" href="style.css?v=93">
 </head>
 <body>
     <div class="container">
@@ -219,23 +219,17 @@
 
         <!-- 푸터 -->
         <footer class="footer">
-            <p class="footer-title">PL교회 새가족교육</p>
+            <!-- 버전은 script.js 가 채운다. 손으로 적지 않는다 —
+                 import.meta.url 에서 읽으므로 캐시가 옛 파일을 내주면 옛 번호가 뜬다.
+                 "고쳤다는데 안 보인다" 를 새로고침 한 번으로 가려낼 수 있다. -->
+            <p class="footer-title">PLC 새가족교육 <span class="footer-version" id="footerVersion"></span></p>
             <div class="footer-buttons">
-                <a href="https://docs.google.com/forms/d/e/1FAIpQLSex87UOQx7C9-9H1MJtrY-rLfNh_wfQWVVQ66-1XnY6YJ2M9A/viewform" target="_blank" class="footer-btn">
+                <a href="mailto:dev@plch.or.kr" class="footer-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                         <polyline points="22,6 12,13 2,6"></polyline>
                     </svg>
                     문의
-                </a>
-                <span class="footer-divider">|</span>
-                <a href="https://docs.google.com/forms/d/e/1FAIpQLSex87UOQx7C9-9H1MJtrY-rLfNh_wfQWVVQ66-1XnY6YJ2M9A/viewform" target="_blank" class="footer-btn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                    </svg>
-                    오류 신고
                 </a>
             </div>
         </footer>
@@ -270,6 +264,6 @@
         </div>
     </div>
 
-<script type="module" src="script.js?v=92"></script>
+<script type="module" src="script.js?v=93"></script>
 </body>
 </html>
