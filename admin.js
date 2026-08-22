@@ -12,12 +12,13 @@ import {
     refresh,
     getKimbapDetail,
     getHomeworkList,
+    splitLinks,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=89';
-import { matches as hangulMatches } from './scripts/hangul.js?v=89';
-import { registerServiceWorker } from './scripts/sw-update.js?v=89';
-import { sbPostGas } from './scripts/supabase-config.js?v=89';
+} from './scripts/members-data.js?v=90';
+import { matches as hangulMatches } from './scripts/hangul.js?v=90';
+import { registerServiceWorker } from './scripts/sw-update.js?v=90';
+import { sbPostGas } from './scripts/supabase-config.js?v=90';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -776,6 +777,15 @@ function mdFoldable(items, keep, renderFn, unit) {
         + `<button type="button" class="md-more" data-rest="${rest}" data-unit="${unit}">더보기 (${rest}${unit})</button>`;
 }
 
+// 제출 URL 칸에 링크가 둘 들어오면(파일 2개 제출) 버튼도 둘로 나눈다.
+// 한 칸에 이어 붙은 채로 href 에 넣으면 주소가 깨져 하나도 못 연다.
+function mdLinks(url) {
+    const urls = splitLinks(url);
+    return urls.map((u, i) =>
+        `<a class="md-row-link" href="${encodeURI(u)}" target="_blank" rel="noopener"
+            title="제출 파일 ${i + 1}">🔗${urls.length > 1 ? i + 1 : ''}</a>`).join('');
+}
+
 function mdSection(icon, title, right, inner, extraClass = '') {
     return `
         <section class="md-sec ${extraClass}">
@@ -905,7 +915,7 @@ function openMemberDetail(member) {
                         `<div class="md-row"><span class="md-row-key">${escapeHtml(r.session || '(미기재)')}</span>
                          <span class="md-row-type">${escapeHtml(r.type || '')}</span>
                          <span class="md-row-when">${escapeHtml(String(r.when).slice(0, 10))}</span>
-                         ${r.url ? `<a class="md-row-link" href="${encodeURI(r.url)}" target="_blank" rel="noopener">🔗</a>` : ''}
+                         ${mdLinks(r.url)}
                          </div>`, '개')}</div>`
                     : '');
 

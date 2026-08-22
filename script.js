@@ -11,6 +11,7 @@ import {
     isAnnouncementRoomName,
     getKimbapDetail,
     getHomeworkList,
+    splitLinks,
     getSessions,
     getSessionKey,
     getCurrentSessionDate,
@@ -22,8 +23,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=89';
-import { registerServiceWorker } from './scripts/sw-update.js?v=89';
+} from './scripts/members-data.js?v=90';
+import { registerServiceWorker } from './scripts/sw-update.js?v=90';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -773,8 +774,12 @@ function renderStatusDetail(member) {
                 sortedEntries,
                 ([sess, subs]) => {
                     const types = [...new Set(subs.map(s => s.type).filter(Boolean))];
-                    const links = subs.filter(s => s.url).map(s =>
-                        `<a href="${s.url}" target="_blank" rel="noopener" class="hw-link">🔗</a>`).join(' ');
+                    // 한 강에 제출이 여럿일 수 있고, 제출 하나에 파일이 둘일 수도 있다.
+                    // 둘 다 펼쳐서 링크 하나에 버튼 하나. 두 개 이상이면 번호를 붙인다.
+                    const urls = subs.flatMap(s => splitLinks(s.url));
+                    const links = urls.map((u, i) =>
+                        `<a href="${encodeURI(u)}" target="_blank" rel="noopener" class="hw-link"
+                            title="제출 파일 ${i + 1}">🔗${urls.length > 1 ? i + 1 : ''}</a>`).join(' ');
                     return `
                         <div class="hw-row">
                             <span class="hw-session">${sess}</span>
@@ -1244,7 +1249,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=89';
+                window.location.href = 'admin.html?v=90';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

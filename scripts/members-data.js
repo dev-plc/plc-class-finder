@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=89';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=89';
+import { matches as hangulMatches } from './hangul.js?v=90';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=90';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -503,6 +503,28 @@ export function getKimbapDetail(memberId) {
 
 export function getHomeworkList(memberId) {
   return state.homework[memberId] || [];
+}
+
+/**
+ * 과제 제출 URL 칸을 링크 여러 개로 쪼갠다.
+ *
+ * 한 과제에 파일을 두 개 올리면 폼이 한 칸에 이어 붙여 넣는다.
+ *   "https://drive.google.com/open?id=A, https://drive.google.com/open?id=B"
+ * 이걸 그대로 href 에 넣으면 주소가 깨져서 둘 다 열리지 않는다.
+ * 쉼표·공백·줄바꿈 어느 것으로 이어져 있든 끊는다.
+ *
+ * 드라이브 링크는 알파벳·숫자·`-`·`_` 뿐이라 쉼표가 주소 안에 들어갈 일은 없다.
+ * http 로 시작하는 조각이 하나도 없으면 (주소가 아닌 다른 값이 들어온 경우)
+ * 원문을 그대로 한 개로 돌려준다 — 값을 잃지 않는다.
+ *
+ * @param {string} url 시트의 '제출 URL' 칸 원문
+ * @returns {string[]} 링크 배열 (빈 칸이면 빈 배열)
+ */
+export function splitLinks(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return [];
+  const links = raw.split(/[\s,]+/).filter(s => /^https?:\/\//i.test(s));
+  return links.length ? links : [raw];
 }
 
 // ============================================================================

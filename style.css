@@ -464,6 +464,7 @@ body.dark-mode .icon-btn:hover {
     font-size: calc(13px * var(--font-scale));
     line-height: 1;
     display: inline-block;
+    white-space: nowrap;   /* 파일을 둘 낸 과제는 🔗1 🔗2 — 번호가 떨어지지 않게 */
 }
 
 .lunch-status {
