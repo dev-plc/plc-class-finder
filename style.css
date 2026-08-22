@@ -1521,17 +1521,22 @@ body.dark-mode .matrix-table thead th { background: #111827; }
     padding-top: 12px;
     border-top: 1px solid rgba(37, 99, 235, 0.15);
 }
+/* 제목이 길어도 '제출하기' 버튼은 오른쪽에 그대로 둔다.
+   wrap 이면 flex 가 제목을 줄이는 대신 버튼을 아래로 내려 버린다 —
+   '과제와 소감문' 으로 늘리자 360~390px 에서 버튼이 통째로 밀렸다.
+   nowrap + min-width:0 이면 제목이 제 안에서 접히고 버튼은 자리를 지킨다. */
 .ms-hw-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 .ms-hw-title {
     font-size: calc(14px * var(--font-scale));
     font-weight: 700;
     color: #d97706;
+    min-width: 0;
 }
 .ms-hw-btn {
     padding: 6px 12px;

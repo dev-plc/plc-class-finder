@@ -23,8 +23,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=91';
-import { registerServiceWorker } from './scripts/sw-update.js?v=91';
+} from './scripts/members-data.js?v=92';
+import { registerServiceWorker } from './scripts/sw-update.js?v=92';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -395,11 +395,11 @@ function renderMyStatus(member) {
     let makeupNote = '';
     if (p.makeupOverflow > 0) {
         makeupNote = `<div class="ms-note warn">
-            과제로 인정받을 수 있는 횟수(${MAKEUP_LIMIT}회)를 넘었어요. 담당자 확인이 필요합니다.
+            과제와 소감문으로 인정받을 수 있는 횟수(${MAKEUP_LIMIT}회)를 넘었어요. 담당자 확인이 필요합니다.
         </div>`;
     } else if (p.makeupUsed > 0) {
         makeupNote = `<div class="ms-note">
-            과제로 ${p.makeupUsed}회 인정받았어요 (남은 기회 ${p.makeupLeft}회)
+            과제와 소감문으로 ${p.makeupUsed}회 인정받았어요 (남은 기회 ${p.makeupLeft}회)
         </div>`;
     }
 
@@ -412,7 +412,7 @@ function renderMyStatus(member) {
         homeworkBlock = `
             <div class="ms-homework">
                 <div class="ms-hw-head">
-                    <span class="ms-hw-title">📝 제출하지 않은 과제 ${pending.length}건</span>
+                    <span class="ms-hw-title">📝 제출하지 않은 과제와 소감문 ${pending.length}건</span>
                     <a class="ms-hw-btn" href="${HOMEWORK_FORM_URL}" target="_blank" rel="noopener">제출하기 →</a>
                 </div>
                 <div class="ms-hw-list">${shown}${more}</div>
@@ -429,7 +429,7 @@ function renderMyStatus(member) {
         <div class="ms-stats">
             <span>출석 ${p.presentCount}</span>
             <span>결석 ${p.absentCount}</span>
-            ${p.makeupUsed ? `<span>과제 인정 ${p.makeupUsed}</span>` : ''}
+            ${p.makeupUsed ? `<span>과제와 소감문 인정 ${p.makeupUsed}</span>` : ''}
         </div>
         ${makeupNote}
         ${homeworkBlock}
@@ -1251,7 +1251,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=91';
+                window.location.href = 'admin.html?v=92';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
