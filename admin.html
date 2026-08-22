@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=93">
-    <link rel="stylesheet" href="admin.css?v=93">
+    <link rel="stylesheet" href="style.css?v=94">
+    <link rel="stylesheet" href="admin.css?v=94">
 </head>
 <body>
     <div class="admin-container">
@@ -167,11 +167,13 @@
                     </div>
                 </div>
 
-                <!-- 인쇄 · 항목 · 출력을 한 줄에. 자리가 모자라면 알아서 접힌다.
-                     조작부가 두꺼우면 아래 출석부를 보기 불편하다. -->
-                <div class="pr-row pr-bar">
-                    <button type="button" id="prPrintBtn" class="pr-print-btn">🖨️ 인쇄</button>
+                <!-- 항목 · 출력 · 인쇄를 한 줄에. 자리가 모자라면 알아서 접힌다.
+                     조작부가 두꺼우면 아래 출석부를 보기 불편하다.
 
+                     순서는 실제로 하는 일의 차례다 — 무엇을 넣을지(항목) 고르고,
+                     몇 장을 뽑을지(출력) 정하고, 몇 장인지 확인한 뒤, 마지막에 누른다.
+                     인쇄가 맨 앞에 있으면 아직 안 고른 채로 먼저 눌리게 된다. -->
+                <div class="pr-row pr-bar">
                     <span class="pr-group">
                         <span class="pr-row-label">항목</span>
                         <label class="pr-chip"><input type="checkbox" id="prKimbapStatus" checked><span>김밥 현황</span></label>
@@ -192,6 +194,8 @@
                     </span>
 
                     <span class="pr-info" id="prInfo"></span>
+
+                    <button type="button" id="prPrintBtn" class="pr-print-btn">🖨️ 인쇄</button>
                 </div>
                 <div class="pr-hint" id="prHint"></div>
             </div>
@@ -257,7 +261,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=93"></script>
+    <script type="module" src="admin.js?v=94"></script>
 </body>
 </html>
 
