@@ -818,6 +818,18 @@ body.dark-mode .icon-btn:hover {
     margin: 0;
 }
 
+/* 지금 도는 버전. 이름을 가리지 않게 한 톤 죽여 둔다.
+   비어 있을 때(스크립트가 아직 안 채웠을 때) 여백만 남지 않도록 :empty 처리. */
+.footer-version {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-light);
+    opacity: 0.55;
+    letter-spacing: 0.02em;
+    margin-left: 2px;
+}
+.footer-version:empty { display: none; }
+
 .footer-buttons {
     display: flex;
     align-items: center;
