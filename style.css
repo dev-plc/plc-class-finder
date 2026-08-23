@@ -1388,6 +1388,66 @@ body.large-text .map-image {
     font-weight: 500; color: #9ca3af;
 }
 
+/* 이름 바로 옆 진행률.
+   th 를 통째로 flex 로 바꾸면 표 레이아웃에서 빠져 행 높이가 어긋난다.
+   안에 wrapper 를 하나 두고 그것만 flex 로 만든다. */
+.mx-name-in { display: flex; align-items: center; gap: 8px; }
+.mx-who { flex: 1 1 auto; min-width: 0; }
+.mx-prog {
+    flex: 0 0 auto; font-size: calc(11px * var(--font-scale)); font-weight: 800;
+    border-radius: 5px; padding: 2px 5px; white-space: nowrap;
+}
+.mx-prog-of { font-size: calc(9px * var(--font-scale)); font-weight: 600; opacity: 0.7; }
+.mx-prog-done    { background: #d1fae5; color: #047857; }
+.mx-prog-ontrack { background: #e0edff; color: #1d4ed8; }
+.mx-prog-atrisk  { background: #fef3c7; color: #b45309; }
+.mx-prog-gone    { background: #fee2e2; color: #b91c1c; }
+.mx-prog-head {
+    flex: 0 0 auto; font-size: calc(9px * var(--font-scale));
+    font-weight: 600; color: #9ca3af;
+}
+
+/* ── 조 수료 전망 (튜터) ─────────────────────────────────────────────── */
+.team-outlook {
+    margin: 10px 0 4px; padding: 10px 12px;
+    background: #f9fafb; border: 1px solid #eceef1; border-radius: 10px;
+}
+.to-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.to-total { font-size: calc(13px * var(--font-scale)); font-weight: 700; color: var(--text-dark, #2C3E50); }
+.to-stat { font-size: calc(12px * var(--font-scale)); font-weight: 600; color: #6b7280; }
+.to-stat.done { color: #047857; }
+.to-stat.ok   { color: #1d4ed8; }
+.to-care {
+    margin-left: auto; padding: 4px 10px; font-family: inherit; cursor: pointer;
+    font-size: calc(12px * var(--font-scale)); font-weight: 700; color: #b45309;
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px;
+}
+.to-care:hover { background: #fef3c7; }
+.to-care.open { background: #fef3c7; }
+.to-caret { font-size: calc(10px * var(--font-scale)); }
+
+.to-list { margin-top: 8px; border-top: 1px dashed #e5e7eb; }
+.to-item {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+    padding: 7px 2px; border-bottom: 1px dotted #eceef1;
+}
+.to-item:last-child { border-bottom: none; }
+.to-name { font-size: calc(13px * var(--font-scale)); font-weight: 700; color: var(--text-dark, #2C3E50); }
+.to-phone { margin-left: 4px; font-size: calc(11px * var(--font-scale)); font-weight: 500; color: #9ca3af; }
+.to-score { font-size: calc(12px * var(--font-scale)); font-weight: 800; color: #b45309; }
+.to-of { font-size: calc(10px * var(--font-scale)); font-weight: 600; color: #9ca3af; }
+.to-todo {
+    margin-left: auto; font-size: calc(11px * var(--font-scale)); color: #4b5563;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 2px 7px;
+}
+
+body.dark-mode .team-outlook { background: #1f2937; border-color: #374151; }
+body.dark-mode .to-total, body.dark-mode .to-name { color: #f3f4f6; }
+body.dark-mode .to-care { background: #2a2113; border-color: #78350f; }
+body.dark-mode .to-list { border-top-color: #374151; }
+body.dark-mode .to-item { border-bottom-color: #374151; }
+body.dark-mode .to-todo { background: #111827; border-color: #374151; color: #d1d5db; }
+
 body.dark-mode .matrix-modal-inner,
 body.dark-mode .matrix-table th,
 body.dark-mode .matrix-table td,

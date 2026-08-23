@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 
-    <link rel="stylesheet" href="style.css?v=97">
+    <link rel="stylesheet" href="style.css?v=98">
 </head>
 <body>
     <div class="container">
@@ -179,6 +179,10 @@
                             <span id="teamSessionNote" class="team-session-note"></span>
                         </div>
                         <div id="teamSummaryCard" class="team-summary-card"></div>
+                        <!-- 수료 전망 한 줄. 평소엔 조용하고, '챙길 사람'을 누르면
+                             그 사람들만 펼쳐진다. 튜터에게 판정을 통보하게 하지 않고
+                             '무엇을 하면 되는지'만 준다. -->
+                        <div id="teamOutlook" class="team-outlook" style="display:none;"></div>
                         <div id="teamMemberList" class="team-member-list-grid">
                         </div>
                         <div id="attendanceSaveBar" class="attendance-save-bar" style="display:none;">
@@ -268,6 +272,6 @@
         </div>
     </div>
 
-<script type="module" src="script.js?v=97"></script>
+<script type="module" src="script.js?v=98"></script>
 </body>
 </html>

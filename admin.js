@@ -14,11 +14,13 @@ import {
     getHomeworkList,
     splitLinks,
     getProgress,
+    getCompletionOutlook,
+    getRemainingClassSessions,
     subscribe,
-} from './scripts/members-data.js?v=97';
-import { matches as hangulMatches } from './scripts/hangul.js?v=97';
-import { registerServiceWorker } from './scripts/sw-update.js?v=97';
-import { sbPostGas } from './scripts/supabase-config.js?v=97';
+} from './scripts/members-data.js?v=98';
+import { matches as hangulMatches } from './scripts/hangul.js?v=98';
+import { registerServiceWorker } from './scripts/sw-update.js?v=98';
+import { sbPostGas } from './scripts/supabase-config.js?v=98';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1865,40 +1867,16 @@ function cpTodayIso() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 아직 하지 않은 강의. 오늘 것은 아직 찍기 전일 수 있으므로 남은 쪽에 넣는다.
-function cpRemainingSessions() {
-    const today = cpTodayIso();
-    return getSessions().filter(s => s.is_class !== false && s.session_date >= today).length;
-}
-
 function cpRows() {
-    const remain = cpRemainingSessions();
-
     let people = (cpTeamName === TEAM_ALL ? getMembers() : getTeamMembers(cpTeamName));
     if (cpPastor !== AB_PASTOR_ALL) people = people.filter(m => abPastorOf(m) === cpPastor);
 
     const out = [];
     for (const m of people) {
-        const p = getProgress(m);
-        if (!p) continue;                       // 판정 자료가 아직 안 온 사람
-
-        // 앞으로 보충으로 더 받을 수 있는 몫 — 이미 과제를 낸 결석분은 credited 에
-        // 들어가 있으므로 '결석했지만 아직 안 낸' 주차만 남는다.
-        const notYet     = Math.max(0, p.absentCount - p.makeupAvailable);
-        const makeupRoom = Math.min(p.makeupLeft, notYet);
-        const maxReach   = p.credited + remain + makeupRoom;
-        const gap        = Math.max(0, p.required - p.credited);   // 더 채워야 할 수
-
-        let bucket;
-        if (p.credited >= p.required)                bucket = 'done';
-        else if (maxReach < p.required)              bucket = 'gone';
-        else if (p.credited + remain >= p.required)  bucket = 'ontrack';
-        else                                         bucket = 'atrisk';
-
-        // 보충 한도 초과는 위 분류와 별개다 — 사람이 봐야 하는 건이라 따로 모은다
-        out.push({ m, p, remain, gap, maxReach, makeupRoom, bucket,
-                   needsReview: p.makeupOverflow > 0,
-                   needHomework: Math.max(0, gap - remain) });
+        // 계산은 데이터 계층 한 곳에만 있다 (튜터 화면도 같은 함수를 쓴다)
+        const o = getCompletionOutlook(m);
+        if (!o) continue;                       // 판정 자료가 아직 안 온 사람
+        out.push({ m, ...o });
     }
     return out;
 }
@@ -1972,7 +1950,7 @@ function renderCompletion() {
     if (!cpListEl) return;
 
     const rows = cpRows();
-    const remain = cpRemainingSessions();
+    const remain = getRemainingClassSessions();
 
     const count = k => k === 'review'
         ? rows.filter(r => r.needsReview).length

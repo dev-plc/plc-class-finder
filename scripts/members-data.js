@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=97';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=97';
+import { matches as hangulMatches } from './hangul.js?v=98';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=98';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -495,6 +495,57 @@ export function getRequiredHomework(member) {
   const uuid = member?._uuid;
   if (!uuid) return [];
   return state.needHomework[uuid] || [];
+}
+
+// ============================================================================
+// 수료 전망 — 이대로 가면 채울 사람인가
+//
+// 판정 숫자(credited·absent·makeup)는 v_completion_status 가 준다. 여기서
+// 다시 세지 않는다. 이 함수가 더하는 것은 '앞으로 남은 강의가 몇 회인가'
+// 하나뿐이고, 그건 판정이 아니라 달력이다.
+//
+// 관리자 화면(수료 현황 탭)과 튜터 화면(조 요약)이 같은 답을 내야 하므로
+// 계산은 여기 한 곳에만 둔다. 문구는 보는 사람이 달라 각 화면이 정한다.
+// ============================================================================
+
+// 아직 하지 않은 강의. 오늘 것은 수업이 끝나고 찍으므로 남은 쪽에 넣는다.
+export function getRemainingClassSessions() {
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return state.sessions.filter(s => s.is_class !== false && s.session_date >= today).length;
+}
+
+/**
+ * @returns {null | {
+ *   p, remain, gap, maxReach, makeupRoom, needHomework, needsReview,
+ *   bucket: 'done'|'ontrack'|'atrisk'|'gone'
+ * }}
+ *   done    다 채웠다
+ *   ontrack 남은 강의를 나오면 채워진다 (보충 없이)
+ *   atrisk  남은 강의를 다 나오고 과제·소감문까지 내야 한다
+ *   gone    다 나와도 못 미친다
+ */
+export function getCompletionOutlook(member) {
+  const p = getProgress(member);
+  if (!p) return null;
+
+  const remain = getRemainingClassSessions();
+  // 이미 과제를 낸 결석분은 credited 에 들어가 있으므로
+  // '결석했지만 아직 안 낸' 주차만 앞으로 더 받을 몫이다.
+  const notYet     = Math.max(0, p.absentCount - p.makeupAvailable);
+  const makeupRoom = Math.min(p.makeupLeft, notYet);
+  const maxReach   = p.credited + remain + makeupRoom;
+  const gap        = Math.max(0, p.required - p.credited);
+
+  let bucket;
+  if (p.credited >= p.required)               bucket = 'done';
+  else if (maxReach < p.required)             bucket = 'gone';
+  else if (p.credited + remain >= p.required) bucket = 'ontrack';
+  else                                        bucket = 'atrisk';
+
+  return { p, remain, gap, maxReach, makeupRoom, bucket,
+           needsReview: p.makeupOverflow > 0,
+           needHomework: Math.max(0, gap - remain) };
 }
 
 export function getKimbapDetail(memberId) {
