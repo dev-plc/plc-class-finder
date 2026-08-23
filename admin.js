@@ -18,10 +18,10 @@ import {
     getRemainingClassSessions,
     ONTRACK_WITHIN,
     subscribe,
-} from './scripts/members-data.js?v=101';
-import { matches as hangulMatches } from './scripts/hangul.js?v=101';
-import { registerServiceWorker } from './scripts/sw-update.js?v=101';
-import { sbPostGas } from './scripts/supabase-config.js?v=101';
+} from './scripts/members-data.js?v=102';
+import { matches as hangulMatches } from './scripts/hangul.js?v=102';
+import { registerServiceWorker } from './scripts/sw-update.js?v=102';
+import { sbPostGas } from './scripts/supabase-config.js?v=102';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1130,32 +1130,42 @@ function isLastClassOfMonth(sessionDate) {
 // 따로 적어 둘 칸을 만들 필요가 없고, 출석을 찍으면 저절로 맞는다.
 const PR_START_WEEKS = 3;        // 첫 참석부터 몇 회차까지 적어 둘 것인가
 
-// 처음 나온 강의의 순번. 못 찾으면 -1.
+// 처음 나온 강의의 순번(-1 = 아직 없음)과, 이미 인정받은 칸 수.
 //
-// O 만 센다. ◎ 는 나온 것이 아니고(지난 기수 이수 또는 과제·소감문 대체),
-// X 는 안 나온 것이며, − 는 그 사람에게 수업이 없던 주차다.
+// O 만 '나온 날' 로 센다. ◎ 는 나온 것이 아니고, X 는 안 나온 것이며,
+// − 는 그 사람에게 수업이 없던 주차다.
 //
-// 첫 O 앞에 ◎ 가 있으면 대상이 아니다. 지난 기수 이수분이 깔려 있다는 뜻이라
-// '시작' 이 아니라 이어듣는 사람이고, 그 사람에게 '시작' 이라고 적으면
-// 곧 수료할 사람을 새로 온 사람으로 읽게 만든다.
-function prFirstAttended(m, classSessions) {
+// ◎ 가 왜 붙었는지는 추측하지 않는다. 지난 기수 이수분인지 이번 기수
+// 과제·소감문 대체인지 시트가 같은 글자로 주기 때문에 가릴 방법이 없다.
+// 대신 개수를 그대로 적는다 — '이수 8강' 은 어느 쪽이든 참이다.
+//
+// 추측을 넣었다가 틀린 적이 있다. 첫 O 앞의 ◎ 만 보고 이월이라고 판단했는데,
+// 지난 기수 8강부터 들은 사람은 ◎ 가 뒤쪽(9~16강)에 깔려서 걸러지지 않았고
+// 이번 기수 교리1에 나오자 '교리1 시작' 으로 찍혔다. 곧 수료할 사람이
+// 새로 온 사람으로 읽혔다.
+function prAttendStart(m, classSessions) {
+    let first = -1, credited = 0;
     for (let i = 0; i < classSessions.length; i++) {
         const k = getSessionKey(classSessions[i].session_date);
         const v = normStatus(k ? m[k] : '');
-        if (v === 'O') return i;
-        if (v === '◎') return -1;
+        if (v === 'O' && first < 0) first = i;
+        if (v === '◎') credited++;
     }
-    return -1;
+    return { first, credited };
 }
 
-// '교리1(08/09) 시작' — 첫 참석 주차부터 PR_START_WEEKS 회차까지만.
+// '교리1(08/09) 시작'  ·  이미 인정받은 칸이 있으면 '교리1(08/09)부터 · 이수 8강'
+//
+// 첫 참석 주차부터 PR_START_WEEKS 회차까지만 적는다.
 // 오늘이 아니라 '인쇄하는 주차' 를 기준으로 삼는다. 지난 주차 출석부를
 // 다시 뽑을 때도 그때 맞던 문구가 그대로 나와야 한다.
 function prStartNote(m, classSessions, curIdx) {
-    const idx = prFirstAttended(m, classSessions);
-    if (idx < 0 || curIdx < idx || curIdx - idx >= PR_START_WEEKS) return '';
-    const s = classSessions[idx];
-    return `<span class="pr-start">${escapeHtml(`${s.label_norm || ''}(${s.label}) 시작`)}</span>`;
+    const { first, credited } = prAttendStart(m, classSessions);
+    if (first < 0 || curIdx < first || curIdx - first >= PR_START_WEEKS) return '';
+    const s = classSessions[first];
+    const where = `${s.label_norm || ''}(${s.label})`;
+    const text = credited ? `${where}부터 · 이수 ${credited}강` : `${where} 시작`;
+    return `<span class="pr-start">${escapeHtml(text)}</span>`;
 }
 
 // 과제 세션명 대조. 폼 응답과 시트 강의명이 다르게 적히므로 양쪽을 정규화한다.
