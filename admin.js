@@ -18,10 +18,10 @@ import {
     getRemainingClassSessions,
     ONTRACK_WITHIN,
     subscribe,
-} from './scripts/members-data.js?v=102';
-import { matches as hangulMatches } from './scripts/hangul.js?v=102';
-import { registerServiceWorker } from './scripts/sw-update.js?v=102';
-import { sbPostGas } from './scripts/supabase-config.js?v=102';
+} from './scripts/members-data.js?v=103';
+import { matches as hangulMatches } from './scripts/hangul.js?v=103';
+import { registerServiceWorker } from './scripts/sw-update.js?v=103';
+import { sbPostGas } from './scripts/supabase-config.js?v=103';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1121,53 +1121,6 @@ function isLastClassOfMonth(sessionDate) {
     return same.length > 0 && same[same.length - 1] === sessionDate;
 }
 
-// ── 최근 시작한 사람 표시 ─────────────────────────────────────────────
-//
-// 기수 중간에 새로 들어온 사람이 종이 위에서는 다른 조원과 똑같아 보인다.
-// 튜터는 이름만 보고 '언제부터 온 사람인지' 를 알 수 없다.
-//
-// 출석부가 이미 답을 갖고 있다 — 첫 O 가 찍힌 자리가 그 사람이 처음 온 날이다.
-// 따로 적어 둘 칸을 만들 필요가 없고, 출석을 찍으면 저절로 맞는다.
-const PR_START_WEEKS = 3;        // 첫 참석부터 몇 회차까지 적어 둘 것인가
-
-// 처음 나온 강의의 순번(-1 = 아직 없음)과, 이미 인정받은 칸 수.
-//
-// O 만 '나온 날' 로 센다. ◎ 는 나온 것이 아니고, X 는 안 나온 것이며,
-// − 는 그 사람에게 수업이 없던 주차다.
-//
-// ◎ 가 왜 붙었는지는 추측하지 않는다. 지난 기수 이수분인지 이번 기수
-// 과제·소감문 대체인지 시트가 같은 글자로 주기 때문에 가릴 방법이 없다.
-// 대신 개수를 그대로 적는다 — '이수 8강' 은 어느 쪽이든 참이다.
-//
-// 추측을 넣었다가 틀린 적이 있다. 첫 O 앞의 ◎ 만 보고 이월이라고 판단했는데,
-// 지난 기수 8강부터 들은 사람은 ◎ 가 뒤쪽(9~16강)에 깔려서 걸러지지 않았고
-// 이번 기수 교리1에 나오자 '교리1 시작' 으로 찍혔다. 곧 수료할 사람이
-// 새로 온 사람으로 읽혔다.
-function prAttendStart(m, classSessions) {
-    let first = -1, credited = 0;
-    for (let i = 0; i < classSessions.length; i++) {
-        const k = getSessionKey(classSessions[i].session_date);
-        const v = normStatus(k ? m[k] : '');
-        if (v === 'O' && first < 0) first = i;
-        if (v === '◎') credited++;
-    }
-    return { first, credited };
-}
-
-// '교리1(08/09) 시작'  ·  이미 인정받은 칸이 있으면 '교리1(08/09)부터 · 이수 8강'
-//
-// 첫 참석 주차부터 PR_START_WEEKS 회차까지만 적는다.
-// 오늘이 아니라 '인쇄하는 주차' 를 기준으로 삼는다. 지난 주차 출석부를
-// 다시 뽑을 때도 그때 맞던 문구가 그대로 나와야 한다.
-function prStartNote(m, classSessions, curIdx) {
-    const { first, credited } = prAttendStart(m, classSessions);
-    if (first < 0 || curIdx < first || curIdx - first >= PR_START_WEEKS) return '';
-    const s = classSessions[first];
-    const where = `${s.label_norm || ''}(${s.label})`;
-    const text = credited ? `${where}부터 · 이수 ${credited}강` : `${where} 시작`;
-    return `<span class="pr-start">${escapeHtml(text)}</span>`;
-}
-
 // 과제 세션명 대조. 폼 응답과 시트 강의명이 다르게 적히므로 양쪽을 정규화한다.
 // (script.js 의 normalizeSessionKey 와 같은 규칙이어야 한다)
 function prNormalizeSession(v) {
@@ -1357,13 +1310,6 @@ function renderPrintPreview() {
     const sessionLabel = `${session.label}${session.label_norm ? ' ' + session.label_norm : ''}`;
     const sessionKey = prNormalizeSession(session.label_norm || '');
 
-    // 시작 문구가 쓰는 기준. 회차로 센다 — 교제·나눔 주간이 끼면 날짜로 세는
-    // '3주' 와 실제 강의 3회가 어긋난다. 종이에 찍히는 것도 강의 회차다.
-    // 인쇄하는 주차가 강의가 아니어도(교제 주간) 그때까지의 강의 수로 자리를 잡는다.
-    const prClassSessions = getSessions().filter(s => s.is_class !== false);
-    const prCurIdx =
-        prClassSessions.filter(s => s.session_date <= session.session_date).length - 1;
-
     // 조별 신청 수 — 집계표와 각 장 머리글에 같이 쓴다
     const stats = teams.map(t => {
         const members = getTeamMembers(t);
@@ -1436,7 +1382,6 @@ function renderPrintPreview() {
             (cols.memo ? `<th class="pr-c-memo">${memoHead}</th>` : '<th class="pr-c-fill"></th>');
 
         const rows = members.map((m, i) => {
-            const startNote = prStartNote(m, prClassSessions, prCurIdx);
             const id = m.id || (String(m.name || '') + String(m.phone || ''));
             const kb = session.label_norm ? getKimbapDetail(id)[session.label_norm] : null;
             const hw = getHomeworkList(id).some(h => prNormalizeSession(h.session) === sessionKey);
@@ -1454,9 +1399,7 @@ function renderPrintPreview() {
                     ${cols.kimbap ? '<td class="pr-c-mark pr-c-wide pr-blank"></td>' : ''}
                     <td class="pr-c-mark pr-blank"></td>
                     ${cols.homework ? `<td class="pr-c-mark">${hw ? '✓' : ''}</td>` : ''}
-                    ${cols.memo
-                        ? `<td class="pr-c-memo pr-blank">${startNote}</td>`
-                        : `<td class="pr-c-fill">${startNote}</td>`}
+                    ${cols.memo ? '<td class="pr-c-memo pr-blank"></td>' : '<td class="pr-c-fill"></td>'}
                 </tr>`;
         }).join('');
 
@@ -1661,33 +1604,59 @@ function abRows() {
     if (abPastor !== AB_PASTOR_ALL) people = people.filter(m => abPastorOf(m) === abPastor);
 
     return people.map(m => {
-        const absentWeeks = [];
-        let blank = 0;
-        for (const s of sessions) {
+        // 그 주차에 과제·소감문을 냈는가. 이것이 '대체' 를 가리는 유일한 근거다.
+        //
+        // ◎ 만 보고는 못 가린다 — 지난 기수 이수분도 ◎ 라서, ◎ 를 전부 대체로
+        // 세면 이월자가 결석자 명단에 통째로 올라온다. 과제 제출 기록이 있어야
+        // 이번 기수에 빠지고 메운 사람이다.
+        const hwKeys = new Set(
+            getHomeworkList(m.id || (String(m.name || '') + String(m.phone || '')))
+                .map(h => prNormalizeSession(h.session)).filter(Boolean));
+
+        // 한 주차의 상태: 'absent' 순수 결석 · 'makeup' 대체됨 · '' 그 외
+        const missedKind = (s) => {
             const key = getSessionKey(s.session_date);
             const v = normStatus(key ? m[key] : '');
-            if (v === 'X') absentWeeks.push(s);
-            else if (v === '') blank++;
+            const paid = hwKeys.has(prNormalizeSession(s.label_norm || ''));
+            if (v === 'X') return paid ? 'makeup' : 'absent';
+            if (v === '◎') return paid ? 'makeup' : '';   // 과제가 없으면 지난 기수 이수분
+            return '';
+        };
+
+        const weeks = [];          // 안 나온 주차 전부 (순수 결석 + 대체)
+        let absent = 0, makeup = 0, blank = 0;
+        for (const s of sessions) {
+            const kind = missedKind(s);
+            if (kind) { weeks.push({ s, kind }); kind === 'absent' ? absent++ : makeup++; }
+            else if (normStatus(getSessionKey(s.session_date) ? m[getSessionKey(s.session_date)] : '') === '') blank++;
         }
 
-        // 연속 결석 — 기준 주차부터 거꾸로 이어지는 X 의 개수.
-        // 빈칸에서 멈춘다. 아직 안 찍은 주차를 결석으로 이어 붙이면 안 된다.
+        // 연속으로 안 나온 주차. 대체했어도 그 자리에 없었던 것은 같으므로 함께 센다.
+        // 빈칸에서 멈춘다 — 아직 안 찍은 주차를 결석으로 이어 붙이면 안 된다.
         let streak = 0;
         for (let i = sessions.length - 1; i >= 0; i--) {
-            const key = getSessionKey(sessions[i].session_date);
-            if (normStatus(key ? m[key] : '') !== 'X') break;
+            if (!missedKind(sessions[i])) break;
             streak++;
         }
 
+        const thisSession = sessions.find(s => s.session_date === abSessionDate);
+        const thisKind = thisSession ? missedKind(thisSession) : '';
+
         return {
-            m, blank, streak,
-            weeks: absentWeeks,
-            absent: absentWeeks.length,
-            thisWeek: normStatus(thisKey ? m[thisKey] : '') === 'X',
+            m, blank, streak, weeks,
+            absent,                     // 대체되지 않은 결석 — 재수강 판단은 이 숫자로
+            makeup,                     // 과제·소감문으로 메운 주차
+            missed: absent + makeup,    // 안 나온 주차 전부
+            thisWeek: !!thisKind,
+            thisWeekMakeup: thisKind === 'makeup',
+            _thisKey: thisKey,
         };
     });
 }
 
+// 재수강 표시는 '대체되지 않은 결석' 으로만 판단한다.
+// 과제·소감문으로 메운 주차까지 세면, 규정대로 다 메운 사람이
+// 재수강 대상으로 붉게 뜬다.
 function abPersonHtml(r, extra) {
     return `
         <div class="ab-item${r.absent >= AB_RETAKE_AT ? ' risk' : ''}">
@@ -1698,6 +1667,8 @@ function abPersonHtml(r, extra) {
         </div>`;
 }
 
+const AB_MAKEUP_TAG = '<span class="ab-makeup">과제+소감문 대체</span>';
+
 const abText = (x, y) => String(x || '').localeCompare(String(y || ''), 'ko');
 
 // useStreak: 이 주차 명단은 '연속 주차' 가 그 사람의 숫자다.
@@ -1706,7 +1677,7 @@ function abSorter(useStreak) {
         let d;
         if (abSort === 'team')        d = abText(a.m.team, b.m.team);
         else if (abSort === 'pastor') d = abText(abPastorOf(a.m), abPastorOf(b.m));
-        else d = (useStreak ? a.streak - b.streak : a.absent - b.absent);
+        else d = (useStreak ? a.streak - b.streak : a.missed - b.missed);
         if (abDesc) d = -d;
         // 같은 값이면 조 → 이름 순으로 굳힌다. 안 그러면 다시 그릴 때마다 순서가 흔들린다.
         return d || abText(a.m.team, b.m.team) || abText(a.m.name, b.m.name);
@@ -1778,11 +1749,16 @@ function renderAbsence() {
     }
     abWeekList.innerHTML = week.length
         ? week.map(r => abPersonHtml(r,
-            r.streak >= AB_STREAK_MIN ? `<span class="ab-streak">${r.streak}주 연속</span>` : '')).join('')
+            (r.thisWeekMakeup ? AB_MAKEUP_TAG : '')
+            + (r.streak >= AB_STREAK_MIN ? `<span class="ab-streak">${r.streak}주 연속</span>` : ''))).join('')
         : '<div class="ab-empty">이 주차 결석자가 없습니다.</div>';
 
     // ── 누적 결석자
-    const total = rows.filter(r => r.absent >= abMin).sort(abSorter(false));
+    //
+    // 대체된 주차도 '안 나온 주차' 다. 세지 않으면 규정대로 과제를 낸 사람이
+    // 명단에서 통째로 사라져, 관리자가 그 사람을 아예 못 보게 된다.
+    // 대신 줄마다 무엇으로 메웠는지 적고, 재수강 표시는 순수 결석으로만 한다.
+    const total = rows.filter(r => r.missed >= abMin).sort(abSorter(false));
     abLastRows.total = total;
 
     if (abThresholds) {
@@ -1794,13 +1770,18 @@ function renderAbsence() {
     if (abTotalBadge) abTotalBadge.textContent = `${total.length}명`;
     if (abTotalNote) {
         abTotalNote.textContent =
-            `강의 ${sessions.length}회차 기준 · 결석(X)만 셉니다 (빈칸 · ◎ · − 은 제외)`;
+            `강의 ${sessions.length}회차 기준 · 안 나온 주차를 셉니다 — 과제·소감문으로 `
+            + '메운 주차도 포함합니다 (빈칸 · − 과 지난 기수 이수분은 제외)';
     }
     abTotalList.innerHTML = total.length
         ? total.map(r => abPersonHtml(r,
-            `<span class="ab-count">${r.absent}회</span>`
-            + `<span class="ab-weeks">${r.weeks.map(s => `<span class="ab-week">${s.label}</span>`).join('')}</span>`)).join('')
-        : `<div class="ab-empty">${abMin}회 이상 결석한 사람이 없습니다.</div>`;
+            `<span class="ab-count">${r.missed}회</span>`
+            + (r.makeup ? `<span class="ab-makeup">과제+소감문 대체 ${r.makeup}</span>` : '')
+            + `<span class="ab-weeks">${r.weeks.map(w =>
+                `<span class="ab-week${w.kind === 'makeup' ? ' mk' : ''}"`
+                + ` title="${w.kind === 'makeup' ? '과제+소감문으로 대체' : '결석'}">${w.s.label}</span>`
+              ).join('')}</span>`)).join('')
+        : `<div class="ab-empty">${abMin}회 이상 빠진 사람이 없습니다.</div>`;
 }
 
 abSessionSelect?.addEventListener('change', (e) => { abSessionDate = e.target.value; renderAbsence(); });
@@ -1840,8 +1821,10 @@ document.getElementById('absenceTab')?.addEventListener('click', async (e) => {
             r.m.team || '',
             `${r.m.name}(${r.m.phone})`,
             abPastorOf(r.m),
-            which === 'total' ? `결석 ${r.absent}회`
-                              : (r.streak >= AB_STREAK_MIN ? `${r.streak}주 연속` : ''),
+            which === 'total'
+                ? `결석 ${r.missed}회` + (r.makeup ? ` (과제+소감문 대체 ${r.makeup})` : '')
+                : (r.thisWeekMakeup ? '과제+소감문 대체' : '')
+                  + (r.streak >= AB_STREAK_MIN ? ` ${r.streak}주 연속` : ''),
         ].filter(Boolean).join(' ')).join('\n');
         try {
             await navigator.clipboard.writeText(text);

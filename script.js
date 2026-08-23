@@ -25,8 +25,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=102';
-import { registerServiceWorker } from './scripts/sw-update.js?v=102';
+} from './scripts/members-data.js?v=103';
+import { registerServiceWorker } from './scripts/sw-update.js?v=103';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -1381,7 +1381,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=102';
+                window.location.href = 'admin.html?v=103';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

@@ -1131,13 +1131,6 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 /* 쓰던 시트의 기호 표기 — 안내일 뿐이라 옅게 둔다 */
 .pr-memo-mark { color: #98a2b3; font-weight: 400; letter-spacing: 0.12em; }
 
-/* '교리1(08/09) 시작' — 메모 칸은 손으로 적는 자리다. 왼쪽 끝에 옅게 붙여
-   적을 자리를 남긴다. 인쇄에서 회색이 날아가지 않게 색을 강제한다. */
-.pr-start {
-    font-size: 8pt; color: #667085; white-space: nowrap;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-}
-.pr-table .pr-c-memo, .pr-table .pr-c-fill { text-align: left; padding-left: 2mm; }
 .pr-table .pr-c-fill { width: auto; border: none !important; background: none !important; }
 
 /* 손으로 쓰는 줄 높이 — A4 한 장을 채우도록 JS 가 인원수에 맞춰 정한다 */
@@ -1389,6 +1382,12 @@ body.dark-mode .sync-info { color: #9ca3af; }
     font-size: 11px; font-weight: 600; color: #667085;
     background: #f9fafb; border: 1px solid #e6e8ec; border-radius: 5px; padding: 1px 5px;
 }
+/* 과제·소감문으로 메운 주차 — 순수 결석과 한눈에 갈려야 한다 */
+.ab-week.mk { color: #6941c6; background: #f9f5ff; border-color: #d6bbfb; }
+.ab-makeup {
+    font-size: 11px; font-weight: 700; color: #6941c6; white-space: nowrap;
+    background: #f9f5ff; border: 1px solid #d6bbfb; border-radius: 5px; padding: 1px 6px;
+}
 
 /* ── 수료 현황 ──────────────────────────────────────────────────────────
    패널·카드·명단은 결석 현황(.ab-*)을 그대로 쓴다. 같은 모양인데 이름만
@@ -1466,6 +1465,7 @@ body.dark-mode .ab-name { color: #f3f4f6; }
 body.dark-mode .ab-item { border-top-color: #374151; }
 body.dark-mode .ab-item.risk { background: #2a1a1a; }
 body.dark-mode .ab-team { background: #374151; color: #d1d5db; }
+body.dark-mode .ab-week.mk, body.dark-mode .ab-makeup { background: #1e1630; border-color: #5b3fa0; color: #c4b5fd; }
 body.dark-mode .ab-th,
 body.dark-mode .ab-dir,
 body.dark-mode .ab-copy { background: #111827; border-color: #4b5563; color: #d1d5db; }
