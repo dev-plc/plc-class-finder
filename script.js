@@ -23,8 +23,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=96';
-import { registerServiceWorker } from './scripts/sw-update.js?v=96';
+} from './scripts/members-data.js?v=97';
+import { registerServiceWorker } from './scripts/sw-update.js?v=97';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -459,13 +459,19 @@ function extractSessions(member) {
         });
 }
 
-function classifyStatus(raw) {
+// isFuture: 아직 하지 않은 수업인가.
+//
+// 빈칸을 '미기록' 하나로만 부르면 안 된다. 아직 하지 않은 수업의 빈칸과
+// 이미 지났는데 안 찍은 빈칸은 뜻이 전혀 다르다 — 앞은 정상이고 뒤는 할 일이다.
+// 둘 다 흐린 점으로 나오니 읽는 사람은 '수업없음' 으로 짐작하게 된다.
+function classifyStatus(raw, isFuture = false) {
     const s = String(raw ?? '').trim().toUpperCase();
     if (s === 'O') return { cls: 'present', label: 'O', title: '출석' };
     if (s === '◎') return { cls: 'online',  label: '◎', title: '온라인/대체' };
     if (s === 'X') return { cls: 'absent',  label: 'X', title: '결석' };
-    if (s === '-') return { cls: 'none',    label: '−', title: '수업 없음' };
-    return { cls: 'empty', label: '·', title: '미기록' };
+    if (s === '-') return { cls: 'none',    label: '−', title: '수업 없음 (집계 제외)' };
+    if (isFuture)  return { cls: 'future',  label: '',  title: '아직 하지 않은 수업' };
+    return { cls: 'empty', label: '·', title: '미기록 — 아직 출석을 찍지 않았습니다' };
 }
 
 // MM/DD → Date (연도는 대략 판단, 매치용)
@@ -1084,11 +1090,16 @@ async function saveAttendanceBatch() {
 
 // 조 전체 출석표의 세션 컬럼. DB의 sessions 테이블을 그대로 쓴다.
 function buildSessionColumns() {
+    // 오늘 것은 아직 안 찍었을 수 있으므로 '지난 수업' 으로 본다 —
+    // 수업이 끝나고 찍는 자리라 오늘 빈칸은 '미기록' 이 맞다.
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     return getSessions()
         .map(s => ({
             mmdd: String(s.label || '').trim(),
             name: s.label_norm || '',
             isClass: s.is_class === true,
+            isFuture: String(s.session_date || '') > today,
         }))
         .filter(c => c.mmdd);
 }
@@ -1104,7 +1115,8 @@ function renderTeamMatrix(teamName, members) {
     const sorted = members;   // 시트 순서 그대로 — 명단·종이와 줄이 맞아야 한다
 
     const headRow = cols.map(c => `
-        <th class="${c.isClass ? '' : 'non-class'}">
+        <th class="${c.isClass ? '' : 'non-class'}${c.isFuture ? ' mx-future' : ''}"
+            ${c.isFuture ? 'title="아직 하지 않은 수업"' : ''}>
             <span class="mx-session">${c.name || '-'}</span>
             <span class="mx-date">${c.mmdd}</span>
         </th>
@@ -1116,7 +1128,7 @@ function renderTeamMatrix(teamName, members) {
         const homeworkList = getHomeworkList(id);
 
         const cells = cols.map(c => {
-            const s = classifyStatus(m[c.mmdd]);
+            const s = classifyStatus(m[c.mmdd], c.isFuture);
             const kb = c.name ? kimbapDetail[c.name] : null;
             const hw = c.name ? homeworkForSession(homeworkList, c.name) : [];
             const badges = [];
@@ -1134,7 +1146,7 @@ function renderTeamMatrix(teamName, members) {
         return `
             <tr>
                 <th class="mx-name-cell" scope="row">
-                    <span class="mx-name">${m.name}</span>
+                    <span class="mx-name">${m.name}<span class="mx-phone">${m.phone || ''}</span></span>
                     <span class="mx-role">${m.role || '조원'}</span>
                 </th>
                 ${cells}
@@ -1258,7 +1270,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=96';
+                window.location.href = 'admin.html?v=97';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

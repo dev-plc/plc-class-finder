@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 
-    <link rel="stylesheet" href="style.css?v=96">
+    <link rel="stylesheet" href="style.css?v=97">
 </head>
 <body>
     <div class="container">
@@ -209,9 +209,13 @@
                     <h3 id="matrixTitle">조 전체 현황</h3>
                     <button type="button" id="matrixCloseBtn" class="matrix-close-btn" aria-label="닫기">✕</button>
                 </div>
+                <!-- '·'(미기록)이 범례에 없어서, 흐린 점을 보고 '수업없음' 으로
+                     읽히고 있었다. 빈칸에는 뜻이 셋이나 되므로 셋 다 적는다. -->
                 <div class="matrix-legend">
                     <span><b>O</b> 출석</span><span><b>◎</b> 대체</span><span><b>X</b> 결석</span>
-                    <span><b>−</b> 수업없음</span><span>🍙 김밥</span><span>📝 과제</span>
+                    <span><b>·</b> 미기록</span><span><b>−</b> 수업없음</span>
+                    <span><i class="mx-lg-future"></i> 아직 안 한 수업</span>
+                    <span>🍙 김밥</span><span>📝 과제</span>
                 </div>
                 <div class="matrix-scroll" id="matrixScroll"></div>
             </div>
@@ -264,6 +268,6 @@
         </div>
     </div>
 
-<script type="module" src="script.js?v=96"></script>
+<script type="module" src="script.js?v=97"></script>
 </body>
 </html>

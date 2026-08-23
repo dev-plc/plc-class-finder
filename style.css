@@ -1366,6 +1366,28 @@ body.large-text .map-image {
 .mx-cell.empty   { background: #fafafa; color: #d1d5db; }
 .mx-cell.non-class { opacity: 0.75; }
 
+/* 아직 하지 않은 수업. 아무 표시도 하지 않는다 —
+   흐린 점을 찍어 두면 '수업없음(−)' 과 구분이 안 되고, 실제로 그렇게 읽혔다.
+   빗금으로 '여기는 아직 볼 곳이 아니다' 만 알린다. */
+.mx-cell.future {
+    background: repeating-linear-gradient(135deg,
+        #fbfbfc 0 5px, #f3f4f6 5px 10px);
+}
+.matrix-table th.mx-future { opacity: 0.5; }
+/* 빗금 견본. 글자를 넣지 않는다 — 넣으면 20px 안에서 접힌다. */
+.mx-lg-future {
+    display: inline-block; width: 20px; height: 12px; border-radius: 3px;
+    vertical-align: -1px; border: 1px solid #e5e7eb;
+    background: repeating-linear-gradient(135deg,
+        #fbfbfc 0 5px, #f3f4f6 5px 10px);
+}
+
+/* 이름 뒤 뒷번호 — 동명이인을 가린다. 이름을 밀어내지 않게 한 톤 죽인다. */
+.mx-phone {
+    margin-left: 4px; font-size: calc(10px * var(--font-scale));
+    font-weight: 500; color: #9ca3af;
+}
+
 body.dark-mode .matrix-modal-inner,
 body.dark-mode .matrix-table th,
 body.dark-mode .matrix-table td,

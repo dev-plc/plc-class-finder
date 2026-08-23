@@ -15,10 +15,10 @@ import {
     splitLinks,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=96';
-import { matches as hangulMatches } from './scripts/hangul.js?v=96';
-import { registerServiceWorker } from './scripts/sw-update.js?v=96';
-import { sbPostGas } from './scripts/supabase-config.js?v=96';
+} from './scripts/members-data.js?v=97';
+import { matches as hangulMatches } from './scripts/hangul.js?v=97';
+import { registerServiceWorker } from './scripts/sw-update.js?v=97';
+import { sbPostGas } from './scripts/supabase-config.js?v=97';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1819,6 +1819,19 @@ const CP_BUCKETS = [
     { key: 'review',  label: '관리자 확인', tone: 'ask', desc: '보충이 한도를 넘었습니다. 참작 사유가 있는지 사람이 판단해야 합니다.' },
 ];
 
+// 갈래 안을 무엇으로 다시 가를지. 갈래마다 사람이 알고 싶은 축이 다르다.
+// 수료·수료 불가·관리자 확인은 이미 결판이 나서 더 가를 것이 없다.
+const CP_SUB_AXIS = {
+    ontrack: {
+        field: 'gap', unit: '회', suffix: '더',
+        note: n => `앞으로 ${n}회만 더 나오면 수료합니다. 보충은 필요 없습니다.`,
+    },
+    atrisk: {
+        field: 'needHomework', unit: '건', suffix: '필요',
+        note: n => `남은 강의를 전부 나오고 과제·소감문 ${n}건을 내면 수료합니다.`,
+    },
+};
+
 const CP_SORTS = [
     { key: 'short',  label: '남은 횟수' },
     { key: 'team',   label: '조' },
@@ -1998,11 +2011,13 @@ function renderCompletion() {
         ? rows.filter(r => r.needsReview)
         : rows.filter(r => r.bucket === cpBucket);
 
-    // '수료 예정' 은 몇 회 더 나오면 되는지로 한 번 더 가른다.
-    // 1회 남은 사람과 6회 남은 사람은 챙기는 방법이 다르다 —
-    // 앞쪽은 한 번만 붙들면 되고, 뒤쪽은 남은 일정을 통째로 같이 봐야 한다.
-    const needs = cpBucket === 'ontrack'
-        ? [...new Set(inBucket.map(r => r.gap))].sort((x, y) => x - y)
+    // 갈래 안에서 한 번 더 가른다. 무엇으로 가르는지는 갈래마다 다르다 —
+    // 수료 예정은 '몇 회 더 나오면 되는가', 아슬아슬은 '과제를 몇 건 내야 하는가'.
+    // 1회 남은 사람과 6회 남은 사람은 챙기는 방법이 다르고,
+    // 과제 1건과 3건도 마찬가지다. 한 덩어리로 보면 그 차이가 안 보인다.
+    const axis = CP_SUB_AXIS[cpBucket] || null;
+    const needs = axis
+        ? [...new Set(inBucket.map(r => r[axis.field]))].sort((x, y) => x - y)
         : [];
     if (cpNeed != null && !needs.includes(cpNeed)) cpNeed = null;   // 사라진 값은 푼다
 
@@ -2010,25 +2025,25 @@ function renderCompletion() {
         cpNeedsEl.innerHTML = needs.length
             ? `<button type="button" class="ab-th${cpNeed == null ? ' on' : ''}" data-need="">전체 ${inBucket.length}</button>`
               + needs.map(n => {
-                  const c = inBucket.filter(r => r.gap === n).length;
-                  return `<button type="button" class="ab-th${cpNeed === n ? ' on' : ''}" data-need="${n}">${n}회 ${c}</button>`;
+                  const c = inBucket.filter(r => r[axis.field] === n).length;
+                  return `<button type="button" class="ab-th${cpNeed === n ? ' on' : ''}" `
+                       + `data-need="${n}">${n}${axis.unit} ${c}</button>`;
                 }).join('')
             : '';
         cpNeedsEl.style.display = needs.length ? '' : 'none';
     }
 
-    const list = (cpNeed == null ? inBucket : inBucket.filter(r => r.gap === cpNeed))
+    const list = (cpNeed == null ? inBucket : inBucket.filter(r => r[axis.field] === cpNeed))
         .sort(cpSorter());
     cpLastRows = list;
 
     if (cpListTitle) {
-        cpListTitle.textContent = b.label + (cpNeed != null ? ` · ${cpNeed}회 더` : '');
+        cpListTitle.textContent = b.label
+            + (cpNeed != null ? ` · ${cpNeed}${axis.unit} ${axis.suffix}` : '');
     }
     if (cpListBadge) cpListBadge.textContent = `${list.length}명`;
     if (cpNote) {
-        cpNote.textContent = cpNeed != null
-            ? `앞으로 ${cpNeed}회만 더 나오면 수료합니다. ${b.desc}`
-            : b.desc;
+        cpNote.textContent = cpNeed != null ? axis.note(cpNeed) : b.desc;
         cpNote.style.display = '';
     }
 
