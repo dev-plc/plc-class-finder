@@ -16,11 +16,12 @@ import {
     getProgress,
     getCompletionOutlook,
     getRemainingClassSessions,
+    ONTRACK_WITHIN,
     subscribe,
-} from './scripts/members-data.js?v=99';
-import { matches as hangulMatches } from './scripts/hangul.js?v=99';
-import { registerServiceWorker } from './scripts/sw-update.js?v=99';
-import { sbPostGas } from './scripts/supabase-config.js?v=99';
+} from './scripts/members-data.js?v=100';
+import { matches as hangulMatches } from './scripts/hangul.js?v=100';
+import { registerServiceWorker } from './scripts/sw-update.js?v=100';
+import { sbPostGas } from './scripts/supabase-config.js?v=100';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1815,7 +1816,10 @@ document.getElementById('absenceTab')?.addEventListener('click', async (e) => {
 // ============================================================================
 const CP_BUCKETS = [
     { key: 'done',    label: '수료',      tone: 'done', desc: '요건을 다 채웠습니다. 더 나오지 않아도 됩니다.' },
-    { key: 'ontrack', label: '수료 예정',  tone: 'ok',   desc: '남은 강의를 나오면 채워집니다. 보충이 없어도 됩니다.' },
+    { key: 'ontrack', label: '수료 예정',  tone: 'ok',
+      desc: `앞으로 ${ONTRACK_WITHIN}회 안에 채워집니다. 보충이 없어도 됩니다.` },
+    { key: 'going',   label: '진행 중',    tone: 'go',
+      desc: '보충 없이 채울 수 있지만 아직 여러 회 남았습니다. 지금은 손댈 것이 없습니다.' },
     { key: 'atrisk',  label: '아슬아슬',   tone: 'warn', desc: '남은 강의를 다 나오고 과제·소감문까지 내야 채워집니다. 지금 연락하면 결과가 바뀝니다.' },
     { key: 'gone',    label: '수료 불가',  tone: 'bad',  desc: '남은 강의를 다 나와도 요건에 못 미칩니다. 다음 기수 재수강 안내 대상입니다.' },
     { key: 'review',  label: '관리자 확인', tone: 'ask', desc: '보충이 한도를 넘었습니다. 참작 사유가 있는지 사람이 판단해야 합니다.' },
@@ -1827,6 +1831,10 @@ const CP_SUB_AXIS = {
     ontrack: {
         field: 'gap', unit: '회', suffix: '더',
         note: n => `앞으로 ${n}회만 더 나오면 수료합니다. 보충은 필요 없습니다.`,
+    },
+    going: {
+        field: 'gap', unit: '회', suffix: '더',
+        note: n => `앞으로 ${n}회 더 나오면 수료합니다. 보충은 필요 없습니다.`,
     },
     atrisk: {
         field: 'needHomework', unit: '건', suffix: '필요',
@@ -1885,7 +1893,8 @@ function cpRows() {
 function cpTodo(r) {
     if (r.bucket === 'done')    return '요건 충족';
     if (r.bucket === 'gone')    return `최대 ${r.maxReach}회까지만 가능`;
-    if (r.bucket === 'ontrack') return `남은 ${r.open}회 중 ${r.gap}회 출석`;
+    if (r.bucket === 'ontrack' || r.bucket === 'going')
+        return `남은 ${r.open}회 중 ${r.gap}회 출석`;
     return `남은 ${r.open}회 전부 + 과제·소감문 ${r.needHomework}건`;
 }
 

@@ -1417,6 +1417,7 @@ body.large-text .map-image {
 .to-stat { font-size: calc(12px * var(--font-scale)); font-weight: 600; color: #6b7280; }
 .to-stat.done { color: #047857; }
 .to-stat.ok   { color: #1d4ed8; }
+.to-stat.go   { color: #667085; }
 .to-stat.warn { color: #b45309; }
 .to-basis {
     margin-top: 6px; font-size: calc(11px * var(--font-scale)); color: #6b7280;

@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=99';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=99';
+import { matches as hangulMatches } from './hangul.js?v=100';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=100';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -515,14 +515,22 @@ export function getRemainingClassSessions() {
   return state.sessions.filter(s => s.is_class !== false && s.session_date >= today).length;
 }
 
+// '수료 예정' 이라고 부를 수 있는 거리. 이 횟수 안에 채울 수 있어야 예정이다.
+//
+// 기수 초반에는 결석만 없으면 누구나 '남은 걸 다 나오면 채워진다'. 틀린 말은
+// 아니지만 그때 예정이라고 부르면 변별력이 없다 — 2주차에 조원 전원이 예정으로
+// 뜬다. 곧 끝나는 사람만 예정이라고 부르고, 나머지는 '진행 중' 으로 둔다.
+export const ONTRACK_WITHIN = 3;
+
 /**
  * @returns {null | {
  *   p, remain, open, pastUnmarked, gap, maxReach, makeupRoom,
  *   needHomework, needsReview, unmarked,
- *   bucket: 'done'|'ontrack'|'atrisk'|'gone'
+ *   bucket: 'done'|'ontrack'|'going'|'atrisk'|'gone'
  * }}
  *   done    다 채웠다
- *   ontrack 아직 안 정해진 주차를 채우면 된다 (보충 없이)
+ *   ontrack 앞으로 ONTRACK_WITHIN 회 안에 채워진다 (보충 없이)
+ *   going   보충 없이 채울 수 있지만 아직 더 남았다
  *   atrisk  그것만으로 모자라 과제·소감문까지 내야 한다
  *   gone    다 채워도 못 미친다
  */
@@ -556,8 +564,9 @@ export function getCompletionOutlook(member) {
   let bucket;
   if (p.credited >= p.required)             bucket = 'done';
   else if (maxReach < p.required)           bucket = 'gone';
-  else if (p.credited + open >= p.required) bucket = 'ontrack';
-  else                                      bucket = 'atrisk';
+  else if (p.credited + open < p.required)  bucket = 'atrisk';
+  else if (gap <= ONTRACK_WITHIN)           bucket = 'ontrack';
+  else                                      bucket = 'going';
 
   return { p, remain, open, pastUnmarked, gap, maxReach, makeupRoom, bucket,
            unmarked: pastUnmarked > 0,

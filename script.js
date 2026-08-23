@@ -13,6 +13,7 @@ import {
     getHomeworkList,
     splitLinks,
     getCompletionOutlook,
+    ONTRACK_WITHIN,
     getSessions,
     getSessionKey,
     getCurrentSessionDate,
@@ -24,8 +25,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=99';
-import { registerServiceWorker } from './scripts/sw-update.js?v=99';
+} from './scripts/members-data.js?v=100';
+import { registerServiceWorker } from './scripts/sw-update.js?v=100';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -1264,7 +1265,7 @@ function outlookTodo(o) {
     // 안 찍은 주차가 있으면 그것부터다. 전망을 말할 상황이 아니다 —
     // 튜터가 찍기만 하면 숫자가 통째로 달라진다.
     if (o.unmarked) return `지난 ${o.pastUnmarked}주차 출석을 아직 안 찍었습니다`;
-    if (o.bucket === 'ontrack') return `앞으로 ${o.gap}회 더`;
+    if (o.bucket === 'ontrack' || o.bucket === 'going') return `앞으로 ${o.gap}회 더`;
     if (o.bucket === 'atrisk')  return `남은 강의 전부 + 과제·소감문 ${o.needHomework}건`;
     // 산술적으로 이미 어려운 경우. 튜터 화면에서는 단정하지 않는다 —
     // 사정을 아는 것은 담당 교역자이고, 예외 판단도 그쪽 몫이다.
@@ -1303,7 +1304,8 @@ function renderTeamOutlook(el, members) {
         <div class="to-line">
             <span class="to-total">우리 조 ${rows.length}명</span>
             <span class="to-stat done">수료 ${n('done')}</span>
-            <span class="to-stat ok" title="남은 강의를 다 나오면 16회를 채우는 사람입니다">예정 ${n('ontrack')}</span>
+            <span class="to-stat ok" title="앞으로 ${ONTRACK_WITHIN}회 안에 16회를 채우는 사람입니다">예정 ${n('ontrack')}</span>
+            ${n('going') ? `<span class="to-stat go" title="보충 없이 채울 수 있지만 아직 여러 회 남았습니다">진행 중 ${n('going')}</span>` : ''}
             ${unmarked.length ? `<span class="to-stat warn">기록 없음 ${unmarked.length}</span>` : ''}
             ${care.length
                 ? `<button type="button" class="to-care${open ? ' open' : ''}"
@@ -1314,7 +1316,7 @@ function renderTeamOutlook(el, members) {
         </div>
         <!-- '예정' 이 무슨 뜻인지 적어 둔다. 기수 초반에는 결석만 없으면
              거의 다 예정으로 잡히는데, 근거를 안 적어 두면 오해한다. -->
-        <div class="to-basis">‘예정’은 <b>남은 ${remain}회를 다 나오면</b> 16회를 채운다는 뜻입니다.</div>
+        <div class="to-basis">‘예정’은 <b>앞으로 ${ONTRACK_WITHIN}회 안에</b> 채워지는 사람입니다. 남은 강의는 ${remain}회.</div>
         ${open ? `<div class="to-list">${care.map(x => `
             <div class="to-item${x.o.unmarked ? ' unmarked' : ''}">
                 <span class="to-name">${x.m.name}<span class="to-phone">${x.m.phone || ''}</span></span>
@@ -1379,7 +1381,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=99';
+                window.location.href = 'admin.html?v=100';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

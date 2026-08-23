@@ -1405,11 +1405,13 @@ body.dark-mode .sync-info { color: #9ca3af; }
 .cp-bucket .cp-bucket-n { color: #475467; }
 .cp-bucket.on.cp-done { border-color: #12b76a; background: #f6fef9; }
 .cp-bucket.on.cp-ok   { border-color: #2563eb; background: #eff4ff; }
+.cp-bucket.on.cp-go   { border-color: #667085; background: #f9fafb; }
 .cp-bucket.on.cp-warn { border-color: #f79009; background: #fffaeb; }
 .cp-bucket.on.cp-bad  { border-color: #d92d20; background: #fffbfa; }
 .cp-bucket.on.cp-ask  { border-color: #7c3aed; background: #f9f5ff; }
 .cp-bucket.on.cp-done .cp-bucket-n { color: #027a48; }
 .cp-bucket.on.cp-ok   .cp-bucket-n { color: #1849a9; }
+.cp-bucket.on.cp-go   .cp-bucket-n { color: #475467; }
 .cp-bucket.on.cp-warn .cp-bucket-n { color: #b54708; }
 .cp-bucket.on.cp-bad  .cp-bucket-n { color: #b42318; }
 .cp-bucket.on.cp-ask  .cp-bucket-n { color: #6941c6; }
@@ -1417,6 +1419,7 @@ body.dark-mode .sync-info { color: #9ca3af; }
 /* 명단 줄 — 왼쪽 띠로 어느 갈래인지 표시한다 */
 .cp-item.cp-done { box-shadow: inset 4px 0 0 #12b76a; }
 .cp-item.cp-ok   { box-shadow: inset 4px 0 0 #2563eb; }
+.cp-item.cp-go   { box-shadow: inset 4px 0 0 #98a2b3; }
 .cp-item.cp-warn { box-shadow: inset 4px 0 0 #f79009; background: #fffcf5; }
 .cp-item.cp-bad  { box-shadow: inset 4px 0 0 #d92d20; background: #fffbfa; }
 
@@ -1437,6 +1440,7 @@ body.dark-mode .cp-bucket .cp-bucket-n { color: #d1d5db; }
 body.dark-mode .cp-bucket-l { color: #9ca3af; }
 body.dark-mode .cp-bucket.on.cp-done { background: #10241a; }
 body.dark-mode .cp-bucket.on.cp-ok   { background: #111c33; }
+body.dark-mode .cp-bucket.on.cp-go   { background: #1a1f27; }
 body.dark-mode .cp-bucket.on.cp-warn { background: #2a2113; }
 body.dark-mode .cp-bucket.on.cp-bad  { background: #2a1a1a; }
 body.dark-mode .cp-bucket.on.cp-ask  { background: #1e1630; }
