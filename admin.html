@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=95">
-    <link rel="stylesheet" href="admin.css?v=95">
+    <link rel="stylesheet" href="style.css?v=96">
+    <link rel="stylesheet" href="admin.css?v=96">
 </head>
 <body>
     <div class="admin-container">
@@ -193,6 +193,9 @@
                 <div class="ab-card-head">
                     <h3 id="cpListTitle">명단</h3>
                     <span class="ab-badge" id="cpListBadge"></span>
+                    <!-- '수료 예정' 안에서 몇 회 더 나오면 되는지로 다시 가른다.
+                         1회 남은 사람과 6회 남은 사람은 챙기는 방법이 다르다. -->
+                    <div class="ab-thresholds" id="cpNeeds"></div>
                     <button type="button" class="ab-copy" data-copy="cp">📋 명단 복사</button>
                 </div>
                 <p class="ab-note" id="cpNote"></p>
@@ -308,7 +311,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=95"></script>
+    <script type="module" src="admin.js?v=96"></script>
 </body>
 </html>
 

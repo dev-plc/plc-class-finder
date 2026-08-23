@@ -15,10 +15,10 @@ import {
     splitLinks,
     getProgress,
     subscribe,
-} from './scripts/members-data.js?v=95';
-import { matches as hangulMatches } from './scripts/hangul.js?v=95';
-import { registerServiceWorker } from './scripts/sw-update.js?v=95';
-import { sbPostGas } from './scripts/supabase-config.js?v=95';
+} from './scripts/members-data.js?v=96';
+import { matches as hangulMatches } from './scripts/hangul.js?v=96';
+import { registerServiceWorker } from './scripts/sw-update.js?v=96';
+import { sbPostGas } from './scripts/supabase-config.js?v=96';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1835,6 +1835,7 @@ const cpWarn         = document.getElementById('cpWarn');
 const cpBucketsEl    = document.getElementById('cpBuckets');
 const cpListTitle    = document.getElementById('cpListTitle');
 const cpListBadge    = document.getElementById('cpListBadge');
+const cpNeedsEl      = document.getElementById('cpNeeds');
 const cpNote         = document.getElementById('cpNote');
 const cpListEl       = document.getElementById('cpList');
 
@@ -1843,6 +1844,7 @@ let cpPastor   = AB_PASTOR_ALL;
 let cpSort     = 'short';
 let cpDesc     = false;          // 남은 횟수는 적은 쪽(곧 끝나는 쪽)이 먼저
 let cpBucket   = 'atrisk';       // 이 탭을 여는 이유가 여기 있다
+let cpNeed     = null;           // '수료 예정' 안에서 몇 회 더 나오면 되는지 (null = 전체)
 let cpLastRows = [];             // 명단 복사가 쓴다
 
 function cpTodayIso() {
@@ -1992,14 +1994,43 @@ function renderCompletion() {
     }
 
     const b = CP_BUCKETS.find(x => x.key === cpBucket) || CP_BUCKETS[0];
-    const list = (cpBucket === 'review'
+    const inBucket = cpBucket === 'review'
         ? rows.filter(r => r.needsReview)
-        : rows.filter(r => r.bucket === cpBucket)).sort(cpSorter());
+        : rows.filter(r => r.bucket === cpBucket);
+
+    // '수료 예정' 은 몇 회 더 나오면 되는지로 한 번 더 가른다.
+    // 1회 남은 사람과 6회 남은 사람은 챙기는 방법이 다르다 —
+    // 앞쪽은 한 번만 붙들면 되고, 뒤쪽은 남은 일정을 통째로 같이 봐야 한다.
+    const needs = cpBucket === 'ontrack'
+        ? [...new Set(inBucket.map(r => r.gap))].sort((x, y) => x - y)
+        : [];
+    if (cpNeed != null && !needs.includes(cpNeed)) cpNeed = null;   // 사라진 값은 푼다
+
+    if (cpNeedsEl) {
+        cpNeedsEl.innerHTML = needs.length
+            ? `<button type="button" class="ab-th${cpNeed == null ? ' on' : ''}" data-need="">전체 ${inBucket.length}</button>`
+              + needs.map(n => {
+                  const c = inBucket.filter(r => r.gap === n).length;
+                  return `<button type="button" class="ab-th${cpNeed === n ? ' on' : ''}" data-need="${n}">${n}회 ${c}</button>`;
+                }).join('')
+            : '';
+        cpNeedsEl.style.display = needs.length ? '' : 'none';
+    }
+
+    const list = (cpNeed == null ? inBucket : inBucket.filter(r => r.gap === cpNeed))
+        .sort(cpSorter());
     cpLastRows = list;
 
-    if (cpListTitle) cpListTitle.textContent = b.label;
+    if (cpListTitle) {
+        cpListTitle.textContent = b.label + (cpNeed != null ? ` · ${cpNeed}회 더` : '');
+    }
     if (cpListBadge) cpListBadge.textContent = `${list.length}명`;
-    if (cpNote) { cpNote.textContent = b.desc; cpNote.style.display = ''; }
+    if (cpNote) {
+        cpNote.textContent = cpNeed != null
+            ? `앞으로 ${cpNeed}회만 더 나오면 수료합니다. ${b.desc}`
+            : b.desc;
+        cpNote.style.display = '';
+    }
 
     cpListEl.innerHTML = list.length
         ? list.map(cpPersonHtml).join('')
@@ -2025,6 +2056,13 @@ cpBucketsEl?.addEventListener('click', (e) => {
     const btn = e.target.closest('.cp-bucket');
     if (!btn) return;
     cpBucket = btn.dataset.bucket;
+    cpNeed = null;              // 갈래를 바꾸면 하위 고르기는 푼다
+    renderCompletion();
+});
+cpNeedsEl?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.ab-th');
+    if (!btn) return;
+    cpNeed = btn.dataset.need === '' ? null : Number(btn.dataset.need);
     renderCompletion();
 });
 
