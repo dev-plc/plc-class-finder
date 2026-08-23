@@ -17,10 +17,10 @@ import {
     getCompletionOutlook,
     getRemainingClassSessions,
     subscribe,
-} from './scripts/members-data.js?v=98';
-import { matches as hangulMatches } from './scripts/hangul.js?v=98';
-import { registerServiceWorker } from './scripts/sw-update.js?v=98';
-import { sbPostGas } from './scripts/supabase-config.js?v=98';
+} from './scripts/members-data.js?v=99';
+import { matches as hangulMatches } from './scripts/hangul.js?v=99';
+import { registerServiceWorker } from './scripts/sw-update.js?v=99';
+import { sbPostGas } from './scripts/supabase-config.js?v=99';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1830,7 +1830,7 @@ const CP_SUB_AXIS = {
     },
     atrisk: {
         field: 'needHomework', unit: '건', suffix: '필요',
-        note: n => `남은 강의를 전부 나오고 과제·소감문 ${n}건을 내면 수료합니다.`,
+        note: n => `남은 강의를 전부 채우고 과제·소감문 ${n}건을 내면 수료합니다.`,
     },
 };
 
@@ -1885,8 +1885,8 @@ function cpRows() {
 function cpTodo(r) {
     if (r.bucket === 'done')    return '요건 충족';
     if (r.bucket === 'gone')    return `최대 ${r.maxReach}회까지만 가능`;
-    if (r.bucket === 'ontrack') return `남은 ${r.remain}회 중 ${r.gap}회 출석`;
-    return `남은 ${r.remain}회 전부 + 과제·소감문 ${r.needHomework}건`;
+    if (r.bucket === 'ontrack') return `남은 ${r.open}회 중 ${r.gap}회 출석`;
+    return `남은 ${r.open}회 전부 + 과제·소감문 ${r.needHomework}건`;
 }
 
 function cpPersonHtml(r) {
@@ -1973,15 +1973,26 @@ function renderCompletion() {
     if (cpWarn) {
         const today = cpTodayIso();
         const future = getSessions().filter(s => s.is_class !== false && s.session_date > today);
-        const bad = rows.filter(r => future.some(s => {
+        const futureX = rows.filter(r => future.some(s => {
             const k = getSessionKey(s.session_date);
             return normStatus(k ? r.m[k] : '') === 'X';
         })).length;
-        cpWarn.textContent = bad
-            ? `※ ${bad}명은 아직 하지 않은 주차에 X 가 들어 있습니다. `
-              + '그만큼 수료 판정이 실제보다 낮게 잡힙니다 — 시트에서 그 칸을 비워 주세요.'
-            : '';
-        cpWarn.style.display = bad ? '' : 'none';
+
+        // 지난 주차인데 아직 안 찍은 사람. 결석이 아니라 '아직 모르는' 것이라
+        // 아래 분류에서는 채워질 수 있는 것으로 세지만, 지금 화면의 숫자는
+        // 그만큼 낮게 보인다. 찍히면 통째로 달라지므로 몇 명인지 알린다.
+        const unmarked = rows.filter(r => r.unmarked).length;
+
+        const msgs = [];
+        if (futureX) msgs.push(
+            `※ ${futureX}명은 아직 하지 않은 주차에 X 가 들어 있습니다. `
+            + '그만큼 수료 판정이 실제보다 낮게 잡힙니다 — 시트에서 그 칸을 비워 주세요.');
+        if (unmarked) msgs.push(
+            `※ ${unmarked}명은 지난 주차 출석이 아직 안 찍혀 있습니다. `
+            + '찍히면 인정 횟수가 그만큼 올라갑니다 — 지금 숫자는 낮게 보입니다.');
+
+        cpWarn.innerHTML = msgs.map(escapeHtml).join('<br>');
+        cpWarn.style.display = msgs.length ? '' : 'none';
     }
 
     const b = CP_BUCKETS.find(x => x.key === cpBucket) || CP_BUCKETS[0];

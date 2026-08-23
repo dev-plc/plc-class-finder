@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=98';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=98';
+import { matches as hangulMatches } from './hangul.js?v=99';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=99';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -517,35 +517,52 @@ export function getRemainingClassSessions() {
 
 /**
  * @returns {null | {
- *   p, remain, gap, maxReach, makeupRoom, needHomework, needsReview,
+ *   p, remain, open, pastUnmarked, gap, maxReach, makeupRoom,
+ *   needHomework, needsReview, unmarked,
  *   bucket: 'done'|'ontrack'|'atrisk'|'gone'
  * }}
  *   done    다 채웠다
- *   ontrack 남은 강의를 나오면 채워진다 (보충 없이)
- *   atrisk  남은 강의를 다 나오고 과제·소감문까지 내야 한다
- *   gone    다 나와도 못 미친다
+ *   ontrack 아직 안 정해진 주차를 채우면 된다 (보충 없이)
+ *   atrisk  그것만으로 모자라 과제·소감문까지 내야 한다
+ *   gone    다 채워도 못 미친다
  */
 export function getCompletionOutlook(member) {
   const p = getProgress(member);
   if (!p) return null;
 
   const remain = getRemainingClassSessions();
+
+  // 아직 결과가 안 정해진 주차 = 빈칸 전부.
+  //
+  // 앞으로 남은 강의만 세면 안 된다. 지난 주차인데 아직 안 찍은 칸도
+  // 여전히 O 가 될 수 있다 — 튜터가 나중에 찍으면 된다.
+  // 남은 강의만 세던 때는 1·2주차를 안 찍어 둔 조에서 조원이 0/16 으로
+  // 잡히고 '다 나와도 못 미친다' 로 떴다. 결석한 적이 없는데도 그랬다.
+  //
+  // unrecordedCount 는 16개 강의 중 빈칸 전부다 (지난 것 + 앞으로 것).
+  const open = p.unrecordedCount;
+
+  // 그중 이미 지나간 것. 이건 전망이 아니라 '찍어야 할 출석' 이다.
+  // 앞 주차에 미리 찍힌 값이 있으면 remain 보다 작아질 수 있어 0 으로 막는다.
+  const pastUnmarked = Math.max(0, open - remain);
+
   // 이미 과제를 낸 결석분은 credited 에 들어가 있으므로
   // '결석했지만 아직 안 낸' 주차만 앞으로 더 받을 몫이다.
   const notYet     = Math.max(0, p.absentCount - p.makeupAvailable);
   const makeupRoom = Math.min(p.makeupLeft, notYet);
-  const maxReach   = p.credited + remain + makeupRoom;
+  const maxReach   = p.credited + open + makeupRoom;
   const gap        = Math.max(0, p.required - p.credited);
 
   let bucket;
-  if (p.credited >= p.required)               bucket = 'done';
-  else if (maxReach < p.required)             bucket = 'gone';
-  else if (p.credited + remain >= p.required) bucket = 'ontrack';
-  else                                        bucket = 'atrisk';
+  if (p.credited >= p.required)             bucket = 'done';
+  else if (maxReach < p.required)           bucket = 'gone';
+  else if (p.credited + open >= p.required) bucket = 'ontrack';
+  else                                      bucket = 'atrisk';
 
-  return { p, remain, gap, maxReach, makeupRoom, bucket,
+  return { p, remain, open, pastUnmarked, gap, maxReach, makeupRoom, bucket,
+           unmarked: pastUnmarked > 0,
            needsReview: p.makeupOverflow > 0,
-           needHomework: Math.max(0, gap - remain) };
+           needHomework: Math.max(0, gap - open) };
 }
 
 export function getKimbapDetail(memberId) {

@@ -24,8 +24,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=98';
-import { registerServiceWorker } from './scripts/sw-update.js?v=98';
+} from './scripts/members-data.js?v=99';
+import { registerServiceWorker } from './scripts/sw-update.js?v=99';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -1261,8 +1261,11 @@ let teamOutlookOpen = false;
 
 // 튜터가 그대로 읽어 전할 수 있는 말로. 판정이 아니라 할 일을 적는다.
 function outlookTodo(o) {
+    // 안 찍은 주차가 있으면 그것부터다. 전망을 말할 상황이 아니다 —
+    // 튜터가 찍기만 하면 숫자가 통째로 달라진다.
+    if (o.unmarked) return `지난 ${o.pastUnmarked}주차 출석을 아직 안 찍었습니다`;
     if (o.bucket === 'ontrack') return `앞으로 ${o.gap}회 더`;
-    if (o.bucket === 'atrisk')  return `남은 ${o.remain}회 전부 + 과제·소감문 ${o.needHomework}건`;
+    if (o.bucket === 'atrisk')  return `남은 강의 전부 + 과제·소감문 ${o.needHomework}건`;
     // 산술적으로 이미 어려운 경우. 튜터 화면에서는 단정하지 않는다 —
     // 사정을 아는 것은 담당 교역자이고, 예외 판단도 그쪽 몫이다.
     return '담당 교역자와 의논이 필요합니다';
@@ -1279,18 +1282,29 @@ function renderTeamOutlook(el, members) {
     if (!rows.length) { el.style.display = 'none'; return; }
     el.style.display = 'block';
 
-    const n = k => rows.filter(x => x.o.bucket === k).length;
-    const care = rows.filter(x => x.o.bucket === 'atrisk' || x.o.bucket === 'gone')
-        .sort((a, b) => a.o.gap - b.o.gap
+    // 안 찍은 주차가 있는 사람은 전망에서 뺀다. 아직 결과가 정해지지 않았고,
+    // 튜터가 할 일도 '연락' 이 아니라 '출석 찍기' 다.
+    const unmarked = rows.filter(x => x.o.unmarked);
+    const known    = rows.filter(x => !x.o.unmarked);
+    const n = k => known.filter(x => x.o.bucket === k).length;
+
+    // 챙길 사람 = 손을 써야 결과가 바뀌는 사람. 미기록도 여기 넣는다 —
+    // 그것도 튜터가 지금 해야 할 일이다.
+    const care = [...unmarked,
+                  ...known.filter(x => x.o.bucket === 'atrisk' || x.o.bucket === 'gone')]
+        .sort((a, b) => Number(b.o.unmarked) - Number(a.o.unmarked)
+                     || a.o.gap - b.o.gap
                      || String(a.m.name).localeCompare(String(b.m.name), 'ko'));
 
     const open = teamOutlookOpen && care.length > 0;
+    const remain = rows[0].o.remain;
 
     el.innerHTML = `
         <div class="to-line">
             <span class="to-total">우리 조 ${rows.length}명</span>
             <span class="to-stat done">수료 ${n('done')}</span>
-            <span class="to-stat ok">예정 ${n('ontrack')}</span>
+            <span class="to-stat ok" title="남은 강의를 다 나오면 16회를 채우는 사람입니다">예정 ${n('ontrack')}</span>
+            ${unmarked.length ? `<span class="to-stat warn">기록 없음 ${unmarked.length}</span>` : ''}
             ${care.length
                 ? `<button type="button" class="to-care${open ? ' open' : ''}"
                            id="teamOutlookToggle" aria-expanded="${open}">
@@ -1298,8 +1312,11 @@ function renderTeamOutlook(el, members) {
                    </button>`
                 : '<span class="to-stat ok">챙길 사람 없음</span>'}
         </div>
+        <!-- '예정' 이 무슨 뜻인지 적어 둔다. 기수 초반에는 결석만 없으면
+             거의 다 예정으로 잡히는데, 근거를 안 적어 두면 오해한다. -->
+        <div class="to-basis">‘예정’은 <b>남은 ${remain}회를 다 나오면</b> 16회를 채운다는 뜻입니다.</div>
         ${open ? `<div class="to-list">${care.map(x => `
-            <div class="to-item">
+            <div class="to-item${x.o.unmarked ? ' unmarked' : ''}">
                 <span class="to-name">${x.m.name}<span class="to-phone">${x.m.phone || ''}</span></span>
                 <span class="to-score">${x.o.p.credited}<span class="to-of">/${x.o.p.required}</span></span>
                 <span class="to-todo">${outlookTodo(x.o)}</span>
@@ -1362,7 +1379,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=98';
+                window.location.href = 'admin.html?v=99';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
