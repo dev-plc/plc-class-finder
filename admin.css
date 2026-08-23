@@ -1130,6 +1130,14 @@ body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
 .pr-table .pr-c-memo { width: auto; }
 /* 쓰던 시트의 기호 표기 — 안내일 뿐이라 옅게 둔다 */
 .pr-memo-mark { color: #98a2b3; font-weight: 400; letter-spacing: 0.12em; }
+
+/* '교리1(08/09) 시작' — 메모 칸은 손으로 적는 자리다. 왼쪽 끝에 옅게 붙여
+   적을 자리를 남긴다. 인쇄에서 회색이 날아가지 않게 색을 강제한다. */
+.pr-start {
+    font-size: 8pt; color: #667085; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.pr-table .pr-c-memo, .pr-table .pr-c-fill { text-align: left; padding-left: 2mm; }
 .pr-table .pr-c-fill { width: auto; border: none !important; background: none !important; }
 
 /* 손으로 쓰는 줄 높이 — A4 한 장을 채우도록 JS 가 인원수에 맞춰 정한다 */

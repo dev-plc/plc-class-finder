@@ -18,10 +18,10 @@ import {
     getRemainingClassSessions,
     ONTRACK_WITHIN,
     subscribe,
-} from './scripts/members-data.js?v=100';
-import { matches as hangulMatches } from './scripts/hangul.js?v=100';
-import { registerServiceWorker } from './scripts/sw-update.js?v=100';
-import { sbPostGas } from './scripts/supabase-config.js?v=100';
+} from './scripts/members-data.js?v=101';
+import { matches as hangulMatches } from './scripts/hangul.js?v=101';
+import { registerServiceWorker } from './scripts/sw-update.js?v=101';
+import { sbPostGas } from './scripts/supabase-config.js?v=101';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1121,6 +1121,43 @@ function isLastClassOfMonth(sessionDate) {
     return same.length > 0 && same[same.length - 1] === sessionDate;
 }
 
+// ── 최근 시작한 사람 표시 ─────────────────────────────────────────────
+//
+// 기수 중간에 새로 들어온 사람이 종이 위에서는 다른 조원과 똑같아 보인다.
+// 튜터는 이름만 보고 '언제부터 온 사람인지' 를 알 수 없다.
+//
+// 출석부가 이미 답을 갖고 있다 — 첫 O 가 찍힌 자리가 그 사람이 처음 온 날이다.
+// 따로 적어 둘 칸을 만들 필요가 없고, 출석을 찍으면 저절로 맞는다.
+const PR_START_WEEKS = 3;        // 첫 참석부터 몇 회차까지 적어 둘 것인가
+
+// 처음 나온 강의의 순번. 못 찾으면 -1.
+//
+// O 만 센다. ◎ 는 나온 것이 아니고(지난 기수 이수 또는 과제·소감문 대체),
+// X 는 안 나온 것이며, − 는 그 사람에게 수업이 없던 주차다.
+//
+// 첫 O 앞에 ◎ 가 있으면 대상이 아니다. 지난 기수 이수분이 깔려 있다는 뜻이라
+// '시작' 이 아니라 이어듣는 사람이고, 그 사람에게 '시작' 이라고 적으면
+// 곧 수료할 사람을 새로 온 사람으로 읽게 만든다.
+function prFirstAttended(m, classSessions) {
+    for (let i = 0; i < classSessions.length; i++) {
+        const k = getSessionKey(classSessions[i].session_date);
+        const v = normStatus(k ? m[k] : '');
+        if (v === 'O') return i;
+        if (v === '◎') return -1;
+    }
+    return -1;
+}
+
+// '교리1(08/09) 시작' — 첫 참석 주차부터 PR_START_WEEKS 회차까지만.
+// 오늘이 아니라 '인쇄하는 주차' 를 기준으로 삼는다. 지난 주차 출석부를
+// 다시 뽑을 때도 그때 맞던 문구가 그대로 나와야 한다.
+function prStartNote(m, classSessions, curIdx) {
+    const idx = prFirstAttended(m, classSessions);
+    if (idx < 0 || curIdx < idx || curIdx - idx >= PR_START_WEEKS) return '';
+    const s = classSessions[idx];
+    return `<span class="pr-start">${escapeHtml(`${s.label_norm || ''}(${s.label}) 시작`)}</span>`;
+}
+
 // 과제 세션명 대조. 폼 응답과 시트 강의명이 다르게 적히므로 양쪽을 정규화한다.
 // (script.js 의 normalizeSessionKey 와 같은 규칙이어야 한다)
 function prNormalizeSession(v) {
@@ -1310,6 +1347,13 @@ function renderPrintPreview() {
     const sessionLabel = `${session.label}${session.label_norm ? ' ' + session.label_norm : ''}`;
     const sessionKey = prNormalizeSession(session.label_norm || '');
 
+    // 시작 문구가 쓰는 기준. 회차로 센다 — 교제·나눔 주간이 끼면 날짜로 세는
+    // '3주' 와 실제 강의 3회가 어긋난다. 종이에 찍히는 것도 강의 회차다.
+    // 인쇄하는 주차가 강의가 아니어도(교제 주간) 그때까지의 강의 수로 자리를 잡는다.
+    const prClassSessions = getSessions().filter(s => s.is_class !== false);
+    const prCurIdx =
+        prClassSessions.filter(s => s.session_date <= session.session_date).length - 1;
+
     // 조별 신청 수 — 집계표와 각 장 머리글에 같이 쓴다
     const stats = teams.map(t => {
         const members = getTeamMembers(t);
@@ -1382,6 +1426,7 @@ function renderPrintPreview() {
             (cols.memo ? `<th class="pr-c-memo">${memoHead}</th>` : '<th class="pr-c-fill"></th>');
 
         const rows = members.map((m, i) => {
+            const startNote = prStartNote(m, prClassSessions, prCurIdx);
             const id = m.id || (String(m.name || '') + String(m.phone || ''));
             const kb = session.label_norm ? getKimbapDetail(id)[session.label_norm] : null;
             const hw = getHomeworkList(id).some(h => prNormalizeSession(h.session) === sessionKey);
@@ -1399,7 +1444,9 @@ function renderPrintPreview() {
                     ${cols.kimbap ? '<td class="pr-c-mark pr-c-wide pr-blank"></td>' : ''}
                     <td class="pr-c-mark pr-blank"></td>
                     ${cols.homework ? `<td class="pr-c-mark">${hw ? '✓' : ''}</td>` : ''}
-                    ${cols.memo ? '<td class="pr-c-memo pr-blank"></td>' : '<td class="pr-c-fill"></td>'}
+                    ${cols.memo
+                        ? `<td class="pr-c-memo pr-blank">${startNote}</td>`
+                        : `<td class="pr-c-fill">${startNote}</td>`}
                 </tr>`;
         }).join('');
 
