@@ -39,7 +39,8 @@
 //   2) 이 함수로 그 ◎ 를 시트에 내려받는다
 //   3) 이후로는 시트가 원본. 앱과 시트에서 입력하고 push 로 DB 에 민다
 //
-// 쓰는 값: O(출석) ◎(지난 기수 이수) X(결석) −(집계 제외) 그리고 빈칸
+// 쓰는 값: O(출석) ◎(지난 기수 이수 이월) 과제(과제·소감문으로 메운 결석)
+//          X(결석) −(집계 제외) 그리고 빈칸
 // 범위:   출석부 헤더의 모든 날짜 컬럼 (지난 주차·앞으로의 주차 모두)
 //
 // 실행 방법
@@ -343,7 +344,7 @@ function pullAttendanceFromDb() {
       var before = String(curRow[dc.col] == null ? "" : curRow[dc.col]).trim();
       var after;
       if (fill.hasOwnProperty(ri)) {
-        after = fill[ri];                       // DB 기록 그대로 (O ◎ X − 빈칸)
+        after = fill[ri];                       // DB 기록 그대로 (O ◎ 과제 X − 빈칸)
       } else if (knownOffset[ri]) {
         after = "";                             // DB 에 있는 사람인데 그 주차 기록이 없음
       } else {
@@ -450,7 +451,7 @@ function sbRpc_(fn, args) {
   return body ? JSON.parse(body) : null;
 }
 
-var PLC_PUSH_ALLOWED = { "O": 1, "X": 1, "\u25ce": 1, "-": 1, "": 1 };
+var PLC_PUSH_ALLOWED = { "O": 1, "X": 1, "\u25ce": 1, "\uacfc\uc81c": 1, "-": 1, "": 1 };
 
 function pushAttendanceToDb() {
   // doPost 와 같은 잠금을 쓴다. 저장이 진행 중일 때 끼어들어
@@ -582,7 +583,7 @@ function pushAttendanceToDb() {
 
     var msg = cohortId + " — 시트에서 DB 로 " + pushed + "칸 밀어넣었습니다.\n" + samples.join("\n");
     if (skippedBadValue) {
-      msg += "\n⚠️ 허용되지 않는 값이 든 칸 " + skippedBadValue + "개는 건너뛰었습니다 (O ◎ X - 빈칸 만 됩니다).";
+      msg += "\n⚠️ 허용되지 않는 값이 든 칸 " + skippedBadValue + "개는 건너뛰었습니다 (O ◎ 과제 X - 빈칸 만 됩니다).";
     }
     plcLog_(msg);
     return msg;

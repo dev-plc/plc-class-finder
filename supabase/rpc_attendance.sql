@@ -4,7 +4,8 @@
 -- 테이블에 직접 UPDATE 권한을 주지 않는다.
 -- 대신 출석 상태만 바꿀 수 있는 함수를 열어 쓰기 범위를 좁힌다.
 --
--- 허용 상태: O(출석) X(결석) ◎(출석 인정 — 지난 기수 이수 또는 과제 대체) -(집계 제외) ''(기록 취소)
+-- 허용 상태: O(출석) X(결석) ◎(지난 기수 이수 이월)
+--            과제(결석했지만 과제·소감문으로 메움) -(집계 제외) ''(기록 취소)
 -- 그 외 값이나 없는 세션·인원은 거부한다.
 
 -- ===================================================================
@@ -24,7 +25,7 @@ declare
   v_status text := upper(btrim(coalesce(p_status, '')));
   v_cohort text;
 begin
-  if v_status not in ('O', 'X', '◎', '-', '') then
+  if v_status not in ('O', 'X', '◎', '과제', '-', '') then
     raise exception '허용되지 않는 출석 상태: %', p_status;
   end if;
 
@@ -82,7 +83,7 @@ begin
     v_member := (rec ->> 'member_id')::uuid;
     v_status := upper(btrim(coalesce(rec ->> 'status', '')));
 
-    if v_status not in ('O', 'X', '◎', '-', '') then
+    if v_status not in ('O', 'X', '◎', '과제', '-', '') then
       v_skipped := v_skipped || jsonb_build_object(
         'member_id', v_member, 'reason', '허용되지 않는 상태: ' || v_status);
       continue;

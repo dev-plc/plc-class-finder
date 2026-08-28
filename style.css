@@ -408,6 +408,7 @@ body.dark-mode .icon-btn:hover {
 .attendance-cell.present { background: #d1fae5; color: #059669; }
 .attendance-cell.online  { background: #ddd6fe; color: #6d28d9; }
 .attendance-cell.absent  { background: #fee2e2; color: #dc2626; }
+.attendance-cell.makeup  { background: #fef3c7; color: #b45309; font-size: calc(11px * var(--font-scale)); }
 .attendance-cell.none    { background: #f3f4f6; color: #9ca3af; }
 .attendance-cell.empty   { background: #f9fafb; color: #d1d5db; }
 .attendance-cell.kyoje   { outline: 1px dashed #9ca3af; }
@@ -1362,6 +1363,9 @@ body.large-text .map-image {
 .mx-cell.present { background: #d1fae5; color: #059669; }
 .mx-cell.online  { background: #ddd6fe; color: #6d28d9; }
 .mx-cell.absent  { background: #fee2e2; color: #dc2626; }
+/* '과제' 는 두 글자라 한 호 작게. .mx-cell 은 min-width 라 칸은 알아서 늘어난다 */
+.mx-cell.makeup  { background: #fef3c7; color: #b45309; }
+.mx-cell.makeup .mx-status { font-size: calc(10px * var(--font-scale)); }
 .mx-cell.none    { background: #f3f4f6; color: #9ca3af; }
 .mx-cell.empty   { background: #fafafa; color: #d1d5db; }
 .mx-cell.non-class { opacity: 0.75; }

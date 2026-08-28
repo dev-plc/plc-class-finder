@@ -44,7 +44,7 @@
 //     오류도 안 나서 사라진 줄도 몰랐다.
 //   - session(YYYY-MM-DD) 인자를 받는다. 전에는 늘 '가장 최근 지난 강의' 에만 써서
 //     지난 주차를 고쳐도 이번 주에 기록됐다.
-//   - 값을 검증한다 (O X ◎ - 빈칸). 배포 URL 은 공개라 아무 문자열이나 들어갔다.
+//   - 값을 검증한다 (O X ◎ 과제 - 빈칸). 배포 URL 은 공개라 아무 문자열이나 들어갔다.
 //   - 시트에 쓴 뒤 같은 값을 set_attendance_batch 로 DB 에도 민다.
 //     DB 반영이 실패해도 저장은 성공으로 친다 — 원본(시트)에 들어갔고
 //     pushAttendanceToDb 트리거가 다음 차례에 맞춘다.
@@ -173,7 +173,7 @@ var PLC_SUPABASE_URL = "https://wvpqdicsqjozhxtxsnin.supabase.co";
 var PLC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2cHFkaWNzcWpvemh4dHhzbmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2OTA3OTMsImV4cCI6MjEwMDI2Njc5M30.-_vV9lQYoWMZMqEahveSz4fT5psTbF3feKfBZ28qG0w";
 
 // DB(set_attendance_batch)가 받는 값과 같아야 한다.
-var PLC_ALLOWED_STATUS = { "O": 1, "X": 1, "\u25ce": 1, "-": 1, "": 1 };
+var PLC_ALLOWED_STATUS = { "O": 1, "X": 1, "\u25ce": 1, "\uacfc\uc81c": 1, "-": 1, "": 1 };
 
 function plcSbHeaders_() {
   return {

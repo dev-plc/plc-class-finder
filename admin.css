@@ -660,6 +660,7 @@ body.dark-mode .logout-btn:hover {
 
 .att-counts .c-o { color: #059669; }
 .att-counts .c-d { color: #2563eb; }
+.att-counts .c-h { color: #b45309; }
 .att-counts .c-x { color: #dc2626; }
 .att-counts .c-n { color: var(--text-light); }
 .att-counts .c-b { color: #b45309; }
@@ -768,6 +769,7 @@ body.dark-mode .logout-btn:hover {
 .att-state.on { color: #fff; border-color: transparent; }
 .att-state.on.s-o { background: #059669; }
 .att-state.on.s-d { background: #2563eb; }
+.att-state.on.s-h { background: #d97706; }
 .att-state.on.s-x { background: #dc2626; }
 .att-state.on.s-n { background: #6b7280; }
 
@@ -909,12 +911,16 @@ body.dark-mode .input-clear:focus-visible {
     cursor: not-allowed;
     user-select: none;
 }
-.att-locked.s-d { background: #ede9fe; color: #6d28d9; }   /* ◎ */
+.att-locked.s-d { background: #ede9fe; color: #6d28d9; }   /* ◎ 이월 */
+/* '과제' 는 두 글자다. .att-locked 은 min-width 라 알아서 늘어난다 —
+   고정폭인 .att-state(입력 버튼)에는 쓰지 않는다 */
+.att-locked.s-h { background: #fef3c7; color: #b45309; }   /* 과제 대체 */
 .att-locked.s-n { background: #f3f4f6; color: #9ca3af; }   /* − */
 .att-row.locked { opacity: 0.85; }
 
 body.dark-mode .att-locked        { background: #374151; color: #9ca3af; }
 body.dark-mode .att-locked.s-d    { background: #3b2f5e; color: #c4b5fd; }
+body.dark-mode .att-locked.s-h    { background: #3a2c12; color: #fcd34d; }
 
 /* ============================================================================
    출석부 출력 (인쇄용)
@@ -1534,6 +1540,8 @@ body.dark-mode .ab-note { background: #3a2f1a; color: #fbbf24; }
 .md-cell.s-o .md-cell-mark { color: #027a48; }
 .md-cell.s-d { background: #f4f3ff; border-color: #d9d6fe; }
 .md-cell.s-d .md-cell-mark { color: #5925dc; }
+.md-cell.s-h { background: #fffaeb; border-color: #fde68a; }
+.md-cell.s-h .md-cell-mark { color: #b45309; font-size: 13px; }
 .md-cell.s-x { background: #fef3f2; border-color: #fecdca; }
 .md-cell.s-x .md-cell-mark { color: #b42318; }
 .md-cell.s-n .md-cell-mark,

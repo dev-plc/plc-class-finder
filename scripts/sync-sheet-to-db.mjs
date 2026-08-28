@@ -831,11 +831,12 @@ const attRows = attendance
     if (!uuid) return null;
     const st = String(a.status ?? '').trim();
 
-    // 아직 하지 않은 강의에 O/X 가 있을 수는 없다.
+    // 아직 하지 않은 강의에 O/X/과제 가 있을 수는 없다.
     // 지난 기수 결석을 X 로 적어 둔 것이 새 기수로 넘어오면
     // 결석 수가 부풀려지고, 열리지도 않은 강의의 과제를 내라고 안내하게 된다.
-    // ◎(지난 기수 이수)와 -(집계 제외)는 미래 주차에도 정당하므로 통과시킨다.
-    if (a.session_date > todayIso && (st.toUpperCase() === 'O' || st.toUpperCase() === 'X')) {
+    // '과제' 도 마찬가지다 — 열리지도 않은 수업을 과제로 메울 수는 없다.
+    // ◎(지난 기수 이수 이월)와 -(집계 제외)는 미래 주차에도 정당하므로 통과시킨다.
+    if (a.session_date > todayIso && ['O', 'X', '과제'].includes(st.toUpperCase())) {
       futureMarks++;
       if (futureSample.size < 5) futureSample.add(`${a._key.split('|')[0]} ${toMMDD(a.session_date) || a.session_date}=${st}`);
       return { member_id: uuid, session_date: a.session_date, status: '' };

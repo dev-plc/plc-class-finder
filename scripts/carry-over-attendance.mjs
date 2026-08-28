@@ -124,7 +124,11 @@ if (!next.sessions.some(s => s.is_class)) {
 }
 
 // ---------------------------------------------------------------- index
-// 지난 기수에서 "이수한" 주차 = 출석(O) 또는 지난 기수 이수(◎)
+// 지난 기수에서 "이수한" 주차 = 출석(O) 또는 지난 기수 이수 이월(◎)
+//
+// '과제'(과제·소감문으로 메운 결석)는 여기 넣지 않는다. 그건 결석이고,
+// 이수 인정은 v_makeup_detail 을 거쳐야 3회 한도(makeup_limit)가 적용된다.
+// 여기 넣으면 한도를 우회해 4회, 5회를 낸 사람까지 통째로 이수로 친다.
 const PASSED = new Set(['O', '◎']);
 
 const prevDateToLabel = new Map(
@@ -152,6 +156,27 @@ for (const d of prevMakeup) {
   makeupLabels.add(`${d.member_id}|${d.session_label}`);
 }
 console.log(`   ${FROM} 과제 보충 인정: ${prevMakeup.length}건 (출석과 같이 이수로 친다)\n`);
+
+// v_makeup_detail 이 옛 정의('X' 만)인지 여기서 잡는다.
+//
+// 지난 기수에 '과제' 로 적힌 칸이 있는데 보충 인정이 0건이면,
+// supabase/views.sql 의 is_absent() 반영이 안 된 것이다.
+// 그대로 진행하면 그 사람들의 이수분이 통째로 누락되는데 오류는 나지 않는다 —
+// 로그에는 '이미 기록 있음'(alreadyFilled)만 늘어난다.
+// 이월은 dry-run 이 기본이라 사람이 결과를 보는 자리다. 여기서 멈추면 놓칠 수 없다.
+{
+  const marked = prev.attendance
+    .filter(a => prevDateToLabel.has(a.session_date))
+    .filter(a => String(a.status ?? '').trim().toUpperCase() === '과제').length;
+  if (marked > 0 && prevMakeup.length === 0) {
+    console.error(`❌ ${FROM} 에 '과제' 로 적힌 칸이 ${marked}개인데 보충 인정이 0건입니다.`);
+    console.error('');
+    console.error("   supabase/views.sql 의 v_makeup_detail 이 아직 결석을 'X' 로만 봅니다.");
+    console.error('   is_absent() 를 쓰도록 고친 views.sql 을 Supabase 에서 재실행한 뒤 다시 돌리세요.');
+    console.error('   그대로 진행하면 그 주차들이 새 기수로 이월되지 않습니다 (오류 없이).');
+    process.exit(1);
+  }
+}
 
 // 같은 사람이 지난 기수에 두 번 등장할 수 있다(재등록). 이수 주차를 합친다.
 const prevPassedByKey = new Map();

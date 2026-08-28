@@ -18,10 +18,10 @@ import {
     getRemainingClassSessions,
     ONTRACK_WITHIN,
     subscribe,
-} from './scripts/members-data.js?v=103';
-import { matches as hangulMatches } from './scripts/hangul.js?v=103';
-import { registerServiceWorker } from './scripts/sw-update.js?v=103';
-import { sbPostGas } from './scripts/supabase-config.js?v=103';
+} from './scripts/members-data.js?v=104';
+import { matches as hangulMatches } from './scripts/hangul.js?v=104';
+import { registerServiceWorker } from './scripts/sw-update.js?v=104';
+import { sbPostGas } from './scripts/supabase-config.js?v=104';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -375,8 +375,9 @@ const ATT_STATES = [
 // 보기 전용. 이 값이 들어 있는 줄은 아예 손댈 수 없게 한다.
 // 고쳐야 하면 시트에서 고친다 (출결의 원본은 시트다).
 const ATT_LOCKED = {
-    '◎': { label: '◎', title: '출석 인정 — 지난 기수 이수 또는 과제·소감문 대체. 시트에서만 고칩니다' },
-    '-': { label: '−', title: '집계 제외 — 시트에서만 고칩니다' },
+    '◎':   { label: '◎',   title: '지난 기수 이수 이월 — 시트에서만 고칩니다' },
+    '과제': { label: '과제', title: '결석했지만 과제·소감문으로 메움 — 시트에서만 고칩니다' },
+    '-':   { label: '−',   title: '집계 제외 — 시트에서만 고칩니다' },
 };
 
 function isLocked(v) {
@@ -557,7 +558,7 @@ function renderAttList() {
 }
 
 function stateClass(v) {
-    return { 'O': 'o', '◎': 'd', 'X': 'x', '-': 'n' }[v] || 'n';
+    return { 'O': 'o', '◎': 'd', '과제': 'h', 'X': 'x', '-': 'n' }[v] || 'n';
 }
 
 function escapeHtml(s) {
@@ -566,13 +567,14 @@ function escapeHtml(s) {
 }
 
 function updateAttSummary() {
-    const counts = { 'O': 0, '◎': 0, 'X': 0, '-': 0, '': 0 };
+    const counts = { 'O': 0, '◎': 0, '과제': 0, 'X': 0, '-': 0, '': 0 };
     for (const v of attDraft.values()) counts[v] = (counts[v] ?? 0) + 1;
 
     if (attCounts) {
         attCounts.innerHTML =
             `<span class="c-o">출석 ${counts['O']}</span>` +
-            `<span class="c-d">대체 ${counts['◎']}</span>` +
+            `<span class="c-d">이월 ${counts['◎']}</span>` +
+            `<span class="c-h">과제 ${counts['과제']}</span>` +
             `<span class="c-x">결석 ${counts['X']}</span>` +
             `<span class="c-n">제외 ${counts['-']}</span>` +
             `<span class="c-b">미기록 ${counts['']}</span>`;
@@ -767,6 +769,7 @@ const mdBody      = document.getElementById('mdBody');
 const MD_MARK = {
     'O': { cls: 'o', txt: 'O' },
     '◎': { cls: 'd', txt: '◎' },
+    '과제': { cls: 'h', txt: '과제' },
     'X': { cls: 'x', txt: 'X' },
     '-': { cls: 'n', txt: '−' },
     '':  { cls: 'b', txt: '·' },
@@ -838,7 +841,7 @@ function openMemberDetail(member) {
     // '아직 안 한 수업' 이라고 예정으로 묶어 버리면 신규 등록자와 구분이 안 된다.
     // ◎ 는 예측이 아니라 이미 지난 기수에서 들었다는 사실이므로 그대로 센다.
     // O·X·미기록은 지난 주차에서만 센다 — 그건 아직 일어나지 않은 일이다.
-    const counts = { O: 0, '◎': 0, X: 0, '-': 0, '': 0 };
+    const counts = { O: 0, '◎': 0, '과제': 0, X: 0, '-': 0, '': 0 };
     let soon = 0;
 
     const cells = done.map(sx => {
@@ -869,7 +872,8 @@ function openMemberDetail(member) {
     const bits = [`진행 ${done.length}회차`];
     if (counts.O)     bits.push(`출석 ${counts.O}`);
     if (counts.X)     bits.push(`결석 ${counts.X}`);
-    if (counts['◎'])  bits.push(`인정 ${counts['◎']}`);
+    if (counts['과제']) bits.push(`과제 대체 ${counts['과제']}`);
+    if (counts['◎'])  bits.push(`이월 ${counts['◎']}`);
     if (counts[''])   bits.push(`미기록 ${counts['']}`);
     if (counts['-'])  bits.push(`수업없음 ${counts['-']}`);
     if (soon)         bits.push(`예정 ${soon}`);
@@ -877,9 +881,9 @@ function openMemberDetail(member) {
 
     // ◎ 가 많은 사람은 그리드만 봐서는 티가 안 난다. 제목 옆에 한 번 짚어 준다.
     //
-    // ◎ 는 두 가지다 — 지난 기수에 이수했거나, 결석했지만 과제·소감문을 내서
-    // 대체 인정받았거나. 시트에는 둘 다 같은 ◎ 로 들어와 여기서는 구분할 수 없다.
-    // 그래서 '지난 기수 이수' 라고 단정하지 않고 '인정 출석' 이라고만 적는다.
+    // ◎ 는 이제 지난 기수 이수 이월만 뜻한다 — 과제·소감문 대체는 '과제' 로 따로 적는다.
+    // 다만 값을 나누기 전에 찍힌 ◎ 중에는 대체분이 섞여 있을 수 있어,
+    // 옮기기가 끝날 때까지는 '인정 출석' 이라고만 적는다.
     const credited = counts['◎'];
 
     // ── 김밥 : 신청한 주차만, 최근부터
@@ -1614,12 +1618,19 @@ function abRows() {
                 .map(h => prNormalizeSession(h.session)).filter(Boolean));
 
         // 한 주차의 상태: 'absent' 순수 결석 · 'makeup' 대체됨 · '' 그 외
+        //
+        // '과제' 도 X 와 같이 결석이다. 인정 여부를 정하는 것은 적힌 글자가 아니라
+        // 과제 제출 기록이다 (views.sql 의 is_absent 와 같은 규칙).
+        //
+        // ◎ 는 지난 기수 이수 이월이라 결석이 아니다. 다만 값을 나누기 전에
+        // 대체분을 ◎ 로 적어 둔 것이 남아 있어, 옮기기가 끝날 때까지는
+        // 제출 기록이 있는 ◎ 도 대체로 세어 준다.
         const missedKind = (s) => {
             const key = getSessionKey(s.session_date);
             const v = normStatus(key ? m[key] : '');
             const paid = hwKeys.has(prNormalizeSession(s.label_norm || ''));
-            if (v === 'X') return paid ? 'makeup' : 'absent';
-            if (v === '◎') return paid ? 'makeup' : '';   // 과제가 없으면 지난 기수 이수분
+            if (v === 'X' || v === '과제') return paid ? 'makeup' : 'absent';
+            if (v === '◎') return paid ? 'makeup' : '';   // 옛 데이터 대비
             return '';
         };
 

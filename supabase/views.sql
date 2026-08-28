@@ -3,13 +3,14 @@
 --
 -- 규칙 (2026-07-28 확정):
 --   분모: 실제 강의 16강 = 교리1~12 + 성경적대화1~4 (교제·나눔 제외)
---   출석 인정: O(현장) / ◎(지난 기수 이수분 · 과제·소감문 대체 인정)
---   보충: 결석(X)·미기록 주차에 과제·소감문 제출 시 출석 인정, 최대 3회
+--   출석 인정: O(현장) / ◎(지난 기수 이수 이월)
+--   보충: 결석(X·과제) 주차에 과제·소감문 제출 시 출석 인정, 최대 3회
+--         '과제' 는 사람이 읽으라고 붙이는 라벨이고, 인정 근거는 제출 기록이다
 --         인정 건수는 makeup_used, 상세는 v_makeup_detail 에서 확인
 --   수료: 인정 출석 = 16
 --   보충 3회 초과: 원칙 미수료, 참작 사유 있으면 관리자 재량 → '관리자확인'
 --   '-' 는 사유(하차·중도합류·휴강)를 구분하지 않고 집계에서 제외한다.
---   결국 출석으로 인정되지 않으면 수료가 아니므로, 출석(O/◎)과 결석(X)만 센다.
+--   결국 출석으로 인정되지 않으면 수료가 아니므로, 출석(O/◎)과 결석(X·과제)만 센다.
 --   빈칸(미기록)도 결석으로 치지 않는다 — 아직 기록되지 않았을 뿐이다.
 
 -- ===================================================================
@@ -36,6 +37,23 @@ returns int language sql immutable as $$ select 16 $$;
 
 create or replace function makeup_limit()
 returns int language sql immutable as $$ select 3 $$;
+
+-- 결석으로 세는 값.
+--
+-- '과제' 는 '결석했지만 과제·소감문으로 메웠다' 는 뜻이라 결석 쪽이다.
+-- present 로 옮기면 makeup_limit() 을 안 거쳐 3회 한도가 우회된다 —
+-- 시트에서 ◎ 로 바꿔 적던 시절에 실제로 그랬다.
+--
+-- 인정 여부를 정하는 것은 이 값이 아니라 homework_submissions 다.
+-- '과제' 라고 적혀 있어도 제출 기록이 없으면 그냥 결석이다.
+--
+-- 세 곳(v_attendance_summary · v_homework_required · v_makeup_detail)이
+-- 같은 판정을 쓰므로 함수로 모은다. 손으로 세 곳을 맞추면 언젠가 하나를
+-- 빠뜨리고, 그 실패는 다음 기수 이월 때가 되어서야 조용히 드러난다.
+create or replace function is_absent(s text)
+returns boolean language sql immutable as $$
+  select upper(btrim(coalesce(s, ''))) in ('X', '과제')
+$$;
 
 -- ===================================================================
 -- 1. 인원별 출석 집계
@@ -66,9 +84,9 @@ scored as (
     att.*,
     -- 출석 인정 (현장 O / ◎ = 지난 기수 이수 또는 과제·소감문 대체)
     (raw_status in ('O', '◎'))                          as present,
-    -- 결석은 X 만. 빈칸은 아직 기록되지 않은 것이라 unrecorded_count 로 따로 센다
+    -- 결석 (X · 과제). 빈칸은 아직 기록되지 않은 것이라 unrecorded_count 로 따로 센다
     -- ('-' 는 어느 쪽도 아님 → 무시)
-    (raw_status = 'X')                                  as absent,
+    is_absent(raw_status)                               as absent,
     -- '-' : 하차·중도합류·휴강 등 사유를 구분하지 않고 집계에서 제외
     (raw_status = '-')                                  as skipped,
     -- 해당 주차 과제 제출 여부
@@ -148,8 +166,9 @@ left join homework_submissions h
 where
   -- 이미 지난 세션만
   s.session_date <= current_date
-  -- 결석(X)한 주차만. '-'와 빈칸은 안내 대상이 아니다.
-  and upper(trim(coalesce(a.status, ''))) = 'X'
+  -- 결석한 주차만 ('-'와 빈칸은 안내 대상이 아니다).
+  -- '과제' 라고 적혔는데 제출 기록이 없으면 아래 h.id is null 로 걸려 안내된다.
+  and is_absent(a.status)
   -- 아직 제출 안 한 건만
   and h.id is null
   and m.status = 'active';
@@ -270,7 +289,7 @@ with base as (
     on a.member_id = m.id and a.session_date = s.session_date
   join homework_submissions h
     on h.member_id = m.id and h.session_label = s.label_norm
-  where upper(trim(coalesce(a.status, ''))) = 'X'
+  where is_absent(a.status)
   order by m.id, s.session_date, h.submitted_at nulls last
 ),
 ranked as (

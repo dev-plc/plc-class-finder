@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=103';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=103';
+import { matches as hangulMatches } from './hangul.js?v=104';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=104';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -149,7 +149,9 @@ function buildMemberRow(m, sessions, attByMember) {
     if (!key) continue;
     const v = att.get(s.session_date) ?? '';
     row[key] = v;
-    if (s.is_class && String(v).trim().toUpperCase() === 'X') absentCount++;
+    // 결석은 X 와 과제 둘 다다 (supabase/views.sql 의 is_absent 와 같은 규칙).
+    // '과제' 는 결석했지만 과제·소감문으로 메운 주차 — 안 나온 것은 같다.
+    if (s.is_class && ['X', '과제'].includes(String(v).trim().toUpperCase())) absentCount++;
   }
   row['결석횟수'] = String(absentCount);
 

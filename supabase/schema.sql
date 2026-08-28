@@ -60,7 +60,7 @@ create table members (
 create table attendance (
   member_id     uuid references members(id) on delete cascade,
   session_date  date,
-  status        text,                      -- O/X/-/◎/빈값
+  status        text,                      -- O/X/-/◎/과제/빈값
   updated_at    timestamptz default now(),
   primary key (member_id, session_date)
 );

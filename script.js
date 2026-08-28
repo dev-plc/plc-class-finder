@@ -25,8 +25,8 @@ import {
     getCohortId,
     subscribe,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=103';
-import { registerServiceWorker } from './scripts/sw-update.js?v=103';
+} from './scripts/members-data.js?v=104';
+import { registerServiceWorker } from './scripts/sw-update.js?v=104';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -469,7 +469,8 @@ function extractSessions(member) {
 function classifyStatus(raw, isFuture = false) {
     const s = String(raw ?? '').trim().toUpperCase();
     if (s === 'O') return { cls: 'present', label: 'O', title: '출석' };
-    if (s === '◎') return { cls: 'online',  label: '◎', title: '온라인/대체' };
+    if (s === '◎') return { cls: 'online',  label: '◎', title: '지난 기수 이수 이월' };
+    if (s === '과제') return { cls: 'makeup', label: '과제', title: '결석 — 과제·소감문으로 메움' };
     if (s === 'X') return { cls: 'absent',  label: 'X', title: '결석' };
     if (s === '-') return { cls: 'none',    label: '−', title: '수업 없음 (집계 제외)' };
     if (isFuture)  return { cls: 'future',  label: '',  title: '아직 하지 않은 수업' };
@@ -636,7 +637,7 @@ function renderStatusDetail(member) {
 
     const grid = document.getElementById('attendanceGrid');
     const summary = document.getElementById('attendanceSummary');
-    let classAttended = 0, classAbsent = 0, classOnline = 0;
+    let classAttended = 0, classAbsent = 0, classOnline = 0, classMakeup = 0;
     let kimbapAppliedCount = 0, homeworkSubmittedCount = 0;
 
     // 통합 그리드 렌더
@@ -648,6 +649,9 @@ function renderStatusDetail(member) {
             if (isClass) {
                 if (s.cls === 'present') classAttended++;
                 else if (s.cls === 'online') { classAttended++; classOnline++; }
+                // '과제' 는 결석이다. 인정 여부는 제출 기록이 정하므로 여기서 단정하지 않고
+                // '결석 · 과제로 대체 N' 으로 나눠 적는다 (views.sql 의 is_absent 와 같은 취급).
+                else if (s.cls === 'makeup') { classAbsent++; classMakeup++; }
                 else if (s.cls === 'absent' || s.cls === 'empty') classAbsent++;
             }
 
@@ -695,7 +699,8 @@ function renderStatusDetail(member) {
             총 <strong>${classTotal}</strong>강 ·
             <strong style="color:#059669">출석 ${classAttended}</strong> ·
             <strong style="color:#dc2626">결석 ${absenceFromData}</strong>
-            ${classOnline ? ` · <strong style="color:#6d28d9">대체 ${classOnline}</strong>` : ''}
+            ${classMakeup ? ` · <strong style="color:#b45309">과제로 대체 ${classMakeup}</strong>` : ''}
+            ${classOnline ? ` · <strong style="color:#6d28d9">이월 ${classOnline}</strong>` : ''}
             ${kimbapAppliedCount ? ` · <strong style="color:#d97706">🍙 ${kimbapAppliedCount}회 신청</strong>` : ''}
             ${homeworkSubmittedCount ? ` · <strong style="color:#2563eb">📝 ${homeworkSubmittedCount}건 제출</strong>` : ''}
         `;
@@ -947,12 +952,14 @@ function renderTeamMembers(members, teamName, role) {
         const attendanceRaw = attendanceOf(m, sessionKey);
         const isChecked = (attendanceRaw === 'O' || attendanceRaw === '◎') ? 'checked' : '';
 
-        // ◎(출석 인정)·−(집계 제외)는 튜터가 정하는 값이 아니다.
-        // ◎ 는 이월 스크립트가 지난 기수 기록에서 뽑고, − 는 수업이 없는 주차다.
+        // ◎(이월)·과제(대체)·−(집계 제외)는 튜터가 정하는 값이 아니다.
+        // ◎ 는 이월 스크립트가 지난 기수 기록에서 뽑고, 과제 는 제출 기록이 근거이며,
+        // − 는 수업이 없는 주차다. 셋 다 시트에서만 고친다.
         // 체크를 풀 수 있게 두면 이수자가 결석으로 저장된다 — 실제로 그렇게 사고가 났다.
         // 보여만 주고 잠근다. 고쳐야 하면 시트에서 고친다.
-        const locked = (attendanceRaw === '◎' || attendanceRaw === '-');
-        const mark = attendanceRaw === '◎' ? ' <span title="출석 인정 — 지난 기수 이수 또는 과제·소감문 대체. 시트에서만 고칩니다" style="color:#7c3aed;">◎</span>'
+        const locked = (attendanceRaw === '◎' || attendanceRaw === '과제' || attendanceRaw === '-');
+        const mark = attendanceRaw === '과제' ? ' <span title="결석 — 과제·소감문으로 메움. 시트에서만 고칩니다" style="color:#b45309;">과제</span>'
+            : attendanceRaw === '◎' ? ' <span title="지난 기수 이수 이월. 시트에서만 고칩니다" style="color:#7c3aed;">◎</span>'
                    : attendanceRaw === '-' ? ' <span title="집계 제외 — 시트에서만 고칩니다" style="color:#888;">−</span>' : '';
 
         return `
@@ -1381,7 +1388,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=103';
+                window.location.href = 'admin.html?v=104';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
