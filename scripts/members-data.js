@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=104';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=104';
+import { matches as hangulMatches } from './hangul.js?v=105';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=105';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -195,7 +195,13 @@ async function fetchFromServer(cohortId) {
          progress, needHomework] =
     await Promise.all([
       // 행 수가 늘어나는 것은 전부 나눠 받는다 (아래 order 는 페이징에 필수)
-      sbSelectAll(`members?select=*&cohort_id=eq.${enc}&status=eq.active&order=team,team_no,id`),
+      //
+      // sheet_row 가 앞에 오는 것이 조 순서를 정한다. 시트에 적힌 그대로 따라간다 —
+      // 이름으로 짐작하면 새 조가 생길 때마다 어긋난다 ('V3' 가 한글보다 앞서 맨 앞에 왔다).
+      // nullslast: 동기화가 아직 안 돌아 sheet_row 가 비어 있으면 뒤의 team,team_no 로
+      // 떨어져 예전과 똑같이 동작한다. 배포와 데이터 갱신 사이에 깨지는 구간이 없다.
+      sbSelectAll(`members?select=*&cohort_id=eq.${enc}&status=eq.active` +
+                  `&order=sheet_row.asc.nullslast,team.asc,team_no.asc,id.asc`),
       sbSelectAll(`sessions?select=*&cohort_id=eq.${enc}&order=session_date`),
       sbSelectAll(`attendance?select=member_id,session_date,status,members!inner(cohort_id)` +
                   `&members.cohort_id=eq.${enc}&order=member_id,session_date`),

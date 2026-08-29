@@ -482,7 +482,7 @@ const members = [];
 const attendance = [];   // member key 기준, uuid는 이관 후 매핑
 const seen = new Set();
 
-for (const r of rows) {
+for (const [sheetRow, r] of rows.entries()) {
   const name  = trim(r.name);
   const phone = trim(r.phone);
   if (!name) continue;
@@ -501,6 +501,9 @@ for (const r of rows) {
     full_phone: trim(r['연락처']),
     team: trim(r.team),
     team_no: toInt(r['no.']),
+    // GAS 는 시트를 위에서 아래로 읽어 주므로 이 인덱스가 곧 시트 행 순서다.
+    // 조 목록과 명단이 이 값으로 정렬된다 — 이름으로 짐작하지 않는다.
+    sheet_row: sheetRow,
     location: trim(r.location),
     role: trim(r.role),
     gender: trim(r.gen),

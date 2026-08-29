@@ -18,10 +18,10 @@ import {
     getRemainingClassSessions,
     ONTRACK_WITHIN,
     subscribe,
-} from './scripts/members-data.js?v=104';
-import { matches as hangulMatches } from './scripts/hangul.js?v=104';
-import { registerServiceWorker } from './scripts/sw-update.js?v=104';
-import { sbPostGas } from './scripts/supabase-config.js?v=104';
+} from './scripts/members-data.js?v=105';
+import { matches as hangulMatches } from './scripts/hangul.js?v=105';
+import { registerServiceWorker } from './scripts/sw-update.js?v=105';
+import { sbPostGas } from './scripts/supabase-config.js?v=105';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -212,19 +212,13 @@ function renderTeamsView(filterText = '') {
         teamGroups[member.team].members.push(member);
     });
 
-    const sortedTeams = Object.values(teamGroups).sort((a, b) => {
-        const getPrefix = (name) => name.match(/[가-힣]+/)?.[0] || '';
-        const getNumber = (name) => parseInt(name.match(/\d+/)?.[0] || '0');
-        const prefixA = getPrefix(a.name);
-        const prefixB = getPrefix(b.name);
-        const numA = getNumber(a.name);
-        const numB = getNumber(b.name);
-        if (prefixA !== prefixB) {
-            const order = ['새', '남', '여', 'DG', 'M', 'W'];
-            return order.indexOf(prefixA) - order.indexOf(prefixB);
-        }
-        return numA - numB;
-    });
+    // 정렬하지 않는다. getMembers() 가 시트 행 순서(sheet_row)로 와 있으므로
+    // 조가 처음 나온 순서가 곧 시트의 조 순서다 — 다른 화면과 같은 순서가 된다.
+    //
+    // 한때 접두 표(['새','남','여','DG','M','W'])로 세웠는데, 표에 없는 이름이 오면
+    // indexOf 가 -1 이라 맨 앞으로 튀었다. 'V3' 조를 만들자 그렇게 됐다.
+    // 이름을 보고 짐작하는 방식은 새 조가 생길 때마다 고쳐야 한다.
+    const sortedTeams = Object.values(teamGroups);
 
     allTeams = sortedTeams;
 

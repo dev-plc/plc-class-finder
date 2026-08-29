@@ -1230,7 +1230,16 @@ body.dark-mode .pr-hint { background: #3a2f1a; border-color: #78350f; color: #fb
        화면에는 없던 빈 종이가 맨 뒤에 한 장 붙는다.
        조를 몇 개 빼서 인쇄할 때만 나타나서 원인을 찾기 어려웠다 —
        마지막에 오는 장이 짧은 조냐 긴 조냐에 따라 갈렸다. */
-    body.printing { background: #fff; margin: 0; padding: 0; }
+    /* style.css 의 body 는 display:flex + align-items:center 다 (조회 화면을 화면
+       가운데 두려고). 인쇄에서 그걸 안 풀면 한 장짜리가 종이 세로 가운데로 뜬다 —
+       아래 .pr-page 의 min-height:273mm 도 0 으로 풀리므로 조원이 적은 조는 내용이
+       짧아지고, 그 짧은 덩어리가 가운데 정렬된다. 두 장 이상이면 총 높이가 한 장을
+       넘어 위부터 차므로 증상이 안 보여 찾기 어려웠다.
+       min-height:100vh 도 같이 푼다 — 빈 종이가 붙을 여지를 남기지 않는다. */
+    body.printing {
+        background: #fff; margin: 0; padding: 0;
+        display: block; min-height: 0;
+    }
     body.printing .admin-container {
         padding: 0; margin: 0; max-width: none; width: auto; min-height: 0;
     }

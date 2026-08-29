@@ -41,6 +41,12 @@ create table members (
   full_phone    text,                      -- 연락처 원본 010-XXXX-XXXX
   team          text,
   team_no       int,                       -- 조 내 순번
+  -- 시트 출석부 탭의 행 순서. 조 목록·명단 정렬의 근거다.
+  --
+  -- 이름으로 순서를 짐작하면 새 조가 생길 때마다 어긋난다. 'V3' 조를 만들었더니
+  -- 라틴 문자가 한글보다 앞서(‘V3’ < ‘새A’) 맨 앞에 나온 적이 있다.
+  -- 시트에 적힌 순서를 그대로 옮겨 두면 새 조를 아래에 붙이는 것만으로 끝난다.
+  sheet_row     int,
   location      text,
   role          text,                      -- 튜터/서브튜터/바나바/null
   gender        text,                      -- 남/여
