@@ -1615,3 +1615,32 @@ body.dark-mode .md-close { background: #374151; color: #d1d5db; }
     .md-inner { max-height: 92vh; }
     .md-head h2 { font-size: 15px; }
 }
+
+/* ============================================================================
+   추가 UI/UX 개선 (2026-09-02)
+   ============================================================================ */
+.mx-extra-btn {
+    padding: 5px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--midnight-blue, #E8DCC8);
+    color: var(--white, #1A1F3A);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    cursor: pointer;
+}
+.mx-extra-btn:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.info-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+}
+.action-btn {
+    flex-shrink: 0;
+}

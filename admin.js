@@ -237,6 +237,22 @@ function renderTeamsView(filterText = '') {
 
     filteredTeams.forEach(team => {
         const kimbapCount = team.members.filter(m => (m.lunch || '').toUpperCase() === 'O').length;
+        
+        let representativePastor = '';
+        const leader = team.members.find(m => m.role && m.role.includes('조장'));
+        if (leader && leader.pastor) {
+            representativePastor = leader.pastor;
+        } else {
+            const pastors = team.members.map(m => m.pastor).filter(Boolean);
+            if (pastors.length > 0) {
+                const counts = pastors.reduce((acc, val) => {
+                    acc[val] = (acc[val] || 0) + 1;
+                    return acc;
+                }, {});
+                representativePastor = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+            }
+        }
+
         const card = document.createElement('div');
         card.className = 'team-card';
         card.innerHTML = `
@@ -244,9 +260,24 @@ function renderTeamsView(filterText = '') {
                 <div class="team-card-name">${team.name}</div>
                 <div class="team-card-count">${team.members.length}명</div>
             </div>
-            <div class="team-card-location">${team.location}</div>
-            <div class="team-card-kimbap">🍱 김밥 ${kimbapCount}개 (${team.members.length}명 중)</div>
+            <div class="team-card-location" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>${team.location}</span>
+                <span style="opacity: 0.85;">${representativePastor}</span>
+            </div>
+            <div class="team-card-kimbap" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <span class="info-text">🍱 김밥 ${kimbapCount}개 (${team.members.length}명 중)</span>
+                <button class="mx-extra-btn action-btn btn-roster">명단 보기</button>
+            </div>
         `;
+        
+        const rosterBtn = card.querySelector('.btn-roster');
+        if (rosterBtn) {
+            rosterBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showTeamMembers(team);
+            });
+        }
+        
         card.addEventListener('click', () => showTeamMembers(team));
         teamsGrid.appendChild(card);
     });

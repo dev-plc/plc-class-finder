@@ -1265,7 +1265,7 @@ body.large-text .map-image {
     background: var(--white, #fff);
     border-radius: 12px;
     width: 100%;
-    max-width: 1200px;
+    max-width: 95vw;
     max-height: 92vh;
     display: flex;
     flex-direction: column;
