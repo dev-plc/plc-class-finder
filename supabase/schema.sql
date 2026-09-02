@@ -22,6 +22,15 @@ create table cohorts (
   started_at   date,                       -- 첫 세션 날짜
   is_active    boolean default false,      -- 웹앱은 이 값이 true인 기수만 노출
   archived_at  timestamptz,
+  -- 마지막으로 동기화가 '끝난' 시각.
+  --
+  -- 관리자 화면의 ⟳ 는 GitHub Actions 실행을 요청만 하고 바로 돌아온다.
+  -- 워크플로가 끝난 때를 알 방법이 없어 사람이 기다렸다 새로고침을 눌러야 했다.
+  -- 이 값이 앞서면 끝난 것이다 — 화면이 그걸 보고 스스로 다시 그린다.
+  --
+  -- 반드시 모든 upsert 가 끝난 뒤에 쓴다. cohorts upsert 자리에 쓰면
+  -- 명단·출석·과제가 들어오기 전에 '끝났다' 고 알리게 된다.
+  synced_at    timestamptz,
   created_at   timestamptz default now()
 );
 

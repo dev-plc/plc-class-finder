@@ -16,11 +16,6 @@ on:
         description: '과제 기준일 YYYY-MM-DD (비우면 지난 기수 마지막 강의). 이 날짜 뒤 제출만 이 기수 것으로 본다'
         required: false
         default: ''
-      include_undated_homework:
-        description: '제출 시각 없는 과제도 반영 (오프라인 제출에 날짜를 적기 시작하면 불필요)'
-        type: boolean
-        required: false
-        default: false
       import_attendance:
         description: '시트 출석으로 DB 통째로 덮어쓰기 — 평소엔 불필요(10분 트리거가 대신함). 아직 하지 않은 강의의 O/X 는 빈칸으로 들어갑니다'
         type: boolean
@@ -75,9 +70,6 @@ jobs:
           fi
           if [ "${{ github.event.inputs.activate }}" = "true" ]; then
             FLAGS="$FLAGS --activate"
-          fi
-          if [ "${{ github.event.inputs.include_undated_homework }}" = "true" ]; then
-            FLAGS="$FLAGS --include-undated-homework"
           fi
           if [ "${{ github.event.inputs.import_attendance }}" = "true" ]; then
             FLAGS="$FLAGS --import-attendance"

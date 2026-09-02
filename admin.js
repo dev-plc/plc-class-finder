@@ -18,10 +18,10 @@ import {
     getRemainingClassSessions,
     ONTRACK_WITHIN,
     subscribe,
-} from './scripts/members-data.js?v=105';
-import { matches as hangulMatches } from './scripts/hangul.js?v=105';
-import { registerServiceWorker } from './scripts/sw-update.js?v=105';
-import { sbPostGas } from './scripts/supabase-config.js?v=105';
+} from './scripts/members-data.js?v=106';
+import { matches as hangulMatches } from './scripts/hangul.js?v=106';
+import { registerServiceWorker } from './scripts/sw-update.js?v=106';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=106';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -83,6 +83,9 @@ async function loadData() {
         try { initPrintTab(); } catch (e) { console.error(e); }
         try { initAbsenceTab(); } catch (e) { console.error(e); }
         try { initCompletionTab(); } catch (e) { console.error(e); }
+        // 마지막으로 동기화가 끝난 시각. 8/21 정오 크론이 조용히 죽어 하루를
+        // 잃었을 때 가장 아쉬웠던 정보다 — 화면만 보고 '언제 것인지' 를 안다.
+        showLastSynced();
     }
 }
 
@@ -2200,6 +2203,101 @@ function setSyncInfo(text, kind) {
     syncInfo.className = 'sync-info' + (kind ? ' ' + kind : '');
 }
 
+// 동기화가 끝났는지 지켜본다.
+//
+// GAS 는 워크플로 실행을 '요청' 만 하고 바로 돌아온다. 끝난 때를 알 방법이 없어
+// 사람이 23~46초를 기다렸다가 [화면 새로 고침] 을 한 번 더 눌러야 했다.
+// 동기화가 마지막에 cohorts.synced_at 을 남기므로, 그 값이 앞서면 끝난 것이다.
+const SYNC_POLL_MS  = 5000;     // 조회 한 줄이라 가볍다
+const SYNC_WAIT_MS  = 180000;   // 3분. 보통 1분 안에 끝난다
+const SYNC_BLIND_MS = 60000;    // synced_at 이 아직 없을 때 그냥 기다리는 시간
+
+let syncPollTimer = null;
+
+function stopSyncPoll() {
+    if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
+    if (syncBtn) syncBtn.disabled = false;
+}
+// 탭을 닫거나 다른 화면으로 가면 타이머를 남기지 않는다
+window.addEventListener('pagehide', stopSyncPoll);
+
+// '3분 전' · '2시간 전' · '어제' 처럼. 정확한 시각보다 얼마나 묵었는지가 중요하다.
+function agoText(iso) {
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return '';
+    const min = Math.floor((Date.now() - t) / 60000);
+    if (min < 1)  return '방금';
+    if (min < 60) return `${min}분 전`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24)  return `${hr}시간 전`;
+    return `${Math.floor(hr / 24)}일 전`;
+}
+
+async function showLastSynced() {
+    const at = await readSyncedAt();
+    if (!at) return;                 // 아직 칸이 없거나 한 번도 안 돌았다 — 기본 문구를 둔다
+    // 하루가 넘었으면 크론이 죽었을 수 있다. 눈에 걸리게 한다.
+    const stale = Date.now() - Date.parse(at) > 26 * 60 * 60 * 1000;
+    setSyncInfo(`마지막 동기화: ${agoText(at)}` +
+        (stale ? ' — 하루가 넘었습니다. 일 1회 동기화를 확인해 주세요.' : '') +
+        ' · 시트를 방금 고치셨다면 ⟳ 를 눌러 주세요.', stale ? 'fail' : '');
+}
+
+async function readSyncedAt() {
+    const id = getCohortId();
+    if (!id) return null;
+    try {
+        const rows = await sbSelect(
+            `cohorts?select=synced_at&id=eq.${encodeURIComponent(id)}&limit=1`);
+        return rows?.[0]?.synced_at ?? null;
+    } catch {
+        return null;   // 조회가 잠깐 실패해도 폴링은 계속한다
+    }
+}
+
+// 새로 그리고 안내한다. refresh() 가 'refresh' 이벤트를 쏘면 화면이 알아서 따라온다.
+async function syncDone(msg) {
+    stopSyncPoll();
+    try {
+        await refresh();
+        setSyncInfo(msg, 'ok');
+    } catch (err) {
+        setSyncInfo('가져오기는 끝났는데 화면 갱신에 실패했습니다: '
+            + (err?.message || '알 수 없는 오류') + ' — [화면 새로 고침] 을 눌러 주세요.', 'fail');
+    }
+}
+
+function watchSync(before) {
+    const started = Date.now();
+
+    // synced_at 이 아직 없다 = supabase/add_synced_at.sql 을 아직 안 돌렸다.
+    // 끝난 때를 알 수 없으므로 넉넉히 기다렸다 한 번 새로 그린다.
+    if (before === null) {
+        setSyncInfo('요청했습니다. 1분 뒤 화면을 새로 고칩니다…', 'ok');
+        syncPollTimer = setTimeout(
+            () => syncDone('새로 그렸습니다. (동기화가 그 사이 끝났는지는 확인하지 못했습니다)'),
+            SYNC_BLIND_MS);
+        return;
+    }
+
+    const tick = async () => {
+        if (Date.now() - started > SYNC_WAIT_MS) {
+            stopSyncPoll();
+            setSyncInfo('아직 끝나지 않았습니다. 잠시 뒤 [화면 새로 고침] 을 눌러 주세요.', 'fail');
+            return;
+        }
+        const now = await readSyncedAt();
+        if (now && now !== before) {
+            await syncDone('가져오기가 끝나 화면을 새로 그렸습니다.');
+            return;
+        }
+        const sec = Math.round((Date.now() - started) / 1000);
+        setSyncInfo(`가져오는 중입니다… (${sec}초) 끝나면 저절로 새로 그립니다.`, 'ok');
+        syncPollTimer = setTimeout(tick, SYNC_POLL_MS);
+    };
+    syncPollTimer = setTimeout(tick, SYNC_POLL_MS);
+}
+
 syncBtn?.addEventListener('click', async () => {
     if (syncBtn.disabled) return;
     const prev = syncBtn.textContent;
@@ -2207,16 +2305,18 @@ syncBtn?.addEventListener('click', async () => {
     syncBtn.textContent = '요청 중…';
     setSyncInfo('요청하는 중입니다…');
 
+    // 누르기 전 값을 먼저 잡아 둔다. 이 값이 바뀌면 끝난 것이다.
+    const before = await readSyncedAt();
+
     try {
-        const res = await sbPostGas({ action: 'sync' });
-        setSyncInfo((res.message || '요청했습니다.') +
-            ' 끝나면 아래 [화면 새로 고침] 을 눌러 주세요.', 'ok');
+        await sbPostGas({ action: 'sync' });
+        watchSync(before);          // 요청이 성공했을 때만 지켜본다
     } catch (err) {
         setSyncInfo('요청 실패: ' + (err?.message || '알 수 없는 오류'), 'fail');
-    } finally {
-        syncBtn.textContent = prev;
         // 연타 방지 — GAS 쪽에서도 1분에 한 번으로 묶여 있다
         setTimeout(() => { syncBtn.disabled = false; }, 60000);
+    } finally {
+        syncBtn.textContent = prev;
     }
 });
 

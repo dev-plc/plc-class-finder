@@ -8,7 +8,6 @@
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기 --activate   (기수 전환)
 //   node scripts/sync-sheet-to-db.mjs --homework-since=2026-07-31  (과제 기준일 직접 지정)
-//   node scripts/sync-sheet-to-db.mjs --include-undated-homework   (제출 시각 없는 과제도 반영)
 //   node scripts/sync-sheet-to-db.mjs --import-attendance          (시트 출석으로 DB 덮어쓰기, 기수 첫 구축용)
 //
 // 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GAS_API_URL(선택)
@@ -29,9 +28,6 @@ const COHORT_ARG = getArg('cohort') || (process.env.COHORT_ID || '').trim();
 // --activate: 이 기수를 활성 기수로 지정하고 나머지를 비활성으로 내린다.
 // 기수 전환 때만 쓴다. 매일 도는 동기화가 활성 기수를 건드리면 안 된다.
 const ACTIVATE = args.includes('--activate');
-// 제출 시각이 없는 과제(오프라인·사후 제출 수기 입력)를 넣을지.
-// 기본은 제외 — 지금 시트에 남은 것은 전부 지난 기수 것이다.
-const INCLUDE_UNDATED_HW = args.includes('--include-undated-homework');
 // 출석을 시트에서 가져올지.
 //
 // 출석은 DB 가 원본이다. 앱에서 찍고 시트는 비워 둔다.
@@ -642,13 +638,24 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
     } else if (ts.kind === 'date') {
       if (homeworkCutoff && ts.iso.slice(0, 10) <= homeworkCutoff) { homeworkStale++; continue; }
     } else {
-      // 빈 값이거나 해석할 수 없는 값 — 어느 기수인지 가릴 수 없다.
-      // 넣으면 내지도 않은 과제로 보충을 인정받으므로 기본은 제외한다.
+      // 제출 시각이 없는 행 = 수기(오프라인) 제출을 담당자가 손으로 옮겨 적은 것.
+      // 폼 응답에는 타임스탬프가 자동으로 붙으므로, 날짜가 없다는 것은 곧
+      // 사람이 입력했다는 뜻이다.
+      //
+      // 한때 이걸 '어느 기수 것인지 가릴 수 없는 행' 으로 보고 버렸다. 그런데
+      // 출처는 오히려 분명하다 — 담당자가 실물을 받고 적은 것이다. 버리는 바람에
+      // 정작 챙겨야 할 오프라인 제출이 조용히 사라지고 있었다. 이제 그대로 넣는다.
+      //
+      // 지난 기수에도 있던 사람의 옛 제출이 섞일 수는 있다. 그래도 그 사람이
+      // 실제로 냈다는 사실은 같으므로 문제가 되지 않는다.
+      // 이번 기수 명단에 없는 사람은 아래에서 uuid 를 못 찾아 어차피 떨어진다.
+      //
+      // 건수는 계속 센다 — 손입력이 갑자기 수백 건 늘면 잘못 붙여넣은 것이라
+      // 숫자가 보여야 알아챈다.
       homeworkNoDate++;
       if (homeworkNoDateSample.size < 5) {
         homeworkNoDateSample.add(`${gasId} ${norm}${ts.raw ? ` ("${ts.raw}")` : ''}`);
       }
-      if (!INCLUDE_UNDATED_HW) continue;
     }
 
     const key = `${gasId}|${norm}|${row.type ?? ''}`;
@@ -672,13 +679,10 @@ if (homeworkTagged) {
   console.log(`ℹ️  제출 시각 칸에 '${COHORT_ID}' 라고 적힌 과제 ${homeworkTagged}건 반영 (오프라인·사후 제출)`);
 }
 if (homeworkNoDate) {
-  if (INCLUDE_UNDATED_HW) {
-    console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 반영 (--include-undated-homework)`);
-  } else {
-    console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 제외 (어느 기수인지 가릴 수 없음)`);
-  }
+  // 손입력(오프라인 제출)이다. 반영하되 건수는 남긴다 —
+  // 갑자기 수백 건으로 뛰면 시트에 잘못 붙여넣은 것이므로 숫자가 보여야 안다.
+  console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 반영 (수기 입력)`);
   console.log(`    예: ${[...homeworkNoDateSample].join(' / ')}`);
-  console.log(`    이번 기수 것이라면 시트 과제 탭의 타임스탬프 칸에 '${COHORT_ID}' 라고 적어 주세요.`);
 }
 
 console.log('📊 변환 결과');
@@ -924,6 +928,22 @@ if (gas.teamLinks && Object.keys(gas.teamLinks).length) {
   }));
   await upsert('team_links', tl, 'cohort_id,team');
   console.log(`   ${tl.length}개`);
+}
+
+// 다 끝났다는 표시를 마지막에 남긴다.
+//
+// 관리자 화면의 ⟳ 는 이 값이 앞서는 것을 보고 스스로 새로 그린다.
+// 앞쪽 cohorts upsert 자리에 쓰면 명단·출석·과제가 들어오기 전에 '끝났다' 고
+// 알리게 되므로 반드시 여기여야 한다 — 모든 upsert 뒤.
+//
+// dry-run 은 아무것도 안 썼으므로 이 표시도 남기지 않는다.
+if (!dryRun) {
+  const { error } = await sb.from('cohorts')
+    .update({ synced_at: new Date().toISOString() })
+    .eq('id', COHORT_ID);
+  // 여기서 실패해도 동기화 자체는 성공이다. 화면이 저절로 안 바뀔 뿐이라
+  // 사람이 [화면 새로 고침] 을 누르면 된다. 멈추지 않고 알리기만 한다.
+  if (error) console.log(`⚠️  synced_at 기록 실패 (동기화는 성공): ${error.message}`);
 }
 
 console.log('\n🎉 동기화 완료');
