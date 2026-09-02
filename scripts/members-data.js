@@ -11,13 +11,27 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=106';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=106';
+import { matches as hangulMatches } from './hangul.js?v=107';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=107';
 
 export const MODULE_VERSION = 'members-data v62';
 
 // 보충 인정 한도. supabase/views.sql 의 makeup_limit() 과 같은 값이어야 한다.
 export const MAKEUP_LIMIT = 3;
+
+// 조를 이끄는 사람인가 — 수강생이 아니라 섬기는 쪽.
+//
+// 역할 어휘가 여기 한 곳에만 있어야 한다. 한때 script.js 는 네 갈래를 보고
+// admin.js 는 '조장' 을 찾았는데, 시트에는 '조장' 이라고 적히는 일이 없어서
+// 관리자 화면의 대표 교역자 칸이 늘 비어 있었다. 증상은 '아무것도 안 뜸'
+// 하나뿐이라 어디가 틀렸는지 화면만 봐서는 알 수 없었다.
+export function isTutorRole(role) {
+  const s = String(role || '');
+  return s.includes('튜터')       // 서브튜터도 여기 걸린다
+      || s.includes('바나바')
+      || s.includes('조장')       // 시트에 이렇게 적히면 그것도 받는다
+      || s.includes('관리자');
+}
 
 // ============================================================================
 // 캐시 설정

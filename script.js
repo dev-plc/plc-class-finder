@@ -24,9 +24,19 @@ import {
     getCacheInfo,
     getCohortId,
     subscribe,
+    isTutorRole,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=106';
-import { registerServiceWorker } from './scripts/sw-update.js?v=106';
+} from './scripts/members-data.js?v=107';
+import { registerServiceWorker } from './scripts/sw-update.js?v=107';
+// 조별 전체 출석표. 관리자 화면과 같은 코드를 쓴다 —
+// 한때 admin.js 가 세션명 정규화를 자기 이름으로 한 벌 더 갖고 있었다.
+import {
+    normalizeSessionKey,
+    homeworkForSession,
+    classifyStatus,
+    renderTeamMatrix,
+    renderMatrixFold,
+} from './scripts/attendance-matrix.js?v=107';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -344,12 +354,7 @@ function displayResult(member) {
             elements.mapContainer.style.display = 'none';
         }
 
-        const isTutor = member.role && (
-            member.role.includes('튜터') ||
-            member.role.includes('서브튜터') ||
-            member.role.includes('바나바') ||
-            member.role.includes('관리자')
-        );
+        const isTutor = isTutorRole(member.role);
 
         if (isTutor && member.team && memberListContainer) {
             const teamMembers = getTeamMembers(member.team);
@@ -378,6 +383,11 @@ const HOMEWORK_FORM_URL = 'https://forms.gle/2FpEX6gYhF9Xcd5w8';
 function renderMyStatus(member) {
     const el = document.getElementById('myStatusCard');
     if (!el) return;
+
+    // 튜터·바나바는 수강생이 아니다. 16회 수료 판정이 본인에게는 뜻이 없는데
+    // '수료까지 12회' 같은 문구가 뜨면 자기가 대상인 줄 안다.
+    // (조원에 대한 수료 표시 — 조 수료 전망·전체 출석표 진행률 — 은 그대로 둔다)
+    if (isTutorRole(member.role)) { el.style.display = 'none'; return; }
 
     const p = getProgress(member);
     if (!p) { el.style.display = 'none'; return; }
@@ -461,21 +471,7 @@ function extractSessions(member) {
         });
 }
 
-// isFuture: 아직 하지 않은 수업인가.
-//
-// 빈칸을 '미기록' 하나로만 부르면 안 된다. 아직 하지 않은 수업의 빈칸과
-// 이미 지났는데 안 찍은 빈칸은 뜻이 전혀 다르다 — 앞은 정상이고 뒤는 할 일이다.
-// 둘 다 흐린 점으로 나오니 읽는 사람은 '수업없음' 으로 짐작하게 된다.
-function classifyStatus(raw, isFuture = false) {
-    const s = String(raw ?? '').trim().toUpperCase();
-    if (s === 'O') return { cls: 'present', label: 'O', title: '출석' };
-    if (s === '◎') return { cls: 'online',  label: '◎', title: '지난 기수 이수 이월' };
-    if (s === '과제') return { cls: 'makeup', label: '과제', title: '결석 — 과제·소감문으로 메움' };
-    if (s === 'X') return { cls: 'absent',  label: 'X', title: '결석' };
-    if (s === '-') return { cls: 'none',    label: '−', title: '수업 없음 (집계 제외)' };
-    if (isFuture)  return { cls: 'future',  label: '',  title: '아직 하지 않은 수업' };
-    return { cls: 'empty', label: '·', title: '미기록 — 아직 출석을 찍지 않았습니다' };
-}
+// classifyStatus 는 scripts/attendance-matrix.js 로 옮겼다 (관리자 화면과 공용).
 
 // MM/DD → Date (연도는 대략 판단, 매치용)
 function mmddToDate(mmdd, refYear = new Date().getFullYear()) {
@@ -585,27 +581,7 @@ function mmddSortValue(dateStr) {
     return parseInt(m[1], 10) * 100 + parseInt(m[2], 10);
 }
 
-// 과제 session 필드에서 정규화 키 추출.
-// "1강 XXX" → "교리1", "교리1" → "교리1"
-// "대화1 XXX", "성경적대화1" → "대화1"
-// "교제" → "교제", "나눔" → "나눔"
-function normalizeSessionKey(s) {
-    const raw = String(s || '').trim();
-    let m = raw.match(/^성경적대화\s*(\d+)/) || raw.match(/^대화\s*(\d+)/);
-    if (m) return '대화' + m[1];
-    m = raw.match(/^교리\s*(\d+)/) || raw.match(/^(\d+)\s*강/);
-    if (m) return '교리' + m[1];
-    if (/^교제/.test(raw) || /^교재/.test(raw)) return '교제';
-    if (/^나눔/.test(raw)) return '나눔';
-    return raw;
-}
-
-// 특정 세션명에 매칭되는 과제 제출 목록
-function homeworkForSession(homeworkList, sessionName) {
-    if (!homeworkList?.length || !sessionName) return [];
-    const target = normalizeSessionKey(sessionName);
-    return homeworkList.filter(hw => normalizeSessionKey(hw.session) === target);
-}
+// normalizeSessionKey · homeworkForSession 도 attendance-matrix.js 로 옮겼다.
 
 function renderStatusDetail(member) {
     const container = document.getElementById('statusDetailContainer');
@@ -822,7 +798,12 @@ function renderStatusDetail(member) {
 
     // ────── 수료 상태 ──────
     const compEl = document.getElementById('completionStatus');
-    if (compEl) {
+    // 튜터에게는 제목('🎓 수료 상태')까지 통째로 숨긴다 — 위 진행률 카드와 같은 이유다.
+    // 섹션에 id 가 없어 closest 로 잡는다. HTML 은 건드리지 않는다.
+    const compSection = compEl?.closest('.status-section');
+    const compHidden = isTutorRole(member.role);
+    if (compSection) compSection.style.display = compHidden ? 'none' : '';
+    if (compEl && !compHidden) {
         const raw = String(member['수료'] ?? '').trim();
         if (raw === 'O') {
             compEl.className = 'completion-status done';
@@ -1098,115 +1079,33 @@ async function saveAttendanceBatch() {
 // 조 전체 출석표 (매트릭스 모달)
 // ============================================================================
 
-// 조 전체 출석표의 세션 컬럼. DB의 sessions 테이블을 그대로 쓴다.
-function buildSessionColumns() {
-    // 오늘 것은 아직 안 찍었을 수 있으므로 '지난 수업' 으로 본다 —
-    // 수업이 끝나고 찍는 자리라 오늘 빈칸은 '미기록' 이 맞다.
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return getSessions()
-        .map(s => ({
-            mmdd: String(s.label || '').trim(),
-            name: s.label_norm || '',
-            isClass: s.is_class === true,
-            isFuture: String(s.session_date || '') > today,
-        }))
-        .filter(c => c.mmdd);
-}
+// 표 그리기(buildSessionColumns · mxProgressHtml · renderTeamMatrix)는
+// scripts/attendance-matrix.js 로 옮겼다. 관리자 조별보기가 같은 표를 쓴다.
 
-// 이름 바로 옆 진행률. 주차별 흐름과 결과를 한 눈에 놓고 본다.
-// 이름 칸 안에 넣는다 — 따로 열을 만들면 두 번째 고정(sticky) 열이 되어
-// 첫 열의 실제 너비만큼 left 를 줘야 하는데, 그 너비는 이름 길이에 따라 변한다.
-function mxProgressHtml(m) {
-    const o = getCompletionOutlook(m);
-    if (!o) return '';
-    return `<span class="mx-prog mx-prog-${o.bucket}"
-                  title="${o.p.credited}/${o.p.required} 인정 · ${MX_PROG_TITLE[o.bucket]}">
-                ${o.p.credited}<span class="mx-prog-of">/${o.p.required}</span>
-            </span>`;
-}
-const MX_PROG_TITLE = {
-    done:    '수료 요건 충족',
-    ontrack: '남은 강의를 나오면 수료',
-    atrisk:  '남은 강의 전부 + 과제·소감문 필요',
-    gone:    '담당 교역자와 의논 필요',
-};
+// 접혀 있는가. 모달을 열 때마다 접힌 상태로 되돌린다 —
+// 지난번에 펼쳐 뒀다고 다음 조까지 펼쳐 놓으면 늘 가로로 넓은 표가 된다.
+let matrixExpanded = false;
 
-function renderTeamMatrix(teamName, members) {
-    const scrollEl = document.getElementById('matrixScroll');
+function drawMatrix() {
+    if (!currentRenderedTeam) return;
+    const members = getTeamMembers(currentRenderedTeam.name);
+    const info = renderTeamMatrix(
+        document.getElementById('matrixScroll'),
+        currentRenderedTeam.name, members, { expanded: matrixExpanded });
+
     const titleEl = document.getElementById('matrixTitle');
-    if (!scrollEl) return;
+    if (titleEl) titleEl.textContent = `👥 ${currentRenderedTeam.name} 전체 현황 (${members.length}명)`;
 
-    if (titleEl) titleEl.textContent = `👥 ${teamName} 전체 현황 (${members.length}명)`;
-
-    const cols = buildSessionColumns();
-    const sorted = members;   // 시트 순서 그대로 — 명단·종이와 줄이 맞아야 한다
-
-    const headRow = cols.map(c => `
-        <th class="${c.isClass ? '' : 'non-class'}${c.isFuture ? ' mx-future' : ''}"
-            ${c.isFuture ? 'title="아직 하지 않은 수업"' : ''}>
-            <span class="mx-session">${c.name || '-'}</span>
-            <span class="mx-date">${c.mmdd}</span>
-        </th>
-    `).join('');
-
-    const bodyRows = sorted.map(m => {
-        const id = m.id || (String(m.name || '') + String(m.phone || ''));
-        const kimbapDetail = getKimbapDetail(id);
-        const homeworkList = getHomeworkList(id);
-
-        const cells = cols.map(c => {
-            const s = classifyStatus(m[c.mmdd], c.isFuture);
-            const kb = c.name ? kimbapDetail[c.name] : null;
-            const hw = c.name ? homeworkForSession(homeworkList, c.name) : [];
-            const badges = [];
-            if (kb?.applied === 1) badges.push('🍙');
-            if (hw.length) badges.push('📝');
-            return `
-                <td class="mx-cell ${s.cls} ${c.isClass ? '' : 'non-class'}"
-                    title="${m.name} · ${c.mmdd}${c.name ? ' ' + c.name : ''} · ${s.title}">
-                    <span class="mx-status">${s.label}</span>
-                    ${badges.length ? `<span class="mx-badges">${badges.join('')}</span>` : ''}
-                </td>
-            `;
-        }).join('');
-
-        return `
-            <tr>
-                <th class="mx-name-cell" scope="row">
-                    <div class="mx-name-in">
-                        <span class="mx-who">
-                            <span class="mx-name">${m.name}<span class="mx-phone">${m.phone || ''}</span></span>
-                            <span class="mx-role">${m.role || '조원'}</span>
-                        </span>
-                        ${mxProgressHtml(m)}
-                    </div>
-                </th>
-                ${cells}
-            </tr>
-        `;
-    }).join('');
-
-    scrollEl.innerHTML = `
-        <table class="matrix-table">
-            <thead>
-                <tr>
-                    <th class="mx-name-cell mx-corner">
-                        <div class="mx-name-in"><span class="mx-who">조원</span>
-                        <span class="mx-prog-head">진행</span></div>
-                    </th>
-                    ${headRow}
-                </tr>
-            </thead>
-            <tbody>${bodyRows}</tbody>
-        </table>
-    `;
+    renderMatrixFold(document.getElementById('matrixFoldBtn'), info, matrixExpanded, () => {
+        matrixExpanded = !matrixExpanded;
+        drawMatrix();
+    });
 }
 
 function openMatrixModal() {
     if (!currentRenderedTeam) return;
-    const members = getTeamMembers(currentRenderedTeam.name);
-    renderTeamMatrix(currentRenderedTeam.name, members);
+    matrixExpanded = false;          // 열 때마다 접힌 상태로
+    drawMatrix();
     const modal = document.getElementById('matrixModal');
     if (modal) {
         modal.classList.add('active');
@@ -1388,7 +1287,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=106';
+                window.location.href = 'admin.html?v=107';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=106">
-    <link rel="stylesheet" href="admin.css?v=106">
+    <link rel="stylesheet" href="style.css?v=107">
+    <link rel="stylesheet" href="admin.css?v=107">
 </head>
 <body>
     <div class="admin-container">
@@ -311,7 +311,29 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=106"></script>
+    <!-- 조 전체 출석표 — 조 카드의 '📊 출석부' 로 연다.
+         튜터가 보는 것(index.html)과 같은 표다. 그리는 코드도 같다
+         (scripts/attendance-matrix.js). 두 화면이 다르게 보이면 대조가 안 된다. -->
+    <div class="matrix-modal" id="matrixModal" aria-hidden="true">
+        <div class="matrix-modal-inner" role="dialog" aria-modal="true" aria-labelledby="matrixTitle">
+            <div class="matrix-modal-header">
+                <h3 id="matrixTitle">조 전체 현황</h3>
+                <button type="button" id="matrixCloseBtn" class="matrix-close-btn" aria-label="닫기">✕</button>
+            </div>
+            <div class="matrix-legend">
+                <span><b>O</b> 출석</span><span><b>◎</b> 이월</span>
+                <span><b>과제</b> 과제로 대체</span><span><b>X</b> 결석</span>
+                <span><b>·</b> 미기록</span><span><b>−</b> 수업없음</span>
+                <span><i class="mx-lg-future"></i> 아직 안 한 수업</span>
+                <span>🍙 김밥</span><span>📝 과제+소감문</span>
+                <button type="button" id="matrixFoldBtn" class="matrix-fold-btn"
+                        aria-expanded="false" style="display:none;"></button>
+            </div>
+            <div class="matrix-scroll" id="matrixScroll"></div>
+        </div>
+    </div>
+
+    <script type="module" src="admin.js?v=107"></script>
 </body>
 </html>
 

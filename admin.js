@@ -18,10 +18,18 @@ import {
     getRemainingClassSessions,
     ONTRACK_WITHIN,
     subscribe,
-} from './scripts/members-data.js?v=106';
-import { matches as hangulMatches } from './scripts/hangul.js?v=106';
-import { registerServiceWorker } from './scripts/sw-update.js?v=106';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=106';
+    isTutorRole,
+} from './scripts/members-data.js?v=107';
+import { matches as hangulMatches } from './scripts/hangul.js?v=107';
+import { registerServiceWorker } from './scripts/sw-update.js?v=107';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=107';
+// 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
+// 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
+import {
+    normalizeSessionKey as prNormalizeSession,
+    renderTeamMatrix,
+    renderMatrixFold,
+} from './scripts/attendance-matrix.js?v=107';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -202,6 +210,31 @@ tabBtns.forEach(btn => {
 // ============================================================================
 let allTeams = [];
 
+// 담당교역자를 읽는 단 하나의 자리. 결석 현황도 이걸 쓴다 (abPastorOf 로 재수출).
+//
+// 데이터 계층은 DB 의 pastor 를 '담당교역자' 라는 키로 넣는다
+// (scripts/members-data.js 의 buildMemberRow). 한때 이 화면이 m.pastor 를 읽어
+// 늘 undefined 였고, 조 카드의 교역자 칸이 아무 소리 없이 빈 채로 나왔다.
+const pastorOf = (m) => String(m['담당교역자'] || '').trim();
+
+// 조를 대표하는 교역자. 조장(튜터)의 담당자를 쓰고, 없으면 조에서 가장 많은 이름.
+//
+// 조원마다 담당 교역자가 다를 수 있어서 '한 명' 을 골라야 한다.
+// 조장 기준이 원칙이고, 조장이 비어 있는 조를 위해 최빈값 폴백을 둔다.
+function teamPastor(team) {
+    const leader = team.members.find(m => isTutorRole(m.role));
+    if (leader && pastorOf(leader)) return pastorOf(leader);
+
+    const counts = new Map();
+    for (const m of team.members) {
+        const p = pastorOf(m);
+        if (p) counts.set(p, (counts.get(p) || 0) + 1);
+    }
+    let best = '';
+    for (const [name, n] of counts) if (!best || n > counts.get(best)) best = name;
+    return best;
+}
+
 function renderTeamsView(filterText = '') {
     const teamGroups = {};
     getMembers().forEach(member => {
@@ -225,10 +258,12 @@ function renderTeamsView(filterText = '') {
 
     allTeams = sortedTeams;
 
+    // 교역자 이름으로도 찾는다 — '김목사가 맡은 조' 를 훑을 일이 자주 있다.
     const filteredTeams = filterText
         ? sortedTeams.filter(team =>
             hangulMatches(team.name, filterText) ||
-            hangulMatches(team.location, filterText)
+            hangulMatches(team.location, filterText) ||
+            hangulMatches(teamPastor(team), filterText)
           )
         : sortedTeams;
 
@@ -240,21 +275,7 @@ function renderTeamsView(filterText = '') {
 
     filteredTeams.forEach(team => {
         const kimbapCount = team.members.filter(m => (m.lunch || '').toUpperCase() === 'O').length;
-        
-        let representativePastor = '';
-        const leader = team.members.find(m => m.role && m.role.includes('조장'));
-        if (leader && leader.pastor) {
-            representativePastor = leader.pastor;
-        } else {
-            const pastors = team.members.map(m => m.pastor).filter(Boolean);
-            if (pastors.length > 0) {
-                const counts = pastors.reduce((acc, val) => {
-                    acc[val] = (acc[val] || 0) + 1;
-                    return acc;
-                }, {});
-                representativePastor = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-            }
-        }
+        const representativePastor = teamPastor(team);
 
         const card = document.createElement('div');
         card.className = 'team-card';
@@ -269,10 +290,14 @@ function renderTeamsView(filterText = '') {
             </div>
             <div class="team-card-kimbap" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                 <span class="info-text">🍱 김밥 ${kimbapCount}개 (${team.members.length}명 중)</span>
-                <button class="mx-extra-btn action-btn btn-roster">명단 보기</button>
+                <span style="display:flex; gap:6px;">
+                    <button class="mx-extra-btn action-btn btn-roster">명단 보기</button>
+                    <button class="mx-extra-btn action-btn btn-matrix">📊 출석부</button>
+                </span>
             </div>
         `;
-        
+
+        // 카드 클릭이 명단을 열기 때문에 버튼은 전파를 끊어야 한다
         const rosterBtn = card.querySelector('.btn-roster');
         if (rosterBtn) {
             rosterBtn.addEventListener('click', (e) => {
@@ -280,7 +305,14 @@ function renderTeamsView(filterText = '') {
                 showTeamMembers(team);
             });
         }
-        
+        const matrixBtn = card.querySelector('.btn-matrix');
+        if (matrixBtn) {
+            matrixBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openMatrixModal(team.name, team.members);
+            });
+        }
+
         card.addEventListener('click', () => showTeamMembers(team));
         teamsGrid.appendChild(card);
     });
@@ -292,6 +324,55 @@ teamFilter?.addEventListener('input', (e) => {
 
 // 지금 열려 있는 조. 배경 갱신이 오면 이 이름으로 다시 그린다.
 let openTeamName = null;
+
+// ── 조 전체 출석표 모달 ──────────────────────────────────────────────────
+// 그리는 것은 scripts/attendance-matrix.js 가 한다. 튜터가 보는 표와 같은 코드다.
+let mxTeam = null;               // { name, members }
+let mxExpanded = false;          // 열 때마다 접힌 상태로 되돌린다
+
+function drawAdminMatrix() {
+    if (!mxTeam) return;
+    const info = renderTeamMatrix(
+        document.getElementById('matrixScroll'),
+        mxTeam.name, mxTeam.members, { expanded: mxExpanded });
+
+    const titleEl = document.getElementById('matrixTitle');
+    if (titleEl) titleEl.textContent = `👥 ${mxTeam.name} 전체 현황 (${mxTeam.members.length}명)`;
+
+    renderMatrixFold(document.getElementById('matrixFoldBtn'), info, mxExpanded, () => {
+        mxExpanded = !mxExpanded;
+        drawAdminMatrix();
+    });
+}
+
+function openMatrixModal(teamName, members) {
+    mxTeam = { name: teamName, members };
+    mxExpanded = false;
+    drawAdminMatrix();
+    const modal = document.getElementById('matrixModal');
+    if (!modal) return;
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMatrixModal() {
+    const modal = document.getElementById('matrixModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = 'auto';
+}
+
+// 닫는 길 셋 — 튜터 화면(script.js:1319~1326)과 같게 맞춘다
+document.getElementById('matrixCloseBtn')?.addEventListener('click', closeMatrixModal);
+document.getElementById('matrixModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'matrixModal') closeMatrixModal();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('matrixModal')?.classList.contains('active')) closeMatrixModal();
+});
 
 function showTeamMembers(team) {
     openTeamName = team.name;
@@ -1153,18 +1234,8 @@ function isLastClassOfMonth(sessionDate) {
     return same.length > 0 && same[same.length - 1] === sessionDate;
 }
 
-// 과제 세션명 대조. 폼 응답과 시트 강의명이 다르게 적히므로 양쪽을 정규화한다.
-// (script.js 의 normalizeSessionKey 와 같은 규칙이어야 한다)
-function prNormalizeSession(v) {
-    const raw = String(v || '').trim();
-    let m = raw.match(/^성경적대화\s*(\d+)/) || raw.match(/^대화\s*(\d+)/);
-    if (m) return '대화' + m[1];
-    m = raw.match(/^교리\s*(\d+)/) || raw.match(/^(\d+)\s*강/);
-    if (m) return '교리' + m[1];
-    if (/^교제/.test(raw) || /^교재/.test(raw)) return '교제';
-    if (/^나눔/.test(raw)) return '나눔';
-    return raw;
-}
+// 과제 세션명 대조는 scripts/attendance-matrix.js 의 normalizeSessionKey 로 옮겼다.
+// (위 import 에서 prNormalizeSession 이라는 이름으로 받는다 — 호출부는 그대로다)
 
 // A4 한 장을 채우도록 줄 높이를 정한다.
 //
@@ -1625,7 +1696,7 @@ function abSessionsUpTo(dateIso) {
     return getSessions().filter(s => s.is_class !== false && s.session_date <= dateIso);
 }
 
-const abPastorOf = (m) => String(m['담당교역자'] || '').trim();
+const abPastorOf = pastorOf;   // 조별 보기와 같은 자리를 본다 (위 pastorOf)
 
 function abRows() {
     if (!abSessionDate) return [];

@@ -1305,6 +1305,21 @@ body.large-text .map-image {
 }
 .matrix-legend b { color: var(--text-dark, #2C3E50); }
 
+/* 접기/펼치기. 범례 오른쪽 끝으로 밀어 둔다 — 읽는 것이 아니라 누르는 것이다. */
+.matrix-fold-btn {
+    margin-left: auto;
+    padding: 3px 10px;
+    font-size: calc(11px * var(--font-scale));
+    font-weight: 700;
+    color: var(--text-dark, #2C3E50);
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.matrix-fold-btn:hover { background: #e5e7eb; }
+
 .matrix-scroll {
     overflow: auto;
     flex: 1 1 auto;
