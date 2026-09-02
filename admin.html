@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=107">
-    <link rel="stylesheet" href="admin.css?v=107">
+    <link rel="stylesheet" href="style.css?v=108">
+    <link rel="stylesheet" href="admin.css?v=108">
 </head>
 <body>
     <div class="admin-container">
@@ -68,7 +68,10 @@
         <div class="sync-bar">
             <button type="button" id="syncBtn" class="sync-btn">⟳ 시트에서 지금 가져오기</button>
             <button type="button" id="reloadBtn" class="sync-sub-btn">화면 새로 고침</button>
-            <span class="sync-info" id="syncInfo">명단·편성·위치·과제·김밥은 하루 한 번(정오) 들어옵니다. 방금 시트를 고치셨다면 눌러 주세요.</span>
+            <!-- 저절로 되는 것을 먼저 적는다. 이 문구가 ⟳ 가 필요한 것만 적고 있어서,
+                 시트에서 고친 출석이 [화면 새로 고침] 만으로 보이는 것을 두고
+                 "새로 고침이 시트를 부르나" 하는 오해가 났다. -->
+            <span class="sync-info" id="syncInfo">출석은 10분마다 저절로 들어옵니다. 명단·편성·위치·과제·김밥은 하루 한 번(정오) — 방금 시트에서 고치셨다면 ⟳ 를 눌러 주세요.</span>
         </div>
 
         <!-- 출석 관리 (DB 가 원본. 시트에서 고치지 않는다) -->
@@ -333,7 +336,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=107"></script>
+    <script type="module" src="admin.js?v=108"></script>
 </body>
 </html>
 

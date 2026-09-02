@@ -138,20 +138,41 @@
 
 ### 지금 사람이 해야 하는 것
 
+- [ ] **`과제` 값 켜기 (v104)** — 코드는 들어갔고 아직 아무 데도 적용 안 됨.
+      **순서가 중요하다. 반드시 SQL 먼저.**
+  1. Supabase 에서 `supabase/views.sql` · `supabase/rpc_attendance.sql` 재실행
+  2. GAS `doGet.js` · `pullAttendance.js` 붙여넣고 **웹앱 재배포**
+     (배포 관리에서 기존 배포의 **버전만** 올린다 — 새 배포는 URL 이 바뀐다)
+  3. 아래 쿼리를 **켜기 전에 한 번, 켠 뒤에 한 번** 돌려 대조한다
+
+  왜 SQL 이 먼저인가 — 거꾸로 하면 조용히 어긋난다:
+
+  | 먼저 한 것 | 무슨 일이 나나 |
+  |---|---|
+  | SQL → GAS ✅ | SQL 만 된 동안은 시트의 `과제` 가 DB 로 안 올라와 아무 일도 안 난다 |
+  | GAS → SQL ⚠️ | `과제` 는 DB 에 들어오는데 옛 `is_absent()` 가 `= 'X'` 라 **결석으로도 출석으로도 안 세어진다.** 보충 인정 대상이던 주차가 사라져 **수료 진행률이 조용히 내려간다** |
+
+  ```sql
+  -- 판정 분포. 켜기 전후로 돌려 대조한다 — 사람 수가 달라지면 그만큼 판정이 움직인 것이다.
+  select verdict, count(*), min(credited), round(avg(credited), 1), max(credited)
+    from v_completion_status
+   where cohort_id = '3기'
+   group by verdict order by verdict;
+
+  -- DB 에 들어온 '과제' 칸. GAS 재배포 전에는 0 이다.
+  select count(*) from attendance
+   where cohort_id = '3기' and btrim(raw_status) = '과제';
+  ```
+
 - [ ] **`synced_at` 켜기 (v106)** — 동기화가 끝난 것을 화면이 알아채는 칸
   1. Supabase 에서 `supabase/add_synced_at.sql` 실행 (`alter table` 한 줄)
-  2. 그 전까지는 ⟳ 를 누르면 60초 뒤 한 번 새로 그리는 폴백으로 돈다.
-     칸이 생기면 5초마다 확인해 끝나는 즉시 다시 그린다
-  3. 값이 채워지면 동기화 바에 `마지막 동기화: N분 전` 이 같이 뜬다.
+  2. **켜졌는지 확인**: 동기화 바에 `마지막 동기화: N분 전` 이 뜨면 된 것이다.
      26시간이 넘으면 빨갛게 — 8/21 처럼 크론이 조용히 죽은 것을 화면에서 안다
-- [ ] **`sheet_row` 켜기 (v105)** — 조 순서를 시트대로 만드는 칸
-  1. Supabase 에서 `supabase/add_sheet_row.sql` 실행 (`alter table` 한 줄)
-  2. 관리자 화면 **⟳ 시트에서 지금 가져오기** 를 눌러 값을 채운다
-  3. 그 전까지는 `nullslast` 로 예전 순서 그대로 (V3 가 아직 맨 앞)
-- [ ] **`과제` 값 켜기 (v104)** — 코드는 들어갔고 아직 아무 데도 적용 안 됨
-  1. Supabase 에서 `supabase/views.sql` · `supabase/rpc_attendance.sql` 재실행
-  2. GAS `doGet.js` · `pullAttendance.js` 붙여넣고 **웹앱 재배포** (안 하면 조용히 막힘)
-  3. 검증 쿼리로 `credited` 분포가 그대로인지 대조 (`/root/.claude/plans/` 계획서)
+  3. 그 전까지는 ⟳ 를 누르면 60초 뒤 한 번 새로 그리는 폴백으로 돈다.
+     그때 뜨는 `새로 그렸습니다. (동기화가 그 사이 끝났는지는 확인하지 못했습니다)`
+     가 곧 '아직 안 켜졌다' 는 표시다. 칸이 생기면 5초마다 확인해 끝나는 즉시 그린다
+- [x] **`sheet_row` 켜기 (v105)** — 조 순서를 시트대로. **2026-09-02 확인 완료**
+      (V3 가 맨 뒤로 갔다). SQL 실행 + 동기화로 값이 채워졌다
 - [ ] **기존 `◎` 가르기 (선택)** — 손으로 `◎` 로 적은 과제 대체분을 `과제` 로.
       개수부터 세어 보고(0이면 불필요), 0이 아니면 시트를 고치는 일회용 GAS 필요
 - [x] **GAS 웹앱 재배포** — `scripts/gas/doGet.js` v30 배포 완료 (2026-08-22).
