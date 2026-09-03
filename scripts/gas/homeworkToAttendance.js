@@ -360,7 +360,13 @@ function htaApply_(apply) {
            '네 번 이상 보충한 사람은 관리자확인 대상이 될 수 있습니다.';
   }
   msg += '\n\n제출 기록이 없는 ◎ 는 진짜 이월이라 건드리지 않았습니다.';
-  if (unmatched) msg += '\n명단·강의명에서 짝을 못 찾은 제출 ' + unmatched + '건은 건너뛰었습니다.';
+  // 과제 탭은 기수를 넘어 쌓인다. 지난 기수 사람은 지금 출석부에 없으므로
+  // 여기 숫자는 늘 크고 기수가 갈수록 늘어난다 — 고장이 아니다.
+  // 그 사실을 안 적어 두면 볼 때마다 뭔가 깨진 줄 알게 된다.
+  if (unmatched) {
+    msg += '\n\n짝을 못 찾은 제출 ' + unmatched + '건은 건너뛰었습니다 — ' +
+           '대부분 지난 기수 사람입니다 (과제 탭은 기수를 넘어 쌓입니다).';
+  }
   if (samples.length) msg += '\n\n예: ' + samples.join(' / ');
   if (!apply && total > 0) msg += '\n\n이대로 바꾸려면 syncAllAttendance 를 실행하세요.';
 
