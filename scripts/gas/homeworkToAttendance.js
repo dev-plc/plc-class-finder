@@ -6,47 +6,42 @@
 // ⚠️ 이 파일을 고쳐도 웹앱 재배포는 필요 없다. 트리거가 저장된 코드를 그대로 부른다.
 //    (재배포가 필요한 것은 doGet/doPost 뿐이다)
 //
-// 핵심 변경 (2026-09-03): '◎' 대신 '과제' 를 쓴다
+// ── '과제' 는 출석으로 인정된다 ────────────────────────────────────────────
 //
-//   이 스크립트가 '◎' 를 쓰고 있었던 것이 오랫동안 판정을 망가뜨린 원인이었다.
-//   '◎' 는 supabase/views.sql 에서 present 로 세어진다. 그래서 과제로 메운
-//   주차가 '출석' 이 되어 makeup_limit()(3회)을 아예 안 거쳤고, 여섯 번을
-//   대체해도 '관리자확인' 조차 뜨지 않았다.
+//   supabase/views.sql 에서
+//     credited = present_count + least(결석이면서 과제 제출한 주차, 3)
+//   이므로 '과제' 주차는 **수료 조건에 그대로 들어간다.** 다만 최대 3회다.
 //
-//   게다가 '◎' 는 원래 '지난 기수 이수 이월' 의 표시다. 한 글자가 두 뜻을
-//   겸하니 코드가 둘을 가릴 방법이 없었다.
+//   그러면 왜 '◎' 가 아니라 따로 두는가 —
+//   '◎' 는 present 로 세어져 그 3회 한도를 **아예 안 거친다.** 예전에 이
+//   스크립트가 '◎' 를 찍고 있어서, 여섯 번을 과제로 메워도 '관리자확인' 조차
+//   뜨지 않았다. 게다가 '◎' 는 원래 '지난 기수 이수 이월' 의 표시라
+//   한 글자가 두 뜻을 겸했고, 코드가 둘을 가릴 방법이 없었다.
 //
-//   이제 보충은 '과제' 로 적는다. is_absent() 가 X 와 같이 결석으로 세고,
-//   인정 여부는 글자가 아니라 homework_submissions 가 정한다 — 그래야 3회
-//   한도가 제대로 붙는다. '◎' 는 이월 전용으로 남는다.
+//   '과제' 로 적으면 is_absent() 가 X 와 같이 잡아 3회 한도를 태우고,
+//   인정 여부는 글자가 아니라 homework_submissions 가 정한다.
+//   결과는 같은 '출석 인정' 이되 규정대로 세어진다.
 //
 //   ⚠️ 이 값이 DB 까지 가려면 Supabase 의 views.sql · rpc_attendance.sql 과
 //      pullAttendance.js 의 PLC_PUSH_ALLOWED 가 '과제' 를 알아야 한다.
 //      셋 중 하나라도 옛것이면 그 칸이 조용히 건너뛰어진다.
 //
-// ── 시트 배치 (여기 상수로 둔다) ──────────────────────────────────────────
-//   과제 탭      C열 아이디 · F열 강의명 · G열 과제유형
-//   출석부(DB)   3행 강의명 · J열 아이디 · 5행부터 데이터
+// ── 시트 배치는 찾아서 쓴다 ────────────────────────────────────────────────
 //
-//   ⚠️ doGet.js 는 'id' 헤더를 찾아 열 위치를 스스로 알아내는데, 이 파일은
-//      자리를 고정해 두고 있다. 열을 하나 끼워 넣으면 조용히 엉뚱한 칸에 쓴다.
-//      지금 배치가 맞아서 도는 중이라 그대로 두지만, 시트 구조를 바꾸면
-//      이 파일부터 확인할 것.
+//   열 번호를 박아 두지 않는다. doGet.js 가 헤더 글자로 찾아내는 것과 같은
+//   규칙을 쓴다. 한동안 이 스크립트는 과제 탭 아이디를 C열로 고정해 두었는데
+//   doGet.js 의 주석은 B열이라고 적고 있었다 — 둘 중 하나는 틀린 것이고,
+//   틀린 쪽으로 쓰면 아무 오류 없이 엉뚱한 사람의 칸이 바뀐다.
+//   열을 하나 끼워 넣는 것만으로 그렇게 된다. 그래서 찾아서 쓴다.
 
-var HTA_STATUS_MAKEUP = '과제';    // 결석했지만 과제·소감문으로 메움
+var HTA_STATUS_MAKEUP = '과제';
 var HTA_TAB_HOMEWORK  = '과제';
 var HTA_TAB_ROSTER    = '출석부(DB)';
 
-var HTA_COL_ID       = 3;   // 과제 탭 C열
-var HTA_COL_LECTURE  = 6;   // 과제 탭 F열
-var HTA_COL_TYPE     = 7;   // 과제 탭 G열
-var HTA_DB_ID_IDX    = 9;   // 출석부 J열 (0-based)
-var HTA_DB_LEC_ROW   = 2;   // 출석부 3행 (0-based)
-var HTA_DB_FIRST_ROW = 4;   // 출석부 5행 (0-based)
-
+// ============================================================================
+// 아이디 정형화
+// ============================================================================
 /**
- * 아이디 정형화.
- *
  * doGet.js 의 plcNormalizeId_ 와 같은 규칙을 쓴다 — 한 프로젝트 안에서 아이디를
  * 두 가지 규칙으로 다듬으면 반드시 어긋난다. 과제 탭 아이디는 손입력과 폼이
  * 섞여 '김도현 5326' · '김도현-5326' · '김도현(5326)' · '김도현５３２６' 처럼
@@ -69,6 +64,93 @@ function normalizeString(str) {
     .toLowerCase();
 }
 
+// ============================================================================
+// 시트 배치 찾기
+// ============================================================================
+
+/** 과제 탭의 열 위치. doGet.js 의 과제 탭 파싱과 같은 규칙이다. */
+function htaFindHomeworkCols_(header) {
+  var out = { id: -1, lecture: -1, type: -1 };
+  for (var k = 0; k < header.length; k++) {
+    var lh = String(header[k] || '').trim().toLowerCase();
+    if (lh === "아이디" || lh === "id") out.id = k;
+    else if (lh.indexOf("몇 강") !== -1 || lh === "강") out.lecture = k;
+    else if (lh.indexOf("어떤 과제") !== -1 || lh === "과제유형") out.type = k;
+  }
+  return out;
+}
+
+/** 'MM/DD' · 날짜값 · '2026. 9. 6' 을 날짜 헤더로 본다 (강의명 행을 고를 때 쓴다) */
+function htaIsDateHeader_(v) {
+  if (v instanceof Date) return true;
+  var s = String(v || '').trim();
+  return /^\d{1,2}[\/.\-]\d{1,2}$/.test(s) ||
+         /^\d{4}[.\/\-]\s*\d{1,2}[.\/\-]\s*\d{1,2}\.?$/.test(s);
+}
+
+/** 강의명처럼 보이는가 (doGet.js 의 looksLikeSessionName 과 같은 규칙) */
+function htaLooksLikeSessionName_(v) {
+  var t = String(v || '').trim();
+  return /^교리\s*\d+/.test(t) || /^성경적대화\s*\d+/.test(t) || /^대화\s*\d+/.test(t)
+      || /^교제/.test(t) || /^교재/.test(t) || /^나눔/.test(t);
+}
+
+/**
+ * 출석부(DB) 의 구조를 읽는다.
+ *   headerRow  'id' 가 있는 행 (0-based)
+ *   idIdx      그 행에서 'id' 열
+ *   firstRow   데이터 시작 행 = headerRow + 1
+ *   lecRow     강의명 행 — 헤더 행 위쪽에서, 날짜 열에 강의명이 둘 이상 있는 행
+ *
+ * 하나라도 못 찾으면 null 을 돌려준다. 짐작해서 쓰지 않는다 —
+ * 틀린 자리에 쓰면 아무 오류 없이 남의 출결이 바뀐다.
+ */
+function htaReadRosterLayout_(dbData) {
+  var headerRow = -1, idIdx = -1;
+  for (var i = 0; i < Math.min(6, dbData.length) && headerRow === -1; i++) {
+    for (var c = 0; c < dbData[i].length; c++) {
+      if (String(dbData[i][c] || '').trim().toLowerCase() === 'id') {
+        headerRow = i; idIdx = c; break;
+      }
+    }
+  }
+  if (headerRow === -1) return null;
+
+  var header = dbData[headerRow];
+  var lecRow = -1;
+  for (var nr = headerRow - 1; nr >= 0 && lecRow === -1; nr--) {
+    var hits = 0;
+    for (var nc = 0; nc < header.length; nc++) {
+      if (htaIsDateHeader_(header[nc]) && htaLooksLikeSessionName_(dbData[nr][nc])) hits++;
+    }
+    if (hits >= 2) lecRow = nr;
+  }
+  if (lecRow === -1) return null;
+
+  return { headerRow: headerRow, idIdx: idIdx, firstRow: headerRow + 1, lecRow: lecRow };
+}
+
+/** 아이디 → 시트 행번호(1-based) */
+function htaIdRowMap_(dbData, layout) {
+  var map = {};
+  for (var i = layout.firstRow; i < dbData.length; i++) {
+    var nId = normalizeString(dbData[i][layout.idIdx]);
+    if (nId) map[nId] = i + 1;
+  }
+  return map;
+}
+
+/** 강의명 → 시트 열번호(1-based) */
+function htaLectureColMap_(dbData, layout) {
+  var map = {};
+  var row = dbData[layout.lecRow];
+  for (var j = 0; j < row.length; j++) {
+    var lec = String(row[j] || '').trim();
+    if (lec) map[lec] = j + 1;
+  }
+  return map;
+}
+
 /**
  * 강의명 → 출석부 헤더 이름. '9강 …' → '교리9'.
  * 숫자+강 이 없으면 적힌 그대로 쓴다 ('대화1' · '교제' 등은 헤더와 같은 말이다).
@@ -84,28 +166,26 @@ function htaIsMakeup_(assignment) {
   return String(assignment || '').indexOf('과제+소감문') !== -1;
 }
 
-/**
- * 수기 입력 시 작동하는 단순 트리거 (onEdit)
- */
+// ============================================================================
+// 트리거
+// ============================================================================
+
+/** 수기 입력 (단순 트리거) */
 function onEdit(e) {
   if (!e) return;
   var sheet = e.source.getActiveSheet();
-
   if (sheet.getName() !== HTA_TAB_HOMEWORK) return;
 
   var row = e.range.getRow();
-  if (row === 1) return; // 1행(헤더) 수정 시 제외
+  if (row === 1) return; // 헤더 행
 
   processAttendance(sheet, row);
 }
 
-/**
- * 구글 폼 제출 시 작동하는 트리거 (onFormSubmit)
- */
+/** 구글 폼 제출 (설치형 트리거) */
 function onFormSubmit(e) {
   if (!e) return;
   var sheet = e.range.getSheet();
-
   if (sheet.getName() !== HTA_TAB_HOMEWORK) return;
 
   processAttendance(sheet, e.range.getRow());
@@ -113,44 +193,45 @@ function onFormSubmit(e) {
 
 /**
  * 출석부(DB) 한 칸 업데이트
+ *
+ * 트리거에서 불리므로 화면에 아무것도 못 띄운다. 못 찾은 것은 로그로 남긴다 —
+ * 조용히 지나가면 왜 안 바뀌는지 알아낼 방법이 없다.
  */
 function processAttendance(sheet, row) {
-  var rawId      = sheet.getRange(row, HTA_COL_ID).getValue();
-  var rawLecture = sheet.getRange(row, HTA_COL_LECTURE).getValue();
-  var assignment = sheet.getRange(row, HTA_COL_TYPE).getValue();
+  var hwHeader = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+  var cols = htaFindHomeworkCols_(hwHeader);
+  if (cols.id === -1 || cols.lecture === -1 || cols.type === -1) {
+    Logger.log("과제 탭 헤더를 못 찾았습니다 (아이디 · 몇 강 · 어떤 과제).");
+    return;
+  }
+
+  var rowVals = sheet.getRange(row, 1, 1, hwHeader.length).getValues()[0];
+  var rawId      = rowVals[cols.id];
+  var rawLecture = rowVals[cols.lecture];
+  var assignment = rowVals[cols.type];
 
   if (!rawId || !rawLecture || !assignment) return;
   if (!htaIsMakeup_(assignment)) return;
 
-  var targetLecture = htaLectureKey_(rawLecture);
-  var normalizedInputId = normalizeString(rawId);
-
   var dbSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HTA_TAB_ROSTER);
-  if (!dbSheet) return;
+  if (!dbSheet) { Logger.log("'" + HTA_TAB_ROSTER + "' 시트가 없습니다."); return; }
 
   var dbData = dbSheet.getDataRange().getValues();
-
-  var targetRow = -1;
-  for (var i = HTA_DB_FIRST_ROW; i < dbData.length; i++) {
-    var normalizedDbId = normalizeString(dbData[i][HTA_DB_ID_IDX]);
-    if (normalizedDbId !== "" && normalizedDbId === normalizedInputId) {
-      targetRow = i + 1;
-      break;
-    }
+  var layout = htaReadRosterLayout_(dbData);
+  if (!layout) {
+    Logger.log("출석부 구조를 못 읽었습니다 ('id' 행 또는 강의명 행). 자리를 짐작하지 않고 멈춥니다.");
+    return;
   }
 
-  var targetCol = -1;
-  for (var j = 0; j < dbData[HTA_DB_LEC_ROW].length; j++) {
-    if (String(dbData[HTA_DB_LEC_ROW][j]).trim() === targetLecture) {
-      targetCol = j + 1;
-      break;
-    }
+  var targetRow = htaIdRowMap_(dbData, layout)[normalizeString(rawId)];
+  var targetCol = htaLectureColMap_(dbData, layout)[htaLectureKey_(rawLecture)];
+  if (!targetRow || !targetCol) {
+    Logger.log("짝을 못 찾음: " + String(rawId).trim() + " · " + htaLectureKey_(rawLecture));
+    return;
   }
 
-  if (targetRow === -1 || targetCol === -1) return;
-
-  // 결석(X)일 때만 바꾼다. 이미 출석(O)인 사람을 건드리지 않는다 —
-  // 빈칸도 그대로 둔다. 빈칸은 '아직 안 찍음' 이지 결석이 아니다.
+  // 결석(X)일 때만 바꾼다. 이미 출석(O)인 사람을 건드리지 않고,
+  // 빈칸도 그대로 둔다 — 빈칸은 '아직 안 찍음' 이지 결석이 아니다.
   var cell = dbSheet.getRange(targetRow, targetCol);
   var currentValue = String(cell.getValue()).trim();
   if (currentValue === 'X' || currentValue === 'x') {
@@ -158,11 +239,9 @@ function processAttendance(sheet, row) {
   }
 }
 
-/**
- * =======================================================================
- * 기존 과제 제출 내역 전체를 읽어 출석부(DB)에 일괄 반영
- * =======================================================================
- */
+// ============================================================================
+// 기존 제출 내역 일괄 반영
+// ============================================================================
 function syncAllAttendance() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var submitSheet = ss.getSheetByName(HTA_TAB_HOMEWORK);
@@ -176,24 +255,30 @@ function syncAllAttendance() {
   var submitData = submitSheet.getDataRange().getValues();
   var dbData     = dbSheet.getDataRange().getValues();
 
-  var idToRowMap = {};
-  for (var i = HTA_DB_FIRST_ROW; i < dbData.length; i++) {
-    var nId = normalizeString(dbData[i][HTA_DB_ID_IDX]);
-    if (nId) idToRowMap[nId] = i + 1;
+  var cols = htaFindHomeworkCols_(submitData[0] || []);
+  if (cols.id === -1 || cols.lecture === -1 || cols.type === -1) {
+    SpreadsheetApp.getUi().alert(
+      "과제 탭에서 '아이디' · '몇 강' · '어떤 과제' 열을 찾지 못했습니다.\n" +
+      '헤더 이름을 확인해 주세요.');
+    return;
   }
 
-  var lectureToColMap = {};
-  for (var j = 0; j < dbData[HTA_DB_LEC_ROW].length; j++) {
-    var lec = String(dbData[HTA_DB_LEC_ROW][j]).trim();
-    if (lec) lectureToColMap[lec] = j + 1;
+  var layout = htaReadRosterLayout_(dbData);
+  if (!layout) {
+    SpreadsheetApp.getUi().alert(
+      "출석부(DB) 에서 'id' 행이나 강의명 행을 찾지 못했습니다.\n" +
+      '자리를 짐작하면 남의 출결을 바꿀 수 있어 멈춥니다.');
+    return;
   }
 
+  var idToRowMap      = htaIdRowMap_(dbData, layout);
+  var lectureToColMap = htaLectureColMap_(dbData, layout);
   var updateCount = 0;
 
   for (var r = 1; r < submitData.length; r++) {
-    var rawId      = submitData[r][HTA_COL_ID - 1];
-    var rawLecture = submitData[r][HTA_COL_LECTURE - 1];
-    var assignment = submitData[r][HTA_COL_TYPE - 1];
+    var rawId      = submitData[r][cols.id];
+    var rawLecture = submitData[r][cols.lecture];
+    var assignment = submitData[r][cols.type];
 
     if (!rawId || !rawLecture || !assignment) continue;
     if (!htaIsMakeup_(assignment)) continue;
@@ -210,35 +295,29 @@ function syncAllAttendance() {
     }
   }
 
-  var msg = updateCount + '개의 결석(X)을 보충(과제)으로 바꿨습니다.\n\n' +
-            "'과제' 는 출석이 아니라 '결석했지만 과제·소감문으로 메움' 입니다.\n" +
-            '인정 3회 한도는 그대로 적용됩니다.';
+  var msg = '결석(X) ' + updateCount + '칸을 과제로 바꿨습니다.\n\n' +
+            "'과제' 는 출석으로 인정되어 수료 조건에 함께 셉니다 (최대 3회).\n" +
+            '한도를 넘으면 관리자확인 대상이 됩니다.';
   SpreadsheetApp.getUi().alert(msg);
   return msg;
 }
 
-/**
- * =======================================================================
- * 옛 '◎' 가르기 — 이 스크립트가 예전에 찍어 둔 보충분만 '과제' 로
- * =======================================================================
- *
- * 2026-09-03 이전에는 이 스크립트가 보충을 '◎' 로 적었다. 그 값들이 아직
- * 시트에 남아 present 로 세어지고 있어 3회 한도를 우회한다.
- *
- * 그런데 '◎' 에는 진짜 '지난 기수 이수 이월' 도 섞여 있다. 둘을 눈으로는
- * 못 가른다. 가를 수 있는 유일한 근거는 **그 주차에 과제+소감문 제출 기록이
- * 있는가** 다 — 있으면 이 스크립트가 찍은 것이고, 없으면 이월이다.
- *
- * 먼저 plcCountLegacyCarryOver 로 몇 개인지 세어 보고(아무것도 안 바꾼다),
- * 숫자를 확인한 뒤에 plcSplitLegacyCarryOver 를 돌린다.
- */
-function plcCountLegacyCarryOver() {
-  return htaLegacyCarryOver_(false);
-}
+// ============================================================================
+// 옛 '◎' 가르기 — 이 스크립트가 예전에 찍어 둔 보충분만 '과제' 로
+// ============================================================================
+//
+// 2026-09-03 이전에는 이 스크립트가 보충을 '◎' 로 적었다. 그 값들이 아직
+// 시트에 남아 present 로 세어지고 있어 3회 한도를 우회한다.
+//
+// 그런데 '◎' 에는 진짜 '지난 기수 이수 이월' 도 섞여 있다. 둘을 눈으로는
+// 못 가른다. 가를 수 있는 유일한 근거는 **그 주차에 과제+소감문 제출 기록이
+// 있는가** 다 — 있으면 이 스크립트가 찍은 것이고, 없으면 이월이다.
+//
+// 먼저 plcCountLegacyCarryOver 로 몇 개인지 세어 보고(아무것도 안 바꾼다),
+// 숫자를 확인한 뒤에 plcSplitLegacyCarryOver 를 돌린다.
 
-function plcSplitLegacyCarryOver() {
-  return htaLegacyCarryOver_(true);
-}
+function plcCountLegacyCarryOver() { return htaLegacyCarryOver_(false); }
+function plcSplitLegacyCarryOver() { return htaLegacyCarryOver_(true); }
 
 function htaLegacyCarryOver_(apply) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -252,25 +331,24 @@ function htaLegacyCarryOver_(apply) {
   var submitData = submitSheet.getDataRange().getValues();
   var dbData     = dbSheet.getDataRange().getValues();
 
-  var idToRowMap = {};
-  for (var i = HTA_DB_FIRST_ROW; i < dbData.length; i++) {
-    var nId = normalizeString(dbData[i][HTA_DB_ID_IDX]);
-    if (nId) idToRowMap[nId] = i + 1;
+  var cols = htaFindHomeworkCols_(submitData[0] || []);
+  var layout = htaReadRosterLayout_(dbData);
+  if (cols.id === -1 || cols.lecture === -1 || cols.type === -1 || !layout) {
+    SpreadsheetApp.getUi().alert('시트 구조를 읽지 못했습니다. 자리를 짐작하지 않고 멈춥니다.');
+    return;
   }
-  var lectureToColMap = {};
-  for (var j = 0; j < dbData[HTA_DB_LEC_ROW].length; j++) {
-    var lec = String(dbData[HTA_DB_LEC_ROW][j]).trim();
-    if (lec) lectureToColMap[lec] = j + 1;
-  }
+
+  var idToRowMap      = htaIdRowMap_(dbData, layout);
+  var lectureToColMap = htaLectureColMap_(dbData, layout);
 
   var hits = 0;
   var samples = [];
   var seen = {};
 
   for (var r = 1; r < submitData.length; r++) {
-    var rawId      = submitData[r][HTA_COL_ID - 1];
-    var rawLecture = submitData[r][HTA_COL_LECTURE - 1];
-    var assignment = submitData[r][HTA_COL_TYPE - 1];
+    var rawId      = submitData[r][cols.id];
+    var rawLecture = submitData[r][cols.lecture];
+    var assignment = submitData[r][cols.type];
 
     if (!rawId || !rawLecture || !assignment) continue;
     if (!htaIsMakeup_(assignment)) continue;
@@ -295,9 +373,10 @@ function htaLegacyCarryOver_(apply) {
   }
 
   var msg = apply
-    ? '◎ ' + hits + '개를 과제로 바꿨습니다.'
-    : '바꿀 대상 ◎ 는 ' + hits + '개입니다. (아무것도 바꾸지 않았습니다)';
-  msg += '\n\n제출 기록이 없는 ◎ 는 진짜 이월이므로 건드리지 않았습니다.';
+    ? '◎ ' + hits + '칸을 과제로 바꿨습니다.'
+    : '바꿀 대상 ◎ 는 ' + hits + '칸입니다. (아무것도 바꾸지 않았습니다)';
+  msg += '\n\n제출 기록이 없는 ◎ 는 진짜 이월이므로 건드리지 않았습니다.' +
+         '\n인정 출석이라는 결과는 같고, 3회 한도를 제대로 타게 됩니다.';
   if (samples.length) msg += '\n\n예: ' + samples.join(' / ');
   if (!apply && hits > 0) msg += '\n\n이대로 바꾸려면 plcSplitLegacyCarryOver 를 실행하세요.';
 
