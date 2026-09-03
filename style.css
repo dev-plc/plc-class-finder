@@ -1264,7 +1264,7 @@ body.large-text .map-image {
 .matrix-modal-inner {
     background: var(--white, #fff);
     border-radius: 12px;
-    width: 100%;
+    width: fit-content;
     max-width: 95vw;
     max-height: 92vh;
     display: flex;
@@ -1330,7 +1330,6 @@ body.large-text .map-image {
     border-spacing: 0;
     font-size: calc(11px * var(--font-scale));
     width: max-content;
-    min-width: 100%;
 }
 .matrix-table th,
 .matrix-table td {
