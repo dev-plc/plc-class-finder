@@ -183,6 +183,22 @@ function htaShouldReplace_(current) {
   return v === 'X' || v === 'x' || v === '◎';
 }
 
+/**
+ * 결과를 사람에게 알린다.
+ *
+ * getUi().alert() 만 쓰면 **편집기에서 ▶ 로 돌렸을 때 그대로 멈춰 있는다.**
+ * 대화상자는 스프레드시트 탭에 떠야 하는데 편집기에는 띄울 자리가 없어서,
+ * 무한 루프처럼 계속 '실행 중' 으로 보인다. 실제로 그렇게 한참 기다린 적이 있다.
+ *
+ * 그래서 로그를 먼저 남기고, 대화상자는 되면 띄운다.
+ * 편집기에서 돌렸으면 실행 기록에, 시트 메뉴에서 눌렀으면 창으로 보인다.
+ */
+function htaTell_(msg) {
+  Logger.log(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* UI 없는 자리 */ }
+  return msg;
+}
+
 // ============================================================================
 // 트리거
 // ============================================================================
@@ -274,8 +290,7 @@ function htaApply_(apply) {
   var dbSheet     = ss.getSheetByName(HTA_TAB_ROSTER);
 
   if (!submitSheet || !dbSheet) {
-    SpreadsheetApp.getUi().alert('시트를 찾을 수 없습니다. 탭 이름을 확인해 주세요.');
-    return;
+    return htaTell_('시트를 찾을 수 없습니다. 탭 이름을 확인해 주세요.');
   }
 
   var submitData = submitSheet.getDataRange().getValues();
@@ -283,18 +298,14 @@ function htaApply_(apply) {
 
   var cols = htaFindHomeworkCols_(submitData[0] || []);
   if (cols.id === -1 || cols.lecture === -1 || cols.type === -1) {
-    SpreadsheetApp.getUi().alert(
-      "과제 탭에서 '아이디' · '몇 강' · '어떤 과제' 열을 찾지 못했습니다.\n" +
-      '헤더 이름을 확인해 주세요.');
-    return;
+    return htaTell_("과제 탭에서 '아이디' · '몇 강' · '어떤 과제' 열을 찾지 못했습니다.\n" +
+                    '헤더 이름을 확인해 주세요.');
   }
 
   var layout = htaReadRosterLayout_(dbData);
   if (!layout) {
-    SpreadsheetApp.getUi().alert(
-      "출석부(DB) 에서 'id' 행이나 강의명 행을 찾지 못했습니다.\n" +
-      '자리를 짐작하면 남의 출결을 바꿀 수 있어 멈춥니다.');
-    return;
+    return htaTell_("출석부(DB) 에서 'id' 행이나 강의명 행을 찾지 못했습니다.\n" +
+                    '자리를 짐작하면 남의 출결을 바꿀 수 있어 멈춥니다.');
   }
 
   var idToRowMap      = htaIdRowMap_(dbData, layout);
@@ -353,6 +364,5 @@ function htaApply_(apply) {
   if (samples.length) msg += '\n\n예: ' + samples.join(' / ');
   if (!apply && total > 0) msg += '\n\n이대로 바꾸려면 syncAllAttendance 를 실행하세요.';
 
-  SpreadsheetApp.getUi().alert(msg);
-  return msg;
+  return htaTell_(msg);
 }
