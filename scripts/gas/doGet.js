@@ -10,6 +10,19 @@
 //    승인 창을 띄울 자리가 없고, 권한이 없으면 조용히 실패한다.
 //    승인 → 재배포 순서를 지킬 것.
 //
+// 핵심 변경 (v31): 출결 값 '과제' 를 화이트리스트에 넣는다
+//   결석했지만 과제·소감문으로 메운 주차를 ◎ 와 가르기 위해 새로 둔 값이다.
+//   ⚠️ 짝이 되는 pullAttendance.js 의 PLC_PUSH_ALLOWED 도 같이 열어야 한다.
+//      시트의 '과제' 를 DB 로 올리는 것은 그쪽(pushAttendanceToDb)이고,
+//      여기 PLC_ALLOWED_STATUS 는 앱이 쓸 때만 쓰인다 — 앱은 '과제' 를 보내지
+//      않으므로(화면에서 잠겨 있다) 이 파일만 고치면 아무것도 달라지지 않는다.
+//   ⚠️ 그리고 Supabase 의 rpc_attendance.sql · views.sql 을 먼저 돌려야 한다.
+//      거꾸로 하면 set_attendance_batch 가 그 칸을 조용히 건너뛴다.
+//
+//   버전을 올리는 이유: v30 에서 '과제' 를 넣으면서 이 번호를 안 올렸다.
+//   그래서 편집기의 코드가 옛것인지 새것인지 응답의 version 으로 가릴 수 없었고,
+//   실제로 옛 코드가 배포된 채로 한참 갔다. 값이 바뀌면 번호도 바꾼다.
+//
 // 핵심 변경 (v30): 아이디를 한 규칙으로 다듬는다 (plcNormalizeId_)
 //   과제 탭 아이디는 손입력과 폼 응답이 섞여 '김도현 5326' · '김도현-5326' ·
 //   '김도현(5326)' · '김도현５３２６' 처럼 제각각 들어온다. 띄어쓰기만 지우고
@@ -397,7 +410,7 @@ function plcAuthorize() {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 30;
+  var currentVersion = 31;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -574,7 +587,7 @@ function plcCheckToken_(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 30; // + doGet 토큰 · 권한 점검 · 아이디 정형화
+  var currentVersion = 31; // + doGet 토큰 · 권한 점검 · 아이디 정형화 · '과제' 값
 
   if (!plcCheckToken_(e)) {
     return output.setContent(JSON.stringify({

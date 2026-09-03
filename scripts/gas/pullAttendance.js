@@ -451,6 +451,16 @@ function sbRpc_(fn, args) {
   return body ? JSON.parse(body) : null;
 }
 
+// 시트에서 DB 로 올릴 때 통과시키는 값. (v31) '과제' 를 포함한다.
+//
+// ★ 시트의 '과제' 가 앱에 보이느냐를 실제로 가르는 곳이 여기다.
+//   doGet.js 의 PLC_ALLOWED_STATUS 는 앱이 쓸 때만 쓰이는데, 앱은 '과제' 를
+//   보내지 않는다(화면에서 잠겨 있다). 그래서 doGet.js 만 고치고 재배포하면
+//   아무것도 달라지지 않고, 고친 줄 알고 넘어가게 된다 — 실제로 그랬다.
+//
+//   여기서 걸러진 값은 skippedBadValue 로 세어질 뿐 아무 데도 안 알린다.
+//   그리고 Supabase 의 rpc_attendance.sql 을 먼저 돌려 두지 않으면
+//   set_attendance_batch 가 같은 값을 또 조용히 건너뛴다. SQL 이 먼저다.
 var PLC_PUSH_ALLOWED = { "O": 1, "X": 1, "\u25ce": 1, "\uacfc\uc81c": 1, "-": 1, "": 1 };
 
 function pushAttendanceToDb() {
