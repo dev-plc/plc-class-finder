@@ -151,6 +151,8 @@
 | 과제 조회 정렬 키가 고유하지 않았음 | 기수 필터를 걷어내면서 정렬이 `session_label,type` 만 남았다. `sbSelectAll` 은 limit/offset 페이징이라 수백 행이 같은 값이면 페이지 경계에서 행이 **조용히** 빠지거나 겹친다. 지금은 한 페이지(1000)에 다 들어와 안 보일 뿐이라, 기수가 쌓이면 누군가의 과제가 사라진다. `member_id` 를 정렬에 되돌렸다 |
 | 이름+전화로 짝을 맺는 것의 한계 | uuid 대신 이름+전화(뒷자리)를 쓰므로 **기수를 넘어 동명이인이고 뒷자리까지 같으면 과제가 섞인다.** `members` 의 `unique (cohort_id, name, phone)` 덕에 같은 기수 안에서는 안 나고, `carry-over-attendance.mjs` 가 이미 쓰던 규칙과 같다 — 알고 받는 위험이다 |
 | `fix_future_x.sql` 이 반대를 지시하게 됨 | 그 파일은 '미래 주차 X 는 잘못 넘어온 것이니 지워라' 다. 미래 X 에 뜻이 생긴 뒤로는 그대로 돌리면 안내 근거가 지워진다. 지우지 않고 머리에 경고를 얹었다 — 49개를 왜 치웠는지도 남아야 해서다 |
+| 실명 표본이 문서에 박혀 있던 것 | `UPDATE_GUIDE.md` 의 CSV 예시가 **진짜 사람**이었다 (이름+전화뒷4+나이+조). 이력 정리를 하다 발견했다 — 지워진 파일만 쫓느라 **지금 트리에 살아 있는 것**을 못 보고 있었다. 예시는 가짜 이름으로 바꿨다 |
+| 경로 열거를 `rev-list --objects` 로 한 것 | 블롭 하나에 이름 하나만 붙어 나온다. 같은 파일이 루트와 하위 폴더 양쪽에 있으면 한쪽만 보인다 — 지울 목록에서 5개가 조용히 빠졌다. `log --all --name-only`(+`core.quotepath=false`)로 세야 한다. 따옴표 이스케이프 때문에 한글·공백 경로도 통째로 빠진다 |
 ---
 
 ## 남은 일
@@ -196,11 +198,34 @@
       **버전만** 올린다 (새 배포를 만들면 URL 이 바뀐다)
 - [ ] **GAS 스크립트 속성 `GH_TOKEN`** — 동기화 버튼용 fine-grained PAT
       (`Actions: Read and write`)
-- [ ] **git 이력의 개인정보** — 지웠던 CSV 5개가 이력에는 남아 있다.
-      저장소가 public 인 동안 이름·전화 뒷4자리가 계속 꺼내진다.
-      저장소를 private 으로 돌리거나 `git filter-repo` 로 잘라내야 한다
-- [ ] **원격 브랜치 `claude/fix-attendance-cache-sKSlV`** — `main` 과 공통 조상이 없는
-      별도 이력(8/8까지). 필요 없으면 GitHub 화면에서 삭제
+- [x] **git 이력의 개인정보** — **2026-09-03 재작성 완료.** `git filter-repo` 로
+      `main` 364개 커밋을 다시 썼다. 모든 커밋 SHA 가 바뀌었다 (`fe61f03` → `24cc6c1`).
+
+      | 지운 것 | 수 |
+      |---|---|
+      | 출석부 CSV (실명+전화뒷4+나이+조+출결) | 7 |
+      | `data.json` (2,289줄) · 변환 스크립트 | 6 |
+      | `scripts/firebase-config.js` (옛 카페앱 설정) | 1 |
+      | 윈도우 사용자명·소속이 박힌 `assets/c__Users_myc43_…` | 6 |
+      | 문서·코드에 예시로 박혀 있던 실명 토큰 → `[이름]` 치환 | 319 |
+
+      **CSV 는 5개가 아니라 7개였고**, `UPDATE_GUIDE.md` 에는 실명 표본이
+      **지금 트리에** 살아 있었다. 이력만 본 탓에 못 봤다 — 같은 일이 또 있으면
+      현재 파일부터 훑는다.
+
+      ⚠️ **아직 남은 것**: GitHub 은 강제 푸시 뒤에도 옛 커밋을 SHA 로 한동안
+      돌려준다. 완전히 없애려면 GitHub 지원팀에 gc 를 요청해야 한다 (아래).
+
+- [ ] **GitHub 지원팀에 옛 객체 정리 요청** — 재작성만으로는 부족하다.
+      Support 에 저장소 이름과 "force-pushed to remove sensitive data,
+      please garbage-collect unreachable objects and purge cached views" 로 요청한다.
+      그 전까지는 옛 SHA 를 아는 사람은 여전히 커밋을 열 수 있다
+- [ ] **`claude/fix-attendance-cache-sKSlV` 브랜치 삭제** — 별도 이력은 이미 끊었다
+      (깨끗한 `main` 커밋으로 덮어써서 CSV 에 도달하는 참조가 없다).
+      브랜치 자체는 GitHub 화면 → Branches 에서 지우면 된다
+- [ ] **옛 Firebase 프로젝트 확인** — 이력에서 지운 `firebase-config.js` 는 옛
+      카페 앱 것이다. 웹 apiKey 는 원래 공개되는 값이지만, 그 프로젝트가 아직
+      살아 있고 Firestore 규칙이 열려 있으면 그건 별개 문제다. 안 쓰면 지운다
 
 ### 기능
 

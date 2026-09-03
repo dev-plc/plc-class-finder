@@ -106,6 +106,12 @@ GAS 웹앱은 `application/json` 을 받으면 preflight 때문에 CORS 로 막�
 ## 저장소가 public 이다
 
 - 실명·전화번호가 든 파일(`data.live.json` 등)을 커밋하지 않는다 (`.gitignore` 등록됨)
+- **문서의 예시도 마찬가지다.** `UPDATE_GUIDE.md` 의 CSV 샘플이 진짜 사람이었다
+  (이름+전화뒷4+나이+조). 예시는 `홍길동1234` 처럼 가짜로 쓴다
+- 한 번 커밋하면 지워도 이력에 남는다. 2026-09-03 에 CSV 7개·`data.json`·
+  실명 토큰 319개를 `git filter-repo` 로 잘라내고 `main` 을 재작성했다.
+  **재작성해도 GitHub 은 옛 커밋을 SHA 로 한동안 돌려준다** — 지원팀에 gc 를
+  따로 요청해야 한다. 애초에 안 올리는 것 말고 싸게 되돌리는 방법은 없다
 - `service_role` 키는 GitHub Secrets 에만 둔다. 채팅·코드·로그 어디에도 남기지 않는다
 - `anon` 키는 공개돼도 안전하다 — RLS 가 막고, 쓰기는 `set_attendance_batch` RPC 로만 된다
 
