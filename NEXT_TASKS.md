@@ -142,42 +142,16 @@
 
 ### 지금 사람이 해야 하는 것
 
-- [ ] **`과제` 값 켜기 (v104)** — 코드는 들어갔고 아직 아무 데도 적용 안 됨.
-      **순서가 중요하다. 반드시 SQL 먼저.**
-  1. Supabase 에서 `supabase/views.sql` · `supabase/rpc_attendance.sql` 재실행
-  2. GAS **두 파일 다** 고친다. 한쪽만 고치면 아무것도 안 달라진다:
-     - `pullAttendance.js` 의 **`PLC_PUSH_ALLOWED`** ← **이게 진짜다.**
-       시트의 `과제` 를 DB 로 올리는 `pushAttendanceToDb` 가 보는 곳
-     - `doGet.js` 의 `PLC_ALLOWED_STATUS` ← 앱이 쓸 때만 쓰인다.
-       앱은 `과제` 를 안 보내므로(화면에서 잠김) 이것만 고치면 티가 안 난다
-  3. **웹앱 재배포** — 배포 관리 → 연필 → 버전: **새 버전**
-     (새 배포를 만들면 URL 이 바뀌어 `GAS_API_URL` 과 ⟳ 가 같이 죽는다).
-     `pushAttendanceToDb` 는 트리거가 부르므로 저장만 해도 다음 차례에 반영된다
-  4. **켜졌는지 확인** — 응답의 `version` 이 **31** 인지 본다.
-     v30 은 `과제` 가 없던 판이다 (2026-09-03 에 이것 때문에 옛 코드가
-     배포된 줄 모르고 넘어갔다. 그래서 번호를 갈랐다)
-  5. 아래 쿼리를 **켜기 전에 한 번, 켠 뒤에 한 번** 돌려 대조한다
-
-  왜 SQL 이 먼저인가 — 거꾸로 하면 조용히 어긋난다:
-
-  | 먼저 한 것 | 무슨 일이 나나 |
-  |---|---|
-  | SQL → GAS ✅ | SQL 만 된 동안은 시트의 `과제` 가 DB 로 안 올라와 아무 일도 안 난다 |
-  | GAS → SQL ⚠️ | `과제` 는 DB 에 들어오는데 옛 `is_absent()` 가 `= 'X'` 라 **결석으로도 출석으로도 안 세어진다.** 보충 인정 대상이던 주차가 사라져 **수료 진행률이 조용히 내려간다** |
-
-  ```sql
-  -- 판정 분포. 켜기 전후로 돌려 대조한다 — 사람 수가 달라지면 그만큼 판정이 움직인 것이다.
-  select verdict, count(*), min(credited), round(avg(credited), 1), max(credited)
-    from v_completion_status
-   where cohort_id = '3기'
-   group by verdict order by verdict;
-
-  -- DB 에 들어온 '과제' 칸. GAS 재배포 전에는 0 이다.
-  select count(*) from attendance
-   where cohort_id = '3기' and btrim(raw_status) = '과제';
-  ```
-
+- [x] **`과제` 값 켜기 (v104)** — **2026-09-03 완료.**
+      `views.sql` · `rpc_attendance.sql` 재실행 + GAS 두 파일(`PLC_ALLOWED_STATUS` ·
+      `PLC_PUSH_ALLOWED`) + 웹앱 재배포까지 끝났다. 시트의 `과제` 가 앱에 노란
+      `과제` 로 뜨는 것을 확인했다.
+      배운 것: 실제로 화면을 바꾸는 것은 `pullAttendance.js` 의 `PLC_PUSH_ALLOWED`
+      다 — `doGet.js` 쪽은 앱이 쓸 때만 쓰이는데 앱은 `과제` 를 안 보낸다.
+- [x] **GAS v32** — **2026-09-03 배포 확인.** ⟳ 가 `pushAttendanceToDb` 를 먼저
+      돌려 출석까지 가져온다. 응답 `version` 이 **32** 면 최신이다.
 - [ ] **`synced_at` 켜기 (v106)** — 동기화가 끝난 것을 화면이 알아채는 칸
+      (SQL 은 2026-09-03 에 실행했다고 들었으나 화면 확인은 아직이다)
   1. Supabase 에서 `supabase/add_synced_at.sql` 실행 (`alter table` 한 줄)
   2. **켜졌는지 확인**: 동기화 바에 `마지막 동기화: N분 전` 이 뜨면 된 것이다.
      26시간이 넘으면 빨갛게 — 8/21 처럼 크론이 조용히 죽은 것을 화면에서 안다
