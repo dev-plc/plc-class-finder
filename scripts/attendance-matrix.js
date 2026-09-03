@@ -14,7 +14,7 @@ import {
     getKimbapDetail,
     getHomeworkList,
     getCompletionOutlook,
-} from './members-data.js?v=108';
+} from './members-data.js?v=109';
 
 // ============================================================================
 // 세션명 정규화
