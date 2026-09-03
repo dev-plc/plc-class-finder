@@ -221,8 +221,8 @@ async function fetchFromServer(cohortId) {
                   `&members.cohort_id=eq.${enc}&order=member_id,session_date`),
       sbSelectAll(`kimbap_signups?select=member_id,session_label,session_date,applied` +
                   `&cohort_id=eq.${enc}&order=member_id,session_label`),
-      sbSelectAll(`homework_submissions?select=member_id,session_label,session_raw,type,url,submitted_at` +
-                  `&cohort_id=eq.${enc}&order=member_id,session_label,type`),
+      sbSelectAll(`homework_submissions?select=session_label,session_raw,type,url,submitted_at,members!inner(name,phone)` +
+                  `&order=session_label,type`),
       sbSelect(`team_links?select=team,chat_url&cohort_id=eq.${enc}`),
       sbSelect(`location_maps?select=location,image_url,detail_url`),
       // 판정 결과는 DB 뷰에서 그대로 읽는다 (규칙이 views.sql 한 곳에만 있도록)
@@ -270,9 +270,9 @@ async function fetchFromServer(cohortId) {
 
   const homeworkMap = {};
   for (const h of homework) {
-    const id = uuidToId.get(h.member_id);
-    if (!id) continue;
-    (homeworkMap[id] ||= []).push({
+    if (!h.members) continue;
+    const key = `${h.members.name}${h.members.phone || ''}`;
+    (homeworkMap[key] ||= []).push({
       session: h.session_raw || h.session_label,
       type: h.type || '',
       url: h.url || '',

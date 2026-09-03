@@ -436,7 +436,7 @@ function renderMyStatus(member) {
                 </div>
                 <div class="ms-hw-list">${shown}${more}</div>
                 ${canStillCount
-                    ? `<div class="ms-hw-hint">지금 제출하면 최대 ${p.makeupLeft}회까지 출석으로 인정돼요</div>`
+                    ? `<div class="ms-hw-hint">지금 제출하면 최대 ${MAKEUP_LIMIT}회까지 출석으로 인정돼요 (인정 ${p.makeupUsed}회 / 남은 횟수 : ${p.makeupLeft}회)</div>`
                     : ''}
             </div>`;
     }

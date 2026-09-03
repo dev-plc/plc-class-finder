@@ -111,9 +111,11 @@ scored as (
     -- '-' : 하차·중도합류·휴강 등 사유를 구분하지 않고 집계에서 제외
     (raw_status = '-')                                  as skipped,
     -- 해당 주차 과제 제출 여부
+    -- 해당 주차 과제 제출 여부 (다른 기수에서 제출한 것도 이름+전화번호로 찾음)
     exists (
       select 1 from homework_submissions h
-      where h.member_id = att.member_id
+      join members hm on hm.id = h.member_id
+      where hm.name = att.name and hm.phone = att.phone
         and h.session_label = att.session_label
         and is_makeup_type(h.type)
     )                                                    as has_homework
@@ -187,9 +189,13 @@ left join attendance a
 -- 안내 대상이 통째로 사라진다 (h 가 없는 행이 먼저 걸러진다).
 -- 여기 걸리지 않은 사람 = 아직 낼 것이 남은 사람이고, 이제 '과제만 낸 사람' 도
 -- 그 안에 남아야 한다.
-left join homework_submissions h
-       on h.member_id = m.id and h.session_label = s.label_norm
-      and is_makeup_type(h.type)
+left join (
+  select h.id, hm.name, hm.phone, h.session_label, h.type
+  from homework_submissions h
+  join members hm on hm.id = h.member_id
+) h on h.name = m.name and h.phone = m.phone
+   and h.session_label = s.label_norm
+   and is_makeup_type(h.type)
 where
   -- 결석한 주차만 ('-'와 빈칸은 안내 대상이 아니다). 미래 주차라도 'X'가 찍혀있으면 안내한다.
   -- '과제' 라고 적혔는데 제출 기록이 없으면 아래 h.id is null 로 걸려 안내된다.
