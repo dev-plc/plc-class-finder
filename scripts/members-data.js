@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=113';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=113';
+import { matches as hangulMatches } from './hangul.js?v=114';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=114';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -221,8 +221,14 @@ async function fetchFromServer(cohortId) {
                   `&members.cohort_id=eq.${enc}&order=member_id,session_date`),
       sbSelectAll(`kimbap_signups?select=member_id,session_label,session_date,applied` +
                   `&cohort_id=eq.${enc}&order=member_id,session_label`),
+      // 기수로 거르지 않는다 — 2기에 낸 과제가 3기 조회에서 보여야 한다.
+      // 사람마다 기수별로 다른 uuid 를 받으므로 짝은 이름+전화로 맺는다.
+      //
+      // 정렬은 반드시 고유해야 한다. sbSelectAll 이 limit/offset 으로 넘기므로
+      // (session_label, type) 처럼 수백 행이 같은 값이면 페이지 경계에서 행이
+      // 조용히 빠지거나 겹친다. 지금은 한 페이지(1000)에 들어와 안 보일 뿐이다.
       sbSelectAll(`homework_submissions?select=session_label,session_raw,type,url,submitted_at,members!inner(name,phone)` +
-                  `&order=session_label,type`),
+                  `&order=member_id,session_label,type`),
       sbSelect(`team_links?select=team,chat_url&cohort_id=eq.${enc}`),
       sbSelect(`location_maps?select=location,image_url,detail_url`),
       // 판정 결과는 DB 뷰에서 그대로 읽는다 (규칙이 views.sql 한 곳에만 있도록)

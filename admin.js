@@ -19,17 +19,17 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=113';
-import { matches as hangulMatches } from './scripts/hangul.js?v=113';
-import { registerServiceWorker } from './scripts/sw-update.js?v=113';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=113';
+} from './scripts/members-data.js?v=114';
+import { matches as hangulMatches } from './scripts/hangul.js?v=114';
+import { registerServiceWorker } from './scripts/sw-update.js?v=114';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=114';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
     normalizeSessionKey as prNormalizeSession,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=113';
+} from './scripts/attendance-matrix.js?v=114';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -944,12 +944,14 @@ function openMemberDetail(member) {
         return normStatus(key ? member[key] : '');
     };
 
-    // ◎ 는 앞으로의 주차에도 붙는다.
+    // 앞으로의 주차라도 값이 찍혀 있으면 센다. 빈칸만 '예정' 이다.
     //
-    // 지난 기수 이수자는 시트에 남은 주차까지 미리 ◎ 가 찍혀 있다.
-    // '아직 안 한 수업' 이라고 예정으로 묶어 버리면 신규 등록자와 구분이 안 된다.
-    // ◎ 는 예측이 아니라 이미 지난 기수에서 들었다는 사실이므로 그대로 센다.
-    // O·X·미기록은 지난 주차에서만 센다 — 그건 아직 일어나지 않은 일이다.
+    // 지난 기수 이수자는 시트에 남은 주차까지 미리 값이 찍혀 있다. ◎ 는 이미
+    // 들었다는 뜻이고, X 는 지난 기수에서 못 들어 아직 남았다는 뜻이다.
+    // 둘 다 예측이 아니라 이미 정해진 사실이므로 '아직 안 한 수업' 으로 묶으면
+    // 안 된다 — 묶어 버리면 신규 등록자와 구분이 안 되고, 더 나쁘게는 X 가
+    // 예정으로 덮여 과제·소감문 안내 대상에서 빠진다 (실제로 그렇게 빠졌다).
+    // 빈칸만 아직 아무 일도 일어나지 않은 칸이다.
     const counts = { O: 0, '◎': 0, '과제': 0, X: 0, '-': 0, '': 0 };
     let soon = 0;
 

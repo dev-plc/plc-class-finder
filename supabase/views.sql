@@ -110,8 +110,10 @@ scored as (
     is_absent(raw_status)                               as absent,
     -- '-' : 하차·중도합류·휴강 등 사유를 구분하지 않고 집계에서 제외
     (raw_status = '-')                                  as skipped,
-    -- 해당 주차 과제 제출 여부
-    -- 해당 주차 과제 제출 여부 (다른 기수에서 제출한 것도 이름+전화번호로 찾음)
+    -- 해당 주차 과제 제출 여부.
+    -- 사람은 기수마다 다른 uuid 를 받으므로 member_id 로 맺으면 지난 기수에
+    -- 낸 것이 통째로 빠진다. 이름+전화(뒷자리)로 찾는다 —
+    -- carry-over-attendance.mjs 가 쓰는 짝짓기 규칙과 같다.
     exists (
       select 1 from homework_submissions h
       join members hm on hm.id = h.member_id

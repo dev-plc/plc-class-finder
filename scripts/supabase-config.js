@@ -66,8 +66,11 @@ export async function sbSelect(path) {
  * 상한에 걸리면 조용히 잘려서, 화면에는 "출석 0" 인데 DB 뷰는 10 이라고 하는
  * 앞뒤가 안 맞는 상태가 된다.
  *
- * path 에 order 를 반드시 넣을 것. 정렬이 없으면 페이지마다 순서가 흔들려
- * 빠지거나 겹치는 행이 생긴다.
+ * path 에 order 를 반드시 넣되, **고유한 키로** 넣을 것. 정렬이 없거나
+ * 같은 값이 여러 행에 걸리면 페이지마다 순서가 흔들려 빠지거나 겹친다.
+ * 있으나 마나 한 order 가 규칙을 지킨 것처럼 보이는 게 더 위험하다 —
+ * homework_submissions 를 order=session_label,type 로 읽던 때가 그랬다.
+ * 한 페이지(1000)에 다 들어오는 동안은 멀쩡해 보인다.
  */
 export async function sbSelectAll(path, pageSize = 1000) {
   const out = [];
