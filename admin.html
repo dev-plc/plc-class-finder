@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=109">
-    <link rel="stylesheet" href="admin.css?v=109">
+    <link rel="stylesheet" href="style.css?v=110">
+    <link rel="stylesheet" href="admin.css?v=110">
 </head>
 <body>
     <div class="admin-container">
@@ -324,11 +324,15 @@
                 <button type="button" id="matrixCloseBtn" class="matrix-close-btn" aria-label="닫기">✕</button>
             </div>
             <div class="matrix-legend">
-                <span><b>O</b> 출석</span><span><b>◎</b> 이월</span>
-                <span><b>과제</b> 과제로 대체</span><span><b>X</b> 결석</span>
+                <span><b>O</b> 출석</span><span><b>◎</b> 지난 기수 이수</span>
+                <span><b>과제</b> 과제+소감문 대체 (출석 인정)</span><span><b>X</b> 결석</span>
                 <span><b>·</b> 미기록</span><span><b>−</b> 수업없음</span>
                 <span><i class="mx-lg-future"></i> 아직 안 한 수업</span>
-                <span>🍙 김밥</span><span>📝 과제+소감문</span>
+                <!-- 📝 는 '그 주차에 제출 기록이 있다' 는 뜻이다. 유형을 안 본다
+                     (attendance-matrix.js 의 homeworkForSession 은 주차로만 거른다).
+                     한때 '📝 과제+소감문' 이라고 적었는데, 과제만 낸 것에도 뜨므로
+                     틀린 말이었다. 인정 여부를 가르는 것은 이 배지가 아니라 '과제' 칸이다. -->
+                <span>🍙 김밥</span><span>📝 과제 제출</span>
                 <button type="button" id="matrixFoldBtn" class="matrix-fold-btn"
                         aria-expanded="false" style="display:none;"></button>
             </div>
@@ -336,7 +340,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=109"></script>
+    <script type="module" src="admin.js?v=110"></script>
 </body>
 </html>
 

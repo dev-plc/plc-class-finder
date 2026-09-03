@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 
-    <link rel="stylesheet" href="style.css?v=109">
+    <link rel="stylesheet" href="style.css?v=110">
 </head>
 <body>
     <div class="container">
@@ -143,8 +143,8 @@
                             <div id="attendanceGrid" class="attendance-grid"></div>
                             <div class="grid-legend">
                                 <span><b>O</b> 출석</span>
-                                <span><b>◎</b> 이월</span>
-                                <span><b>과제</b> 과제로 대체</span>
+                                <span><b>◎</b> 지난 기수 이수</span>
+                                <span><b>과제</b> 과제+소감문 대체 (출석 인정)</span>
                                 <span><b>X</b> 결석</span>
                                 <span><b>−</b> 수업없음</span>
                                 <span>🍙 김밥 신청</span>
@@ -217,11 +217,15 @@
                 <!-- '·'(미기록)이 범례에 없어서, 흐린 점을 보고 '수업없음' 으로
                      읽히고 있었다. 빈칸에는 뜻이 셋이나 되므로 셋 다 적는다. -->
                 <div class="matrix-legend">
-                    <span><b>O</b> 출석</span><span><b>◎</b> 이월</span>
-                    <span><b>과제</b> 과제로 대체</span><span><b>X</b> 결석</span>
+                    <span><b>O</b> 출석</span><span><b>◎</b> 지난 기수 이수</span>
+                    <span><b>과제</b> 과제+소감문 대체 (출석 인정)</span><span><b>X</b> 결석</span>
                     <span><b>·</b> 미기록</span><span><b>−</b> 수업없음</span>
                     <span><i class="mx-lg-future"></i> 아직 안 한 수업</span>
-                    <span>🍙 김밥</span><span>📝 과제+소감문</span>
+                    <!-- 📝 는 '그 주차에 제출 기록이 있다' 는 뜻이다. 유형을 안 본다
+                         (attendance-matrix.js 의 homeworkForSession 은 주차로만 거른다).
+                         한때 '📝 과제+소감문' 이라고 적었는데, 과제만 낸 것에도 뜨므로
+                         틀린 말이었다. 인정 여부를 가르는 것은 이 배지가 아니라 '과제' 칸이다. -->
+                    <span>🍙 김밥</span><span>📝 과제 제출</span>
                     <!-- 평소엔 최근 10주 + 다가오는 한 주만 그린다. 16주가 되면
                          가로로 계속 늘어나 정작 볼 이번 주가 화면 밖으로 나간다. -->
                     <button type="button" id="matrixFoldBtn" class="matrix-fold-btn"
@@ -278,6 +282,6 @@
         </div>
     </div>
 
-<script type="module" src="script.js?v=109"></script>
+<script type="module" src="script.js?v=110"></script>
 </body>
 </html>
