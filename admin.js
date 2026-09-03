@@ -313,7 +313,7 @@ function renderTeamsView(filterText = '') {
             });
         }
 
-        card.addEventListener('click', () => showTeamMembers(team));
+        card.addEventListener('click', () => openMatrixModal(team.name, team.members));
         teamsGrid.appendChild(card);
     });
 }
