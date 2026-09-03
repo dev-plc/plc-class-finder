@@ -19,17 +19,17 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=110';
-import { matches as hangulMatches } from './scripts/hangul.js?v=110';
-import { registerServiceWorker } from './scripts/sw-update.js?v=110';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=110';
+} from './scripts/members-data.js?v=111';
+import { matches as hangulMatches } from './scripts/hangul.js?v=111';
+import { registerServiceWorker } from './scripts/sw-update.js?v=111';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=111';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
     normalizeSessionKey as prNormalizeSession,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=110';
+} from './scripts/attendance-matrix.js?v=111';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -2285,6 +2285,17 @@ const SYNC_BLIND_MS = 60000;    // synced_at 이 아직 없을 때 그냥 기다
 
 let syncPollTimer = null;
 
+// 마지막 ⟳ 응답이 알려 준 GAS 버전. 안내 문구 끝에 붙인다.
+//
+// 웹앱은 편집기에 저장된 코드가 아니라 **배포된** 코드를 돈다. 새 코드를
+// 붙여넣고 재배포를 안 하면 옛 동작이 그대로인데, 화면에서는 그걸 알 방법이
+// 없었다. 실제로 v32(⟳ 가 출석까지 가져오는 판)를 붙여넣고 재배포를 안 해서
+// 시트 메뉴로는 되고 ⟳ 로는 안 되는 상황을 한참 헤맸다.
+let gasNote = '';
+// GAS 가 돌려준 문구 그대로. 진행 중 문구는 5초마다 덮이므로, 정작 중요한
+// '출석 몇 칸을 올렸는지' 가 순식간에 사라진다. 끝났을 때 한 번 더 싣는다.
+let gasMsg = '';
+
 function stopSyncPoll() {
     if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
     if (syncBtn) syncBtn.disabled = false;
@@ -2328,6 +2339,11 @@ async function readSyncedAt() {
     }
 }
 
+// 끝났을 때 붙일 꼬리 — GAS 가 한 말과 버전.
+function gasTail() {
+    return (gasMsg ? ' · ' + gasMsg : '') + gasNote;
+}
+
 // 새로 그리고 안내한다. refresh() 가 'refresh' 이벤트를 쏘면 화면이 알아서 따라온다.
 async function syncDone(msg) {
     stopSyncPoll();
@@ -2348,7 +2364,7 @@ function watchSync(before) {
     if (before === null) {
         setSyncInfo('요청했습니다. 1분 뒤 화면을 새로 고칩니다…', 'ok');
         syncPollTimer = setTimeout(
-            () => syncDone('새로 그렸습니다. (동기화가 그 사이 끝났는지는 확인하지 못했습니다)'),
+            () => syncDone('새로 그렸습니다. (동기화가 그 사이 끝났는지는 확인하지 못했습니다)' + gasTail()),
             SYNC_BLIND_MS);
         return;
     }
@@ -2356,16 +2372,16 @@ function watchSync(before) {
     const tick = async () => {
         if (Date.now() - started > SYNC_WAIT_MS) {
             stopSyncPoll();
-            setSyncInfo('아직 끝나지 않았습니다. 잠시 뒤 [화면 새로 고침] 을 눌러 주세요.', 'fail');
+            setSyncInfo('아직 끝나지 않았습니다. 잠시 뒤 [화면 새로 고침] 을 눌러 주세요.' + gasNote, 'fail');
             return;
         }
         const now = await readSyncedAt();
         if (now && now !== before) {
-            await syncDone('가져오기가 끝나 화면을 새로 그렸습니다.');
+            await syncDone('가져오기가 끝나 화면을 새로 그렸습니다.' + gasTail());
             return;
         }
         const sec = Math.round((Date.now() - started) / 1000);
-        setSyncInfo(`가져오는 중입니다… (${sec}초) 끝나면 저절로 새로 그립니다.`, 'ok');
+        setSyncInfo(`가져오는 중입니다… (${sec}초) 끝나면 저절로 새로 그립니다.` + gasNote, 'ok');
         syncPollTimer = setTimeout(tick, SYNC_POLL_MS);
     };
     syncPollTimer = setTimeout(tick, SYNC_POLL_MS);
@@ -2382,7 +2398,12 @@ syncBtn?.addEventListener('click', async () => {
     const before = await readSyncedAt();
 
     try {
-        await sbPostGas({ action: 'sync' });
+        const res = await sbPostGas({ action: 'sync' });
+        // GAS 가 실제로 무엇을 했는지 그대로 보여 준다.
+        // 배포본이 옛것이면 여기 출석 얘기가 없고 버전도 낮게 나온다.
+        gasNote = res?.version ? ` · GAS v${res.version}` : '';
+        gasMsg  = String(res?.message || '').trim();
+        setSyncInfo((gasMsg || '요청했습니다.') + gasNote, 'ok');
         watchSync(before);          // 요청이 성공했을 때만 지켜본다
     } catch (err) {
         setSyncInfo('요청 실패: ' + (err?.message || '알 수 없는 오류'), 'fail');
