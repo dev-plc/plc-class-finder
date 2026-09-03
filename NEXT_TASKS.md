@@ -135,6 +135,8 @@
 | GAS 버전을 안 올리고 값만 바꿈 | '과제' 를 넣고도 v30 그대로라 편집기의 코드가 옛것인지 새것인지 응답으로 가릴 수 없었다. 옛 코드가 배포된 채 한참 갔다 |
 | 시트 자동화가 보충을 `◎` 로 찍고 있었음 | 과제+소감문을 내면 X 를 `◎` 로 바꾸는 스크립트가 시트에 따로 살아 있었다. `◎` 는 present 로 세어져 3회 한도를 통째로 우회한다 — `◎` 가 두 뜻을 겸하던 근원이 이것이었다 |
 | 보충 인정 기준이 시트와 DB 에서 달랐음 | 시트는 '과제+소감문' 만 라벨을 붙이는데 DB 는 유형을 안 봐서 아무 제출이나 인정했다. 화면에는 '과제+소감문 대체' 로 뜨는데 실제로는 과제만 낸 사람이 있었다 |
+| `pushAttendanceToDb` 가 아이디를 공백만 지우고 맞춤 | v30 이 `plcNormalizeId_` 로 통일했는데 이 파일만 빠져 있었다. DB 아이디는 name+phone 이라 기호가 없으므로, 시트에 `김도현-5326` 처럼 적히면 짝이 안 맞아 **그 사람 출결이 통째로 안 올라간다.** 오류도 로그도 없었다 |
+| 편집기에서 GAS 미리보기가 멈춰 있던 것 | `getUi().alert()` 이 띄울 자리를 기다린다. 무한 루프처럼 보인다 — 로그를 먼저 남기게 고쳤다 |
 
 ---
 
@@ -160,70 +162,24 @@
      가 곧 '아직 안 켜졌다' 는 표시다. 칸이 생기면 5초마다 확인해 끝나는 즉시 그린다
 - [x] **`sheet_row` 켜기 (v105)** — 조 순서를 시트대로. **2026-09-02 확인 완료**
       (V3 가 맨 뒤로 갔다). SQL 실행 + 동기화로 값이 채워졌다
-- [ ] **보충 인정을 '과제+소감문' 으로 조이기 + 옛 `◎` 가르기** — 코드는 들어갔다
-      (`views.sql` 의 `is_makeup_type` · `homeworkToAttendance.js`).
-      **영향은 2026-09-03 에 이미 쟀다 — 적용해도 안전하다.**
+- [x] **보충 인정을 '과제+소감문' 으로 조이기 + 옛 `◎` 가르기** — **2026-09-03 완료.**
+      `views.sql` 재실행 + 시트 스크립트 교체 + `syncAllAttendance` 로 **17칸**
+      (`◎`→`과제` 17 · `X`→`과제` 0)을 바꿨다.
 
   | 잰 것 | 결과 |
   |---|---|
   | 유형 분포 | `과제` 208 · `과제+소감문` 25 (빈 값 없음) |
-  | 그중 **결석 주차** | 제출없음 36 · `과제` **3** · `과제`+`과제+소감문` 1 |
-  | credited 가 바뀌는 사람 | 허홍범 11→10 · 한보연 13→12 · 서미화 15→14 |
-  | `verdict` 가 바뀌는 사람 | **없음** (셋 다 원래 16 미만) |
-  | `◎`→`과제` 로 바뀔 칸 | **17칸** (`X`→`과제` 는 0). 미리보기로 확인 |
-  | 그중 한도(3회) 초과자 | **없음** — `◎`→`과제` 뒤에도 credited·verdict 전부 그대로 |
+  | 그중 결석 주차 | 제출없음 36 · `과제` 3 · `과제`+`과제+소감문` 1 |
+  | 유형 조이기 영향 | 허홍범 11→10 · 한보연 13→12 · 서미화 15→14, `verdict` 변화 없음 |
+  | `◎`→`과제` 영향 | **아무도 안 움직임** — 최다가 3칸이라 `least(3,3)=3` 으로 값이 같다 |
 
-  `◎` 를 present 에서 absent 로 옮기는 것이라 한도를 넘길까 걱정했는데,
-  가장 많은 사람이 3칸이라 `least(3,3)=3` 으로 값이 같았다.
-  4칸 이상인 사람이 없었다.
+  208건이라는 숫자만 보면 대규모 변경 같지만 거의 다 출석(O)한 주차 것이라
+  보충과 무관했다. **큰 숫자에 놀라기 전에 결석 주차만 추려 보는 것**이 요령이다.
 
-  미리보기의 '짝을 못 찾은 제출 200건' 은 정상이다 — 과제 탭이 기수를 넘어
+  미리보기의 '짝을 못 찾은 제출 200건' 도 정상이다 — 과제 탭이 기수를 넘어
   쌓이고 지난 기수 사람은 지금 출석부에 없다. 3기 과제+소감문은 DB 기준 25건,
   시트 쪽 매칭도 25건으로 정확히 맞았다.
 
-  208건의 `과제` 제출은 거의 다 출석(O)한 주차 것이라 보충과 무관했다.
-  실제로 움직이는 것은 3칸뿐이다. 그리고 그 세 주차는 `v_homework_required` 에
-  다시 뜨므로, 소감문만 더 내면 원래 점수로 돌아온다.
-
-  1. `views.sql` 재실행
-  2. 시트 스크립트 붙여넣고 **`plcPreviewAttendance`** 실행 — 몇 칸이 바뀔지만 센다
-  3. 숫자를 확인하고 **`syncAllAttendance`** 실행
-  4. `verdict` 분포를 전후로 대조
-
-  `◎` 를 가르는 근거는 **그 주차에 과제+소감문 제출 기록이 있는가** 하나뿐이다.
-  기록이 없는 `◎` 는 진짜 이월이라 안 건드린다 — 눈으로는 둘을 못 가른다.
-
-  다시 재고 싶을 때 쓰는 쿼리 (읽기만 한다):
-
-  ```sql
-  -- ① 유형 분포. 빈 값이 있으면 그 인정이 사라진다
-  select coalesce(nullif(btrim(type), ''), '(빈 값)') as 유형, count(*)
-    from homework_submissions h join members m on m.id = h.member_id
-   where m.cohort_id = '3기' group by 1 order by 2 desc;
-
-  -- ② 기준이 바뀌면 credited 가 달라지는 사람 (비어 있으면 그냥 적용해도 된다)
-  with cells as (
-    select m.id, m.name,
-           upper(btrim(coalesce(a.status,''))) in ('O','◎') as present,
-           is_absent(a.status)                              as absent,
-           exists (select 1 from homework_submissions h
-                    where h.member_id = m.id and h.session_label = s.label_norm) as hw_any,
-           exists (select 1 from homework_submissions h
-                    where h.member_id = m.id and h.session_label = s.label_norm
-                      and position('과제+소감문' in coalesce(h.type,'')) > 0)    as hw_both
-      from members m
-      join sessions s on s.cohort_id = m.cohort_id and s.is_class is true
-      left join attendance a on a.member_id = m.id and a.session_date = s.session_date
-     where m.cohort_id = '3기' and m.status = 'active'
-  )
-  select name,
-         count(*) filter (where present) + least(count(*) filter (where absent and hw_any),  3) as 지금,
-         count(*) filter (where present) + least(count(*) filter (where absent and hw_both), 3) as 바뀐뒤
-    from cells group by id, name
-  having least(count(*) filter (where absent and hw_any),  3)
-      <> least(count(*) filter (where absent and hw_both), 3)
-   order by 3, name;
-  ```
 - [x] **GAS 웹앱 재배포** — `scripts/gas/doGet.js` v30 배포 완료 (2026-08-22).
       다음에 `doPost` 를 고치면 또 재배포해야 한다. 배포 관리에서 기존 배포의
       **버전만** 올린다 (새 배포를 만들면 URL 이 바뀐다)

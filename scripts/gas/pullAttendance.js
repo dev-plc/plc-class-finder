@@ -77,6 +77,28 @@ function pullTargets_() {
 var PLC_SUPABASE_URL = "https://wvpqdicsqjozhxtxsnin.supabase.co";
 var PLC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2cHFkaWNzcWpvemh4dHhzbmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2OTA3OTMsImV4cCI6MjEwMDI2Njc5M30.-_vV9lQYoWMZMqEahveSz4fT5psTbF3feKfBZ28qG0w";
 
+// ============================================================================
+// 아이디 정형화 — doGet.js 의 plcNormalizeId_ 와 같은 규칙
+// ============================================================================
+// 이 파일은 오래 공백만 지우고 있었다 (.replace(/\s/g, "")).
+// 시트 쪽과 DB 쪽에 같은 규칙을 걸었으니 겉으로는 맞아떨어졌지만, 실은 위험했다 —
+// DB 의 아이디는 name + phone 을 이어 붙인 것이라 기호가 애초에 없다.
+// 그래서 시트에 '김도현-5326' 처럼 기호가 섞이면
+//   시트: 김도현-5326   DB: [이름]
+// 로 갈려 **그 사람의 출결이 통째로 안 올라간다.** 오류도 안 나고 로그도 없다.
+//
+// v30 이 이 규칙을 plcNormalizeId_ 로 통일했는데 이 파일만 빠져 있었다.
+// (doGet.js 가 없는 프로젝트를 위해 같은 규칙을 폴백으로 적어 둔다.
+//  소문자 변환은 하지 않는다 — doGet.js 의 plcRefs_ 와 같아야 한다)
+function pullNormalizeId_(v) {
+  if (typeof plcNormalizeId_ === "function") return plcNormalizeId_(v);
+  return String(v == null ? "" : v)
+    .replace(/[\uFF10-\uFF19]/g, function (d) {
+      return String.fromCharCode(d.charCodeAt(0) - 0xFEE0);
+    })
+    .replace(/[^0-9A-Za-z\uAC00-\uD7A3]/g, "");
+}
+
 // 키가 온전한지 먼저 본다. 편집기에서 이 함수를 골라 ▶ 실행하면 된다.
 //
 // 붙여넣다가 키가 잘리는 일이 잦다 (JWT 는 208 자라 화면에서 줄이 접힌다).
@@ -275,7 +297,7 @@ function pullAttendanceFromDb() {
 
   var idToOffset = {};
   for (var r = 0; r < rowCount; r++) {
-    var rawId = String(data[headerRowIdx + 1 + r][idCol] || "").replace(/\s/g, "");
+    var rawId = pullNormalizeId_(data[headerRowIdx + 1 + r][idCol]);
     if (rawId) idToOffset[rawId] = r;
   }
 
@@ -293,7 +315,7 @@ function pullAttendanceFromDb() {
   var unmatched = [];
   for (var mi = 0; mi < members.length; mi++) {
     var m = members[mi];
-    var sheetId = (String(m.name || "") + String(m.phone || "")).replace(/\s/g, "");
+    var sheetId = pullNormalizeId_(String(m.name || "") + String(m.phone || ""));
     if (idToOffset.hasOwnProperty(sheetId)) {
       uuidToOffset[m.id] = idToOffset[sheetId];
       knownOffset[idToOffset[sheetId]] = true;
@@ -355,7 +377,7 @@ function pullAttendanceFromDb() {
         changed++;
         if (samples.length < 5) {
           samples.push(dc.key + " " +
-            String(data[headerRowIdx + 1 + ri][idCol] || "").replace(/\s/g, "") + " " +
+            pullNormalizeId_(data[headerRowIdx + 1 + ri][idCol]) + " " +
             (before === "" ? "(빈칸)" : before) + " → " + (after === "" ? "(빈칸)" : after));
         }
       }
@@ -530,7 +552,7 @@ function pushAttendanceToDb() {
 
     var idToUuid = {};
     for (var mi = 0; mi < members.length; mi++) {
-      var k = (String(members[mi].name || "") + String(members[mi].phone || "")).replace(/\s/g, "");
+      var k = pullNormalizeId_(String(members[mi].name || "") + String(members[mi].phone || ""));
       if (k) idToUuid[k] = members[mi].id;
     }
     var keyToIso = {};   // MM/DD → YYYY-MM-DD
@@ -552,6 +574,12 @@ function pushAttendanceToDb() {
     var diffs = 0;
     var skippedBadValue = 0;
     var samples = [];
+    // 명단에서 짝을 못 찾은 시트 아이디. 사람 단위로 센다 —
+    // 바깥 반복이 주차라 그냥 세면 주차 수만큼 부풀려진다.
+    //
+    // 이게 조용히 지나가면 그 사람 출결이 통째로 안 올라가는데 아무도 모른다.
+    // 아이디 정형화가 어긋났을 때 나타나는 증상이 정확히 여기다.
+    var noMatchIds = {};
 
     for (var dj = 0; dj < dateCols.length; dj++) {
       var dc = dateCols[dj];
@@ -559,10 +587,10 @@ function pushAttendanceToDb() {
       if (!iso) continue;                       // DB 에 없는 주차는 건드리지 않는다
       for (var r = 0; r < rowCount; r++) {
         var row = data[headerRowIdx + 1 + r] || [];
-        var sheetId = String(row[idCol] || "").replace(/\s/g, "");
+        var sheetId = pullNormalizeId_(row[idCol]);
         if (!sheetId) continue;
         var uuid = idToUuid[sheetId];
-        if (!uuid) continue;                    // 시트에만 있는 사람은 건너뛴다
+        if (!uuid) { noMatchIds[sheetId] = 1; continue; }   // 명단에 없는 사람
 
         var want = String(row[dc.col] == null ? "" : row[dc.col]).trim().toUpperCase();
         if (!PLC_PUSH_ALLOWED.hasOwnProperty(want)) { skippedBadValue++; continue; }
@@ -579,9 +607,16 @@ function pushAttendanceToDb() {
       }
     }
 
+    var noMatchList = Object.keys(noMatchIds);
+    var noMatchNote = noMatchList.length
+      ? "\n⚠️ 명단에서 못 찾은 시트 아이디 " + noMatchList.length + "명은 건너뛰었습니다 — " +
+        "이 사람들의 출결은 DB 로 올라가지 않습니다.\n   " +
+        noMatchList.slice(0, 10).join(" · ") + (noMatchList.length > 10 ? " …" : "")
+      : "";
+
     if (!diffs) {
-      plcLog_(cohortId + " — DB 가 시트와 같습니다. 밀어넣을 것이 없습니다.");
-      return "차이 없음";
+      plcLog_(cohortId + " — DB 가 시트와 같습니다. 밀어넣을 것이 없습니다." + noMatchNote);
+      return "차이 없음" + (noMatchList.length ? " (못 찾은 아이디 " + noMatchList.length + "명)" : "");
     }
 
     var pushed = 0;
@@ -595,6 +630,7 @@ function pushAttendanceToDb() {
     if (skippedBadValue) {
       msg += "\n⚠️ 허용되지 않는 값이 든 칸 " + skippedBadValue + "개는 건너뛰었습니다 (O ◎ 과제 X - 빈칸 만 됩니다).";
     }
+    msg += noMatchNote;
     plcLog_(msg);
     return msg;
 
