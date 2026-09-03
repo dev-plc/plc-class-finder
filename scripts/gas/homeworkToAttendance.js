@@ -1,6 +1,6 @@
 // 과제 탭 → 출석부(DB) 자동 반영 (시트에 붙는 스크립트)
 //
-// 과제+소감문을 낸 사람의 결석(X)을 보충 표시로 바꾼다.
+// 과제+소감문을 낸 사람의 결석(X)과 옛 이월표시(◎)를 보충(과제)으로 바꾼다.
 // 폼 제출(onFormSubmit)과 수기 입력(onEdit) 둘 다에서 돈다.
 //
 // ⚠️ 이 파일을 고쳐도 웹앱 재배포는 필요 없다. 트리거가 저장된 코드를 그대로 부른다.
@@ -166,6 +166,23 @@ function htaIsMakeup_(assignment) {
   return String(assignment || '').indexOf('과제+소감문') !== -1;
 }
 
+/**
+ * 이 칸을 '과제' 로 바꿔야 하는가.
+ *
+ * X  결석. 근거가 있으면 보충으로 바꾼다
+ * ◎  옛 자동화가 찍어 둔 보충이거나 진짜 이월이다. 근거가 있으면 보충 —
+ *    '◎' 는 present 로 세어져 3회 한도를 통째로 우회하므로, 근거가 있는데
+ *    '◎' 로 두면 규정보다 후하게 인정된다.
+ *    근거가 없는 '◎' 는 진짜 이월이라 이 함수가 false 를 준다 (호출부가
+ *    이미 과제+소감문 제출을 확인한 뒤에만 부른다).
+ * O  이미 출석. 안 건드린다
+ * 빈칸 아직 안 찍었을 뿐 결석이 아니다. 그 주차 출석체크를 하면 X 로 채워진다
+ */
+function htaShouldReplace_(current) {
+  var v = String(current || '').trim();
+  return v === 'X' || v === 'x' || v === '◎';
+}
+
 // ============================================================================
 // 트리거
 // ============================================================================
@@ -230,11 +247,8 @@ function processAttendance(sheet, row) {
     return;
   }
 
-  // 결석(X)일 때만 바꾼다. 이미 출석(O)인 사람을 건드리지 않고,
-  // 빈칸도 그대로 둔다 — 빈칸은 '아직 안 찍음' 이지 결석이 아니다.
   var cell = dbSheet.getRange(targetRow, targetCol);
-  var currentValue = String(cell.getValue()).trim();
-  if (currentValue === 'X' || currentValue === 'x') {
+  if (htaShouldReplace_(cell.getValue())) {
     cell.setValue(HTA_STATUS_MAKEUP);
   }
 }
@@ -242,7 +256,19 @@ function processAttendance(sheet, row) {
 // ============================================================================
 // 기존 제출 내역 일괄 반영
 // ============================================================================
-function syncAllAttendance() {
+//
+// plcPreviewAttendance  아무것도 안 바꾸고 몇 칸이 바뀔지만 센다
+// syncAllAttendance     실제로 바꾼다
+//
+// 미리보기를 먼저 두는 이유: '◎' 를 '과제' 로 바꾸면 그 사람의 인정 방식이
+// 달라진다. '◎' 는 present 로 세어져 3회 한도를 안 거치는데, '과제' 는 거친다.
+// 네 번 이상 보충한 사람은 이 변경으로 관리자확인 대상이 될 수 있다 —
+// 몇 명인지 모르고 누르면 안 된다.
+
+function plcPreviewAttendance() { return htaApply_(false); }
+function syncAllAttendance()    { return htaApply_(true); }
+
+function htaApply_(apply) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var submitSheet = ss.getSheetByName(HTA_TAB_HOMEWORK);
   var dbSheet     = ss.getSheetByName(HTA_TAB_ROSTER);
@@ -273,75 +299,8 @@ function syncAllAttendance() {
 
   var idToRowMap      = htaIdRowMap_(dbData, layout);
   var lectureToColMap = htaLectureColMap_(dbData, layout);
-  var updateCount = 0;
 
-  for (var r = 1; r < submitData.length; r++) {
-    var rawId      = submitData[r][cols.id];
-    var rawLecture = submitData[r][cols.lecture];
-    var assignment = submitData[r][cols.type];
-
-    if (!rawId || !rawLecture || !assignment) continue;
-    if (!htaIsMakeup_(assignment)) continue;
-
-    var targetRow = idToRowMap[normalizeString(rawId)];
-    var targetCol = lectureToColMap[htaLectureKey_(rawLecture)];
-    if (!targetRow || !targetCol) continue;
-
-    var currentValue = String(dbData[targetRow - 1][targetCol - 1]).trim();
-    if (currentValue === 'X' || currentValue === 'x') {
-      dbSheet.getRange(targetRow, targetCol).setValue(HTA_STATUS_MAKEUP);
-      dbData[targetRow - 1][targetCol - 1] = HTA_STATUS_MAKEUP;
-      updateCount++;
-    }
-  }
-
-  var msg = '결석(X) ' + updateCount + '칸을 과제로 바꿨습니다.\n\n' +
-            "'과제' 는 출석으로 인정되어 수료 조건에 함께 셉니다 (최대 3회).\n" +
-            '한도를 넘으면 관리자확인 대상이 됩니다.';
-  SpreadsheetApp.getUi().alert(msg);
-  return msg;
-}
-
-// ============================================================================
-// 옛 '◎' 가르기 — 이 스크립트가 예전에 찍어 둔 보충분만 '과제' 로
-// ============================================================================
-//
-// 2026-09-03 이전에는 이 스크립트가 보충을 '◎' 로 적었다. 그 값들이 아직
-// 시트에 남아 present 로 세어지고 있어 3회 한도를 우회한다.
-//
-// 그런데 '◎' 에는 진짜 '지난 기수 이수 이월' 도 섞여 있다. 둘을 눈으로는
-// 못 가른다. 가를 수 있는 유일한 근거는 **그 주차에 과제+소감문 제출 기록이
-// 있는가** 다 — 있으면 이 스크립트가 찍은 것이고, 없으면 이월이다.
-//
-// 먼저 plcCountLegacyCarryOver 로 몇 개인지 세어 보고(아무것도 안 바꾼다),
-// 숫자를 확인한 뒤에 plcSplitLegacyCarryOver 를 돌린다.
-
-function plcCountLegacyCarryOver() { return htaLegacyCarryOver_(false); }
-function plcSplitLegacyCarryOver() { return htaLegacyCarryOver_(true); }
-
-function htaLegacyCarryOver_(apply) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var submitSheet = ss.getSheetByName(HTA_TAB_HOMEWORK);
-  var dbSheet     = ss.getSheetByName(HTA_TAB_ROSTER);
-  if (!submitSheet || !dbSheet) {
-    SpreadsheetApp.getUi().alert('시트를 찾을 수 없습니다.');
-    return;
-  }
-
-  var submitData = submitSheet.getDataRange().getValues();
-  var dbData     = dbSheet.getDataRange().getValues();
-
-  var cols = htaFindHomeworkCols_(submitData[0] || []);
-  var layout = htaReadRosterLayout_(dbData);
-  if (cols.id === -1 || cols.lecture === -1 || cols.type === -1 || !layout) {
-    SpreadsheetApp.getUi().alert('시트 구조를 읽지 못했습니다. 자리를 짐작하지 않고 멈춥니다.');
-    return;
-  }
-
-  var idToRowMap      = htaIdRowMap_(dbData, layout);
-  var lectureToColMap = htaLectureColMap_(dbData, layout);
-
-  var hits = 0;
+  var fromX = 0, fromCarry = 0, unmatched = 0;
   var samples = [];
   var seen = {};
 
@@ -356,29 +315,43 @@ function htaLegacyCarryOver_(apply) {
     var lectureKey = htaLectureKey_(rawLecture);
     var targetRow = idToRowMap[normalizeString(rawId)];
     var targetCol = lectureToColMap[lectureKey];
-    if (!targetRow || !targetCol) continue;
+    if (!targetRow || !targetCol) { unmatched++; continue; }
 
+    // 같은 사람이 같은 주차에 여러 번 낸 경우 한 번만 센다
     var cellKey = targetRow + ':' + targetCol;
-    if (seen[cellKey]) continue;          // 같은 사람이 같은 주차에 여러 번 낸 경우
+    if (seen[cellKey]) continue;
     seen[cellKey] = 1;
 
-    if (String(dbData[targetRow - 1][targetCol - 1]).trim() !== '◎') continue;
+    var current = String(dbData[targetRow - 1][targetCol - 1]).trim();
+    if (!htaShouldReplace_(current)) continue;
 
-    hits++;
-    if (samples.length < 10) samples.push(lectureKey + ' ' + String(rawId).trim());
+    if (current === '◎') fromCarry++; else fromX++;
+    if (samples.length < 10) {
+      samples.push(lectureKey + ' ' + String(rawId).trim() + ' ' + current + '→과제');
+    }
+
     if (apply) {
       dbSheet.getRange(targetRow, targetCol).setValue(HTA_STATUS_MAKEUP);
       dbData[targetRow - 1][targetCol - 1] = HTA_STATUS_MAKEUP;
     }
   }
 
+  var total = fromX + fromCarry;
   var msg = apply
-    ? '◎ ' + hits + '칸을 과제로 바꿨습니다.'
-    : '바꿀 대상 ◎ 는 ' + hits + '칸입니다. (아무것도 바꾸지 않았습니다)';
-  msg += '\n\n제출 기록이 없는 ◎ 는 진짜 이월이므로 건드리지 않았습니다.' +
-         '\n인정 출석이라는 결과는 같고, 3회 한도를 제대로 타게 됩니다.';
+    ? total + '칸을 과제로 바꿨습니다.'
+    : total + '칸이 바뀝니다. (아무것도 바꾸지 않았습니다)';
+  msg += '\n  결석(X) → 과제 : ' + fromX +
+         '\n  이월(◎) → 과제 : ' + fromCarry;
+
+  if (fromCarry > 0) {
+    msg += "\n\n⚠️ ◎ 였던 " + fromCarry + '칸은 인정 방식이 달라집니다.\n' +
+           '◎ 는 3회 한도를 안 거치지만 과제는 거칩니다 —\n' +
+           '네 번 이상 보충한 사람은 관리자확인 대상이 될 수 있습니다.';
+  }
+  msg += '\n\n제출 기록이 없는 ◎ 는 진짜 이월이라 건드리지 않았습니다.';
+  if (unmatched) msg += '\n명단·강의명에서 짝을 못 찾은 제출 ' + unmatched + '건은 건너뛰었습니다.';
   if (samples.length) msg += '\n\n예: ' + samples.join(' / ');
-  if (!apply && hits > 0) msg += '\n\n이대로 바꾸려면 plcSplitLegacyCarryOver 를 실행하세요.';
+  if (!apply && total > 0) msg += '\n\n이대로 바꾸려면 syncAllAttendance 를 실행하세요.';
 
   SpreadsheetApp.getUi().alert(msg);
   return msg;

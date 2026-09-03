@@ -134,6 +134,7 @@
 | ⟳ '시트에서 지금 가져오기' 가 출석을 안 가져옴 | 워크플로는 명단·편성·위치·과제제출·김밥만 본다. 출결은 pushAttendanceToDb 한 길뿐이라, 시트를 고치고 눌러도 화면이 그대로였다. 버튼 이름 탓에 아무도 의심하지 않았다 |
 | GAS 버전을 안 올리고 값만 바꿈 | '과제' 를 넣고도 v30 그대로라 편집기의 코드가 옛것인지 새것인지 응답으로 가릴 수 없었다. 옛 코드가 배포된 채 한참 갔다 |
 | 시트 자동화가 보충을 `◎` 로 찍고 있었음 | 과제+소감문을 내면 X 를 `◎` 로 바꾸는 스크립트가 시트에 따로 살아 있었다. `◎` 는 present 로 세어져 3회 한도를 통째로 우회한다 — `◎` 가 두 뜻을 겸하던 근원이 이것이었다 |
+| 보충 인정 기준이 시트와 DB 에서 달랐음 | 시트는 '과제+소감문' 만 라벨을 붙이는데 DB 는 유형을 안 봐서 아무 제출이나 인정했다. 화면에는 '과제+소감문 대체' 로 뜨는데 실제로는 과제만 낸 사람이 있었다 |
 
 ---
 
@@ -185,13 +186,45 @@
      가 곧 '아직 안 켜졌다' 는 표시다. 칸이 생기면 5초마다 확인해 끝나는 즉시 그린다
 - [x] **`sheet_row` 켜기 (v105)** — 조 순서를 시트대로. **2026-09-02 확인 완료**
       (V3 가 맨 뒤로 갔다). SQL 실행 + 동기화로 값이 채워졌다
-- [ ] **기존 `◎` 가르기** — 옛 `◎` 중 과제 대체분만 `과제` 로. 도구는 준비됐다
-      (`scripts/gas/homeworkToAttendance.js`). **`과제` 값 켜기를 마친 뒤에** 한다
-  1. 시트 스크립트에서 **`plcCountLegacyCarryOver`** 실행 — 개수만 센다.
-     0이면 할 일이 없다
-  2. 숫자를 확인하고 **`plcSplitLegacyCarryOver`** 실행
-  3. 가르는 근거는 **그 주차에 과제+소감문 제출 기록이 있는가** 하나뿐이다.
+- [ ] **보충 인정을 '과제+소감문' 으로 조이기 + 옛 `◎` 가르기** — 코드는 들어갔다
+      (`views.sql` 의 `is_makeup_type` · `homeworkToAttendance.js`).
+      **판정이 바뀌므로 영향부터 잰다.**
+  1. 아래 ①② 쿼리를 먼저 돌린다. ②가 비면 아무도 안 움직인다
+  2. `views.sql` 재실행
+  3. 시트 스크립트 붙여넣고 **`plcPreviewAttendance`** 실행 — 몇 칸이 바뀔지만 센다
+  4. 숫자를 확인하고 **`syncAllAttendance`** 실행
+  5. 가르는 근거는 **그 주차에 과제+소감문 제출 기록이 있는가** 하나뿐이다.
      기록이 없는 `◎` 는 진짜 이월이라 안 건드린다 — 눈으로는 둘을 못 가른다
+
+  ```sql
+  -- ① 유형 분포. 빈 값이 있으면 이 변경으로 그 인정이 사라진다
+  select coalesce(nullif(btrim(type), ''), '(빈 값)') as 유형, count(*)
+    from homework_submissions h join members m on m.id = h.member_id
+   where m.cohort_id = '3기' group by 1 order by 2 desc;
+
+  -- ② 기준이 바뀌면 credited 가 달라지는 사람 (비어 있으면 그냥 적용해도 된다)
+  with cells as (
+    select m.id, m.name,
+           upper(btrim(coalesce(a.status,''))) in ('O','◎') as present,
+           is_absent(a.status)                              as absent,
+           exists (select 1 from homework_submissions h
+                    where h.member_id = m.id and h.session_label = s.label_norm) as hw_any,
+           exists (select 1 from homework_submissions h
+                    where h.member_id = m.id and h.session_label = s.label_norm
+                      and position('과제+소감문' in coalesce(h.type,'')) > 0)    as hw_both
+      from members m
+      join sessions s on s.cohort_id = m.cohort_id and s.is_class is true
+      left join attendance a on a.member_id = m.id and a.session_date = s.session_date
+     where m.cohort_id = '3기' and m.status = 'active'
+  )
+  select name,
+         count(*) filter (where present) + least(count(*) filter (where absent and hw_any),  3) as 지금,
+         count(*) filter (where present) + least(count(*) filter (where absent and hw_both), 3) as 바뀐뒤
+    from cells group by id, name
+  having least(count(*) filter (where absent and hw_any),  3)
+      <> least(count(*) filter (where absent and hw_both), 3)
+   order by 3, name;
+  ```
 - [x] **GAS 웹앱 재배포** — `scripts/gas/doGet.js` v30 배포 완료 (2026-08-22).
       다음에 `doPost` 를 고치면 또 재배포해야 한다. 배포 관리에서 기존 배포의
       **버전만** 올린다 (새 배포를 만들면 URL 이 바뀐다)

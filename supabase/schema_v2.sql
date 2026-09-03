@@ -44,7 +44,9 @@ create table if not exists homework_submissions (
   member_id     uuid references members(id) on delete cascade not null,
   session_label text not null,              -- 정규화된 세션명 '교리3'
   session_raw   text,                       -- 폼 원문 '3강 예수 그리스도는...'
-  type          text,                       -- '과제' | '과제+소감문' | '소감문'
+  type          text,                       -- '과제' | '과제+소감문' (폼의 두 선택지)
+                                            -- 보충 인정은 '과제+소감문' 만 (views.sql 의 is_makeup_type)
+                                            -- 없는 값('소감문')을 적어 두었다가 없는 경우를 설계할 뻔했다
   url           text,
   submitted_at  timestamptz,
   created_at    timestamptz default now(),

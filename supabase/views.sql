@@ -55,6 +55,27 @@ returns boolean language sql immutable as $$
   select upper(btrim(coalesce(s, ''))) in ('X', '과제')
 $$;
 
+-- 보충으로 인정되는 제출인가.
+--
+-- 과제 탭의 유형은 둘뿐이다 — '과제' · '과제+소감문'.
+-- 규정은 둘 다 낸 경우만 출석으로 인정하므로 '과제만' 은 여기서 떨어진다.
+--
+-- 한동안 이 판정이 없어서, 유형을 안 보고 '그 주차에 제출 기록이 있으면 인정'
+-- 이었다. 시트 자동화는 '과제+소감문' 만 라벨을 붙이는데 DB 는 아무거나 세니
+-- 기준이 둘로 갈렸다 — 화면에는 '과제+소감문 대체' 라고 뜨는데 실제로는
+-- 과제만 낸 사람이 있었다.
+--
+-- 시트 쪽 htaIsMakeup_(homeworkToAttendance.js) 와 같은 규칙이다.
+-- position(...) > 0 은 그쪽 indexOf(...) !== -1 과 같아서, 유형에 다른 말이
+-- 붙어도('과제+소감문 제출' 등) 견딘다.
+--
+-- ⚠️ 유형이 빈 제출은 인정되지 않는다. 수기 입력에서 유형을 안 적으면
+--    그 사람이 조용히 손해를 본다 — 유형 분포를 가끔 확인할 것.
+create or replace function is_makeup_type(t text)
+returns boolean language sql immutable as $$
+  select position('과제+소감문' in coalesce(t, '')) > 0
+$$;
+
 -- ===================================================================
 -- 1. 인원별 출석 집계
 -- ===================================================================
@@ -94,6 +115,7 @@ scored as (
       select 1 from homework_submissions h
       where h.member_id = att.member_id
         and h.session_label = att.session_label
+        and is_makeup_type(h.type)
     )                                                    as has_homework
   from att
 )
@@ -161,8 +183,13 @@ from members m
 join sessions s on s.cohort_id = m.cohort_id and s.is_class is true
 left join attendance a
        on a.member_id = m.id and a.session_date = s.session_date
+-- 조건을 on 절에 둔다. where 로 옮기면 left join 이 무의미해져
+-- 안내 대상이 통째로 사라진다 (h 가 없는 행이 먼저 걸러진다).
+-- 여기 걸리지 않은 사람 = 아직 낼 것이 남은 사람이고, 이제 '과제만 낸 사람' 도
+-- 그 안에 남아야 한다.
 left join homework_submissions h
        on h.member_id = m.id and h.session_label = s.label_norm
+      and is_makeup_type(h.type)
 where
   -- 이미 지난 세션만
   s.session_date <= current_date
@@ -289,6 +316,7 @@ with base as (
     on a.member_id = m.id and a.session_date = s.session_date
   join homework_submissions h
     on h.member_id = m.id and h.session_label = s.label_norm
+   and is_makeup_type(h.type)
   where is_absent(a.status)
   order by m.id, s.session_date, h.submitted_at nulls last
 ),
