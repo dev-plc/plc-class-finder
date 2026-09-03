@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=111">
-    <link rel="stylesheet" href="admin.css?v=111">
+    <link rel="stylesheet" href="style.css?v=112">
+    <link rel="stylesheet" href="admin.css?v=112">
 </head>
 <body>
     <div class="admin-container">
@@ -68,10 +68,13 @@
         <div class="sync-bar">
             <button type="button" id="syncBtn" class="sync-btn">⟳ 시트에서 지금 가져오기</button>
             <button type="button" id="reloadBtn" class="sync-sub-btn">화면 새로 고침</button>
-            <!-- 저절로 되는 것을 먼저 적는다. 이 문구가 ⟳ 가 필요한 것만 적고 있어서,
+            <!-- 저절로 되는 것을 먼저 적는다. ⟳ 가 필요한 것만 적어 두었더니
                  시트에서 고친 출석이 [화면 새로 고침] 만으로 보이는 것을 두고
-                 "새로 고침이 시트를 부르나" 하는 오해가 났다. -->
-            <span class="sync-info" id="syncInfo">출석은 10분마다 저절로 들어옵니다. 그 밖에는 하루 한 번(정오) — 방금 시트에서 고치셨다면 ⟳ 를 눌러 주세요 (출석도 함께 가져옵니다).</span>
+                 "새로 고침이 시트를 부르나" 하는 오해가 났다.
+                 '(⟳ 와 무관)' 을 붙인 이유: 출석을 올리는 pushAttendanceToDb 는
+                 시트에 붙은 GAS 프로젝트에 있고, 웹앱(doPost)은 별도 프로젝트라
+                 부를 수가 없다. ⟳ 로 출석까지 당기려던 시도(GAS v32)를 물린 자리다. -->
+            <span class="sync-info" id="syncInfo">출석은 10분마다 저절로 들어옵니다 (⟳ 와 무관). 그 밖에는 하루 한 번(정오) — 방금 시트에서 고치셨다면 ⟳ 를 눌러 주세요.</span>
         </div>
 
         <!-- 출석 관리 (DB 가 원본. 시트에서 고치지 않는다) -->
@@ -340,7 +343,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=111"></script>
+    <script type="module" src="admin.js?v=112"></script>
 </body>
 </html>
 

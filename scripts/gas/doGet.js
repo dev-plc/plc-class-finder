@@ -10,7 +10,19 @@
 //    승인 창을 띄울 자리가 없고, 권한이 없으면 조용히 실패한다.
 //    승인 → 재배포 순서를 지킬 것.
 //
-// 핵심 변경 (v32): ⟳ 가 출석까지 가져온다
+// 핵심 변경 (v33): v32 의 '⟳ 가 출석까지' 를 물린다
+//   GAS 프로젝트가 둘이라는 것을 몰랐다. 웹앱(이 파일)은 독립 프로젝트이고
+//   pullAttendance.js 는 스프레드시트에 붙은 프로젝트에 있다. 전역을 공유하지
+//   않으므로 pushAttendanceToDb 가 여기서는 존재하지 않는다.
+//   typeof 가드가 걸려 '출석은 건너뜀' 만 매번 붙었다 — 설계상 정상인 상황을
+//   경고처럼 보이게 하므로 기능째로 뺀다.
+//
+//   출석은 그대로 10분 트리거(pushAttendanceToDb)가 가져온다. 잘 돌고 있다.
+//   ⟳ 가 그걸 즉시 하게 만드는 것은 편의일 뿐이고, 그러자고 600줄짜리 파일을
+//   웹앱 프로젝트에 한 벌 더 두는 건 남는 장사가 아니다 —
+//   같은 파일이 두 곳에 살면 한쪽만 고치는 사고가 난다.
+//
+// 핵심 변경 (v32, 되돌림): ⟳ 가 출석까지 가져온다
 //   '시트에서 지금 가져오기' 인데 출석만 빠져 있었다. 워크플로(sync-db.yml)는
 //   명단·편성·위치·과제 제출기록·김밥만 가져오고, 출결은 pushAttendanceToDb
 //   한 길로만 온다 — 10분 트리거이거나 시트 메뉴뿐이었다.
@@ -295,46 +307,20 @@ var PLC_GH_REPO_DEFAULT = "dev-plc/plc-class-finder";
 var PLC_GH_WORKFLOW_DEFAULT = "sync-db.yml";
 var PLC_SYNC_MIN_INTERVAL_MS = 60 * 1000;
 
-// 출석을 시트에서 DB 로 밀어 올린다. ⟳ 가 부르는 첫 단계다.
-//
-// 워크플로(sync-db.yml)는 출석을 안 가져온다 — --import-attendance 가 꺼져 있고,
-// 그건 계속 꺼 두어야 한다 (DB 를 통째로 덮어써서 아직 안 한 강의의 O/X 까지
-// 빈칸으로 밀어 넣는다). 대신 pushAttendanceToDb 가 시트와 DB 를 대조해
-// **다른 칸만** 올리므로 안전하다. 이 차이가 이 함수가 있는 이유다.
-//
-// pullAttendance.js 소속이라 그 파일이 없는 프로젝트에서는 존재하지 않는다.
-// GAS 는 파일이 전역을 공유하므로 있으면 그냥 불린다.
-function plcPushAttendance_() {
-  if (typeof pushAttendanceToDb !== "function") {
-    return "출석은 건너뜀 (pullAttendance.js 가 이 프로젝트에 없습니다)";
-  }
-  try {
-    return "출석: " + pushAttendanceToDb();
-  } catch (e) {
-    // 출석이 실패했다고 명단 동기화까지 막을 이유가 없다. 알리기만 한다.
-    return "⚠️ 출석 반영 실패: " + e.message;
-  }
-}
-
+// 출석은 여기서 다루지 않는다. 시트에 붙은 프로젝트의 10분 트리거
+// (pushAttendanceToDb)가 가져온다 — 이 파일과는 다른 프로젝트라 부를 수도 없다.
+// 여기가 요청하는 것은 명단·편성·위치·과제 제출기록·김밥이다.
 function plcRequestSync_() {
   var props = PropertiesService.getScriptProperties();
+  var token = props.getProperty("GH_TOKEN");
+  if (!token) {
+    return { success: false, message: "GH_TOKEN 이 없습니다. Apps Script → 프로젝트 설정 → 스크립트 속성에 넣어 주세요." };
+  }
 
-  // 연타 방지가 맨 앞이다. 뒤로 밀면 두 번 눌렀을 때 시트를 통째로 두 번 읽는다.
+  // 연타 방지. 마지막 요청 시각을 캐시에 둔다 (스크립트 속성은 쓰기가 느리다).
   var cache = CacheService.getScriptCache();
   if (cache.get("plc_sync_recent")) {
     return { success: false, message: "방금 요청했습니다. 1분 뒤에 다시 눌러 주세요." };
-  }
-
-  // ① 출석 먼저. 이건 GitHub 을 안 거치므로 GH_TOKEN 이 없어도 된다.
-  //    버튼 이름이 '시트에서 지금 가져오기' 인데 출석만 빠져 있어서,
-  //    시트를 고치고 눌러도 화면이 안 바뀌는 일이 실제로 있었다.
-  var attMsg = plcPushAttendance_();
-
-  // ② 나머지(명단·편성·위치·과제 제출기록·김밥)는 워크플로가 가져온다.
-  var token = props.getProperty("GH_TOKEN");
-  if (!token) {
-    return { success: true, message: attMsg +
-      " · 나머지는 요청 못 했습니다 — GH_TOKEN 이 없습니다 (Apps Script → 프로젝트 설정 → 스크립트 속성)." };
   }
 
   var repo = props.getProperty("GH_REPO") || PLC_GH_REPO_DEFAULT;
@@ -357,16 +343,15 @@ function plcRequestSync_() {
   var code = res.getResponseCode();
   if (code === 204) {
     cache.put("plc_sync_recent", "1", Math.ceil(PLC_SYNC_MIN_INTERVAL_MS / 1000));
-    return { success: true, message: attMsg + " · 나머지는 동기화를 요청했습니다 (보통 1~2분)." };
+    return { success: true, message: "동기화를 요청했습니다. 보통 1~2분 걸립니다." };
   }
-  // 아래는 전부 워크플로 쪽 실패다. 출석은 이미 반영됐으므로 그 사실을 같이 적는다.
   if (code === 401 || code === 403) {
-    return { success: false, message: attMsg + " · GitHub 토큰이 거부됐습니다 (" + code + "). 권한(Actions: read and write)과 만료일을 확인하세요." };
+    return { success: false, message: "GitHub 토큰이 거부됐습니다 (" + code + "). 권한(Actions: read and write)과 만료일을 확인하세요." };
   }
   if (code === 404) {
-    return { success: false, message: attMsg + " · 워크플로를 찾지 못했습니다. GH_REPO / GH_WORKFLOW 를 확인하세요 (" + repo + " · " + wf + ")." };
+    return { success: false, message: "워크플로를 찾지 못했습니다. GH_REPO / GH_WORKFLOW 를 확인하세요 (" + repo + " · " + wf + ")." };
   }
-  return { success: false, message: attMsg + " · GitHub " + code + ": " + res.getContentText().slice(0, 200) };
+  return { success: false, message: "GitHub " + code + ": " + res.getContentText().slice(0, 200) };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -450,7 +435,7 @@ function plcAuthorize() {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 32;
+  var currentVersion = 33;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -627,7 +612,7 @@ function plcCheckToken_(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 32; // + doGet 토큰 · 권한 점검 · 아이디 정형화 · '과제' 값 · ⟳ 출석
+  var currentVersion = 33; // + doGet 토큰 · 권한 점검 · 아이디 정형화 · '과제' 값
 
   if (!plcCheckToken_(e)) {
     return output.setContent(JSON.stringify({
