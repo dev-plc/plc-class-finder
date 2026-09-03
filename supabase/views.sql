@@ -191,11 +191,9 @@ left join homework_submissions h
        on h.member_id = m.id and h.session_label = s.label_norm
       and is_makeup_type(h.type)
 where
-  -- 이미 지난 세션만
-  s.session_date <= current_date
-  -- 결석한 주차만 ('-'와 빈칸은 안내 대상이 아니다).
+  -- 결석한 주차만 ('-'와 빈칸은 안내 대상이 아니다). 미래 주차라도 'X'가 찍혀있으면 안내한다.
   -- '과제' 라고 적혔는데 제출 기록이 없으면 아래 h.id is null 로 걸려 안내된다.
-  and is_absent(a.status)
+  is_absent(a.status)
   -- 아직 제출 안 한 건만
   and h.id is null
   and m.status = 'active';

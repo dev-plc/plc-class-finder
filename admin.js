@@ -959,7 +959,10 @@ function openMemberDetail(member) {
         return { sx, v, ...marksOf(sx) };
     }).concat(coming.map(sx => {
         const v = statusOf(sx);
-        if (v === '◎') { counts['◎'] += 1; return { sx, v, ...marksOf(sx) }; }
+        if (v && v !== '') {
+            counts[v in counts ? v : ''] += 1;
+            return { sx, v, ...marksOf(sx) };
+        }
         soon += 1;
         return { sx, v: null, ...marksOf(sx) };        // v=null → 예정
     }));
