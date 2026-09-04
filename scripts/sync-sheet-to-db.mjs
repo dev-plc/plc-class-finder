@@ -685,6 +685,38 @@ if (homeworkNoDate) {
   console.log(`    예: ${[...homeworkNoDateSample].join(' / ')}`);
 }
 
+// 아직 하지 않은 강의에 찍힌 값. 시트만 보면 알 수 있으므로 uuid 가 필요 없다 —
+// 그래서 dry-run(아직 members 를 안 썼다)에서도 그대로 부를 수 있다.
+//
+// 지우던 시절에는 이 숫자가 '지운 개수' 였다. 이제는 '그대로 들어갈 개수' 라
+// 성격이 정반대다. 시트를 안 비우고 돌리면 지난 기수 찌꺼기가 통째로 들어오고
+// 곧바로 과제 안내까지 나가므로, 이 로그가 유일하게 남은 안전망이다.
+const todayIso = new Date().toISOString().slice(0, 10);
+
+function futureMarkSummary(rows) {
+  const n = { O: 0, X: 0, '과제': 0 };
+  const sample = [];
+  for (const a of rows) {
+    if (!(a.session_date > todayIso)) continue;
+    const st = String(a.status ?? '').trim();
+    const k = st.toUpperCase() === 'O' ? 'O' : (st === 'X' || st === '과제' ? st : null);
+    if (!k) continue;                       // ◎ · - · 빈칸은 볼 것 없다
+    n[k]++;
+    if (sample.length < 6) {
+      sample.push(`${String(a._key || '').split('|')[0]} ${toMMDD(a.session_date) || a.session_date}=${st}`);
+    }
+  }
+  return { ...n, total: n.O + n.X + n['과제'], sample };
+}
+
+function printFutureMarks(sum) {
+  if (!sum.total) return;
+  console.log(`   미래 주차 표시: ◎ 로 옮길 O ${sum.O}개 · 그대로 넣을 X ${sum.X}개 · 과제 ${sum['과제']}개`);
+  console.log(`      예: ${sum.sample.join(' / ')}`);
+  console.log('      ⚠️ 이어 듣는 분의 지난 기수 기록이 맞는지 보세요.');
+  console.log('         새로 오는 분 칸이 여기 있으면 시트를 안 비운 것입니다.');
+}
+
 console.log('📊 변환 결과');
 console.log(`   sessions   ${sessions.length} (실제 강의 ${sessions.filter(s => s.is_class).length})`);
 console.log(`   members    ${members.length}`);
@@ -698,6 +730,9 @@ if (dryRun) {
   console.log('member 샘플:', (({_key,_id,...r}) => r)(members[0] || {}));
   console.log('kimbap 샘플:', kimbapRows.slice(0, 2));
   console.log('homework 샘플:', homeworkRows.slice(0, 2));
+  // 출석은 --import-attendance 를 켤 때만 들어가지만, 그때 무엇이 들어갈지는
+  // 여기서 미리 봐야 한다. 실제 실행은 되돌릴 수 없다.
+  printFutureMarks(futureMarkSummary(attendance));
   process.exit(0);
 }
 
@@ -828,9 +863,6 @@ function namesOf(set, limit = 12) {
 }
 
 console.log('▶ attendance');
-const todayIso = new Date().toISOString().slice(0, 10);
-let futureMarks = 0;
-const futureSample = new Set();
 
 const attRows = attendance
   .map(a => {
@@ -838,15 +870,24 @@ const attRows = attendance
     if (!uuid) return null;
     const st = String(a.status ?? '').trim();
 
-    // 아직 하지 않은 강의에 O/X/과제 가 있을 수는 없다.
-    // 지난 기수 결석을 X 로 적어 둔 것이 새 기수로 넘어오면
-    // 결석 수가 부풀려지고, 열리지도 않은 강의의 과제를 내라고 안내하게 된다.
-    // '과제' 도 마찬가지다 — 열리지도 않은 수업을 과제로 메울 수는 없다.
-    // ◎(지난 기수 이수 이월)와 -(집계 제외)는 미래 주차에도 정당하므로 통과시킨다.
-    if (a.session_date > todayIso && ['O', 'X', '과제'].includes(st.toUpperCase())) {
-      futureMarks++;
-      if (futureSample.size < 5) futureSample.add(`${a._key.split('|')[0]} ${toMMDD(a.session_date) || a.session_date}=${st}`);
-      return { member_id: uuid, session_date: a.session_date, status: '' };
+    // 아직 하지 않은 강의에 값이 있으면 그것은 지난 기수의 기록이다. 지우지 않는다.
+    //
+    // 지난 기수 중간부터 들은 사람은 새 기수 기준으로 앞 주차를 이미 들었고,
+    // 못 들은 주차도 있다. 그 기록이 있어야 지금 무엇을 메워야 하는지 알 수 있다.
+    //
+    //   X    지난 기수에 못 들은 주차 — 지금 과제·소감문으로 메울 수 있어야 한다
+    //   과제  지난 기수에 결석했지만 메운 주차 — 보충 횟수로 세야 한다
+    //   ◎ -  원래부터 미래 주차에도 정당하다
+    //
+    // O 만 옮긴다. 아직 하지 않은 수업에 '출석' 이 있을 수는 없으니,
+    // 지난 기수에 들었다는 뜻이다 — ◎ 로 적어야 언제부터 들었는지가 드러난다.
+    //
+    // 한때는 이 셋을 전부 빈칸으로 지웠다. 3기 초기 동기화 때 지난 기수 결석
+    // 49개가 넘어와 결석 수가 부풀려진 일 때문인데(fix_future_x.sql),
+    // 그러면 이어 듣는 사람의 근거까지 같이 지워진다. 지우는 대신 아래에서
+    // 크게 보고한다 — 시트를 안 비우고 돌렸다면 그 로그에서 보인다.
+    if (a.session_date > todayIso && st.toUpperCase() === 'O') {
+      return { member_id: uuid, session_date: a.session_date, status: '◎' };
     }
     return { member_id: uuid, session_date: a.session_date, status: st };
   })
@@ -855,12 +896,7 @@ const attRows = attendance
 if (IMPORT_ATTENDANCE) {
   await upsert('attendance', attRows, 'member_id,session_date');
   console.log(`   ${attRows.length}건 (시트 값으로 덮어씀)`);
-  if (futureMarks) {
-    console.log(`   ℹ️ 아직 하지 않은 강의의 O/X ${futureMarks}개는 빈칸으로 넣었습니다.`);
-    console.log(`      예: ${[...futureSample].join(' / ')}`);
-    console.log('      지난 기수 결석 표시가 남아 있으면 결석 수가 부풀려지고');
-    console.log('      열리지도 않은 강의의 과제를 내라고 안내하게 됩니다.');
-  }
+  printFutureMarks(futureMarkSummary(attendance));
 } else {
   const filled = attRows.filter(a => String(a.status ?? '').trim() !== '').length;
   console.log(`   건너뜀 — 출석은 DB 가 원본입니다 (앱에서 기록)`);

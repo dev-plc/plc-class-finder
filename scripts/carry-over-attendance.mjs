@@ -230,17 +230,24 @@ for (const m of next.members) {
     if (cur !== '') {
       // 이미 값이 있으면 원칙은 그대로 둔다.
       //
-      // 예외 하나: 지난 기수에 과제로 인정받은 주차가 새 기수에서 X 로 잡혀 있는 경우.
-      // 그 X 는 "새 기수에서 아직 안 들었다"는 뜻으로 찍힌 것인데,
+      // 예외 하나: 지난 기수에 과제로 인정받은 주차가 새 기수에서 X 나 과제 로
+      // 잡혀 있는 경우. 그 값은 "새 기수에서 아직 안 들었다"는 뜻으로 찍힌 것인데,
       // 이미 인정받은 주차를 다시 들으라는 얘기가 되어 규칙과 어긋난다.
-      // 그 좁은 경우에만 ◎ 로 바꾼다. O·◎·- 는 어떤 경우에도 건드리지 않는다.
-      if (!(isMakeup && cur.toUpperCase() === 'X')) { collided++; continue; }
+      //
+      // '과제' 를 같이 받는 이유: 동기화가 미래 주차의 '과제' 를 살려서 넣게 됐다
+      // (sync-sheet-to-db.mjs). 그대로 두면 is_absent('과제') 가 참이고 제출 기록도
+      // 기수를 넘어 매칭되므로 makeup_limit() 3회를 한 칸 먹는다 — 지난 기수에서
+      // 이미 받은 인정을 새 기수에서 또 치르는 셈이다. ◎ 는 present 라 한도를 안 쓴다.
+      //
+      // isMakeup 일 때만 걸리므로, 지난 기수에 인정 못 받은 '과제' 는 그대로 남아
+      // 정상적으로 보충 판정을 받는다. O·◎·- 는 어떤 경우에도 건드리지 않는다.
+      if (!(isMakeup && ['X', '과제'].includes(cur.toUpperCase()))) { collided++; continue; }
       overwrites++;
     }
 
     rows.push({ member_id: m.id, session_date: s.session_date, status: '◎' });
     // 과제로 인정받은 주차는 눈에 띄게 표시한다 (출석해서 이수한 것과 구분)
-    marks.push(isMakeup ? `${s.label_norm}*${cur ? '(X→◎)' : ''}` : s.label_norm);
+    marks.push(isMakeup ? `${s.label_norm}*${cur ? `(${cur}→◎)` : ''}` : s.label_norm);
     if (isMakeup) makeupMarks++;
   }
   if (marks.length) report.push({ name: m.name, phone: m.phone, team: m.team, marks, makeupMarks, overwrites });
@@ -267,7 +274,7 @@ if (report.length) {
   const totalMakeup = report.reduce((n, r) => n + (r.makeupMarks || 0), 0);
   const totalOver = report.reduce((n, r) => n + (r.overwrites || 0), 0);
   console.log(`상세:  (* 는 ${FROM} 에서 과제로 인정받은 주차 — ${totalMakeup}개` +
-              (totalOver ? `, 그중 X→◎ 로 바꾼 것 ${totalOver}개` : '') + ')');
+              (totalOver ? `, 그중 X·과제 → ◎ 로 바꾼 것 ${totalOver}개` : '') + ')');
   for (const r of report.slice(0, 60)) {
     console.log(`   ${r.team || '-'} ${r.name}${r.phone || ''}  ${r.marks.length}개 · ${r.marks.join(', ')}`);
   }
