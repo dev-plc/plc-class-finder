@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=114">
-    <link rel="stylesheet" href="admin.css?v=114">
+    <link rel="stylesheet" href="style.css?v=115">
+    <link rel="stylesheet" href="admin.css?v=115">
 </head>
 <body>
     <div class="admin-container">
@@ -71,10 +71,14 @@
             <!-- 저절로 되는 것을 먼저 적는다. ⟳ 가 필요한 것만 적어 두었더니
                  시트에서 고친 출석이 [화면 새로 고침] 만으로 보이는 것을 두고
                  "새로 고침이 시트를 부르나" 하는 오해가 났다.
-                 '(⟳ 와 무관)' 을 붙인 이유: 출석을 올리는 pushAttendanceToDb 는
-                 시트에 붙은 GAS 프로젝트에 있고, 웹앱(doPost)은 별도 프로젝트라
-                 부를 수가 없다. ⟳ 로 출석까지 당기려던 시도(GAS v32)를 물린 자리다. -->
-            <span class="sync-info" id="syncInfo">출석은 10분마다 저절로 들어옵니다 (⟳ 와 무관). 그 밖에는 하루 한 번(정오) — 방금 시트에서 고치셨다면 ⟳ 를 눌러 주세요.</span>
+
+                 한때 여기에 '(⟳ 와 무관)' 이라고 적혀 있었다. 출석을 올리는
+                 pushAttendanceToDb 가 시트에 붙은 GAS 프로젝트에 있어 웹앱(doPost)이
+                 부를 수 없었기 때문이다 (GAS v32 를 물린 자리).
+                 지금은 다르다 — 동기화 스크립트가 시트를 읽어 출석까지 직접 넣는다.
+                 ⟳ 도 출석을 가져온다. 다만 '지우기'(시트에서 비운 칸)는 못 하고
+                 그건 여전히 10분 트리거 몫이다. -->
+            <span class="sync-info" id="syncInfo">⟳ 를 누르면 출석까지 함께 가져옵니다 (1~2분). 저절로도 들어옵니다 — 출석은 10분마다, 그 밖은 하루 한 번(정오).</span>
         </div>
 
         <!-- 출석 관리 (DB 가 원본. 시트에서 고치지 않는다) -->
@@ -343,7 +347,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=114"></script>
+    <script type="module" src="admin.js?v=115"></script>
 </body>
 </html>
 

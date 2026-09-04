@@ -8,7 +8,11 @@
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기
 //   node scripts/sync-sheet-to-db.mjs --cohort=3기 --activate   (기수 전환)
 //   node scripts/sync-sheet-to-db.mjs --homework-since=2026-07-31  (과제 기준일 직접 지정)
-//   node scripts/sync-sheet-to-db.mjs --import-attendance          (시트 출석으로 DB 덮어쓰기, 기수 첫 구축용)
+//   node scripts/sync-sheet-to-db.mjs --import-attendance          (빈칸까지 덮어쓰기, 기수 첫 구축용)
+//
+// 출석은 플래그 없이도 늘 가져온다 (값이 있는 칸만). --import-attendance 는
+// '가져올까' 가 아니라 '빈칸까지 덮어쓸까' 를 정한다 — 켜면 시트에서 비운 칸이
+// DB 에서도 지워지므로 기수를 처음 만들 때만 쓴다.
 //
 // 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GAS_API_URL(선택)
 
@@ -886,25 +890,46 @@ const attRows = attendance
     // 49개가 넘어와 결석 수가 부풀려진 일 때문인데(fix_future_x.sql),
     // 그러면 이어 듣는 사람의 근거까지 같이 지워진다. 지우는 대신 아래에서
     // 크게 보고한다 — 시트를 안 비우고 돌렸다면 그 로그에서 보인다.
-    if (a.session_date > todayIso && st.toUpperCase() === 'O') {
+    //
+    // ⚠️ 이 변환은 기수 첫 구축(IMPORT_ATTENDANCE)에서만 한다.
+    //    평소 경로에도 걸면 10분 트리거와 10분마다 서로 되돌린다 —
+    //    트리거는 PLC_PUSH_ALLOWED 대로 O 를 O 로 올리기 때문이다
+    //    (gas/pullAttendance.js). 어차피 이 변환이 필요한 자리는
+    //    지난 기수 시트를 옮겨 담는 첫 구축뿐이다 (COHORT_SWITCH.md 2·3단계).
+    if (IMPORT_ATTENDANCE && a.session_date > todayIso && st.toUpperCase() === 'O') {
       return { member_id: uuid, session_date: a.session_date, status: '◎' };
     }
     return { member_id: uuid, session_date: a.session_date, status: st };
   })
   .filter(Boolean);
 
+// 출석은 늘 가져온다. --import-attendance 는 '가져올까' 가 아니라
+// **'빈칸까지 덮어쓸까'** 를 정하는 스위치다.
+//
+// 평소에 빈칸을 보내면 안 되는 이유: 시트에서 아직 안 찍은 칸이 앱이 기록한
+// 출석을 덮어 지운다. 그래서 오래 출석을 통째로 잠가 뒀는데, 그러느라 ⟳ 가
+// 출석을 못 가져왔다. 빈칸만 빼면 지울 일이 없으므로 상시로 켤 수 있다.
+//
+// 빼도 잃는 것이 없다 — v_attendance_summary 가 coalesce(a.status,'') 로 읽어
+// **행이 없는 것과 '' 인 행은 판정에서 완전히 같다** (views.sql).
+// 시트가 DB 보다 낡을 수도 없다. doPost 가 ① 시트(원본) → ② DB 순서로 쓴다.
+//
+// 지우기는 10분 트리거(pushAttendanceToDb)만 할 수 있다. 그쪽은 DB 값과 비교해
+// 차이만 올리므로 '비웠다' 는 뜻을 담아 보낼 수 있다. 둘은 대체 관계가 아니다 —
+// 동기화는 즉시성, 트리거는 지우기와 자가 치유다.
+const attWrite = IMPORT_ATTENDANCE
+  ? attRows
+  : attRows.filter(a => String(a.status ?? '').trim() !== '');
+
+await upsert('attendance', attWrite, 'member_id,session_date');
+
 if (IMPORT_ATTENDANCE) {
-  await upsert('attendance', attRows, 'member_id,session_date');
-  console.log(`   ${attRows.length}건 (시트 값으로 덮어씀)`);
+  console.log(`   ${attWrite.length}건 (빈칸 포함, 시트 값으로 통째로 덮어씀)`);
   printFutureMarks(futureMarkSummary(attendance));
 } else {
-  const filled = attRows.filter(a => String(a.status ?? '').trim() !== '').length;
-  console.log(`   건너뜀 — 출석은 DB 가 원본입니다 (앱에서 기록)`);
-  if (filled) {
-    console.log(`   ℹ️ 시트에 채워진 출석 ${filled}칸이 있지만 반영하지 않았습니다.`);
-    console.log('      시트 값으로 DB 를 덮어쓰려면 "시트 출석 가져오기" 를 체크하세요.');
-    console.log('      (기수를 처음 만들 때만 씁니다. 평소에 켜면 앱 기록이 지워집니다)');
-  }
+  const blanks = attRows.length - attWrite.length;
+  console.log(`   ${attWrite.length}건 반영` +
+              (blanks ? ` (빈칸 ${blanks}칸은 보내지 않았습니다 — 지우기는 10분 트리거가 합니다)` : ''));
 }
 
 if (kimbapRows.length) {

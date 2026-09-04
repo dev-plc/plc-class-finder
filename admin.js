@@ -19,17 +19,17 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=114';
-import { matches as hangulMatches } from './scripts/hangul.js?v=114';
-import { registerServiceWorker } from './scripts/sw-update.js?v=114';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=114';
+} from './scripts/members-data.js?v=115';
+import { matches as hangulMatches } from './scripts/hangul.js?v=115';
+import { registerServiceWorker } from './scripts/sw-update.js?v=115';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=115';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
     normalizeSessionKey as prNormalizeSession,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=114';
+} from './scripts/attendance-matrix.js?v=115';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -2328,8 +2328,8 @@ async function showLastSynced() {
     // 뒷문장은 admin.html 의 기본 문구와 같은 뜻이어야 한다 — 저절로 되는 것을 먼저.
     setSyncInfo(`마지막 동기화: ${agoText(at)}` +
         (stale ? ' — 하루가 넘었습니다. 일 1회 동기화를 확인해 주세요.' : '') +
-        ' · 출석은 10분마다 저절로 들어옵니다 (⟳ 와 무관). 방금 시트에서'
-        + ' 고치셨다면 ⟳ 를 눌러 주세요.', stale ? 'fail' : '');
+        ' · ⟳ 를 누르면 출석까지 함께 가져옵니다. 저절로도 들어옵니다 —'
+        + ' 출석은 10분마다, 그 밖은 하루 한 번.', stale ? 'fail' : '');
 }
 
 async function readSyncedAt() {

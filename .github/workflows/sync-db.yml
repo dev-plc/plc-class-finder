@@ -17,7 +17,7 @@ on:
         required: false
         default: ''
       import_attendance:
-        description: '시트 출석으로 DB 통째로 덮어쓰기 — 평소엔 불필요(10분 트리거가 대신함). 아직 하지 않은 강의의 O/X 는 빈칸으로 들어갑니다'
+        description: '빈칸까지 덮어쓰기 (기수 첫 구축용) — 출석은 체크하지 않아도 늘 들어옵니다. 켜면 시트에서 비운 칸이 DB 에서도 지워지고, 아직 하지 않은 강의의 O 는 ◎ 로 들어갑니다'
         type: boolean
         required: false
         default: false
