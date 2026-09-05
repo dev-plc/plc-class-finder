@@ -26,8 +26,8 @@ import {
     subscribe,
     isTutorRole,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=115';
-import { registerServiceWorker } from './scripts/sw-update.js?v=115';
+} from './scripts/members-data.js?v=116';
+import { registerServiceWorker } from './scripts/sw-update.js?v=116';
 // 조별 전체 출석표. 관리자 화면과 같은 코드를 쓴다 —
 // 한때 admin.js 가 세션명 정규화를 자기 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -36,7 +36,7 @@ import {
     classifyStatus,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=115';
+} from './scripts/attendance-matrix.js?v=116';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -638,9 +638,20 @@ function renderStatusDetail(member) {
             const badges = [];
             if (kimbapApplied) badges.push('<span class="badge-kimbap" title="김밥 신청">🍙</span>');
             if (hw.length) {
-                const links = hw.filter(h => h.url).map(h => h.url);
-                const linkAttr = links.length ? `data-hw-url="${links[0]}"` : '';
-                badges.push(`<span class="badge-homework" title="과제 제출: ${hw.map(h => h.type).join(', ')}" ${linkAttr}>📝</span>`);
+                // 아래 '과제 제출 목록' 과 같은 함수로 쪼갠다 (splitLinks).
+                //
+                // 한 과제에 파일을 둘 올리면 구글 폼이 한 칸에 ", " 로 이어 붙인다.
+                //   "https://drive.google.com/open?id=A, https://drive.google.com/open?id=B"
+                // 그 원문을 그대로 window.open 에 넘기면 주소가 깨져 404 가 난다.
+                // 목록 쪽만 고치고 여기를 빠뜨려서 오래 그 상태였다 —
+                // 같은 값은 같은 함수로 다뤄야 한쪽만 고쳐지는 일이 없다.
+                //
+                // 여럿이면 첫 번째만 연다. 한 번의 클릭으로 창을 여러 개 띄우면
+                // 두 번째부터 팝업 차단에 걸린다. 전부는 아래 목록에 있고 그쪽이 정본이다.
+                const links = hw.flatMap(h => splitLinks(h.url));
+                const linkAttr = links.length ? `data-hw-url="${encodeURI(links[0])}"` : '';
+                const more = links.length > 1 ? ` · ${links.length}건 중 첫 번째 (전부는 아래 목록에)` : '';
+                badges.push(`<span class="badge-homework" title="과제 제출: ${hw.map(h => h.type).join(', ')}${more}" ${linkAttr}>📝</span>`);
             }
 
             const isTeacher = sessionName === '교제' || sessionName === '나눔';
@@ -1287,7 +1298,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=115';
+                window.location.href = 'admin.html?v=116';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";
