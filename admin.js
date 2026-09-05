@@ -19,17 +19,17 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=116';
-import { matches as hangulMatches } from './scripts/hangul.js?v=116';
-import { registerServiceWorker } from './scripts/sw-update.js?v=116';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=116';
+} from './scripts/members-data.js?v=117';
+import { matches as hangulMatches } from './scripts/hangul.js?v=117';
+import { registerServiceWorker } from './scripts/sw-update.js?v=117';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=117';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
     normalizeSessionKey as prNormalizeSession,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=116';
+} from './scripts/attendance-matrix.js?v=117';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -485,7 +485,7 @@ const ATT_STATES = [
 // 고쳐야 하면 시트에서 고친다 (출결의 원본은 시트다).
 const ATT_LOCKED = {
     '◎':   { label: '◎',   title: '지난 기수 이수 이월 — 시트에서만 고칩니다' },
-    '과제': { label: '과제', title: '결석했지만 과제·소감문으로 메움 — 시트에서만 고칩니다' },
+    '과제': { label: '과제', title: '결석 — 과제·소감문 제출. 시트에서만 고칩니다' },
     '-':   { label: '−',   title: '집계 제외 — 시트에서만 고칩니다' },
 };
 

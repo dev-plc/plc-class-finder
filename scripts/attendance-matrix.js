@@ -14,7 +14,7 @@ import {
     getKimbapDetail,
     getHomeworkList,
     getCompletionOutlook,
-} from './members-data.js?v=116';
+} from './members-data.js?v=117';
 
 // ============================================================================
 // 세션명 정규화
@@ -55,7 +55,7 @@ export function classifyStatus(raw, isFuture = false) {
     const s = String(raw ?? '').trim().toUpperCase();
     if (s === 'O') return { cls: 'present', label: 'O', title: '출석' };
     if (s === '◎') return { cls: 'online',  label: '◎', title: '지난 기수 이수 이월' };
-    if (s === '과제') return { cls: 'makeup', label: '과제', title: '결석 — 과제·소감문으로 메움' };
+    if (s === '과제') return { cls: 'makeup', label: '과제', title: '결석 — 과제·소감문 제출' };
     if (s === 'X') return { cls: 'absent',  label: 'X', title: '결석' };
     if (s === '-') return { cls: 'none',    label: '−', title: '수업 없음 (집계 제외)' };
     if (isFuture)  return { cls: 'future',  label: '',  title: '아직 하지 않은 수업' };

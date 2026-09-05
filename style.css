@@ -324,10 +324,6 @@ body.dark-mode .icon-btn:hover {
     background: #2563eb;
     color: white;
 }
-.cohort-hint {
-    font-size: calc(11px * var(--font-scale));
-    color: var(--text-light, #6B7280);
-}
 .status-section {
     margin-bottom: 18px;
 }
