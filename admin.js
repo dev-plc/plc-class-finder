@@ -19,17 +19,18 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=117';
-import { matches as hangulMatches } from './scripts/hangul.js?v=117';
-import { registerServiceWorker } from './scripts/sw-update.js?v=117';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=117';
+} from './scripts/members-data.js?v=118';
+import { matches as hangulMatches } from './scripts/hangul.js?v=118';
+import { registerServiceWorker } from './scripts/sw-update.js?v=118';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=118';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
     normalizeSessionKey as prNormalizeSession,
+    homeworkSessionKey,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=117';
+} from './scripts/attendance-matrix.js?v=118';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -930,7 +931,7 @@ function openMemberDetail(member) {
     // 그 주차에 과제를 냈나 · 김밥을 신청했나
     const kbMap = getKimbapDetail(member.id) || {};
     const hwSet = new Set((getHomeworkList(member.id) || [])
-        .map(h => prNormalizeSession(h.session)).filter(Boolean));
+        .map(h => homeworkSessionKey(h)).filter(Boolean));
     const marksOf = (sx) => {
         const norm = prNormalizeSession(sx.label_norm || '');
         return {
@@ -1014,7 +1015,7 @@ function openMemberDetail(member) {
         const hit = getSessions().find(x => prNormalizeSession(x.label_norm || '') === target);
         return hit ? hit.session_date : '';
     };
-    const hwRows = hw.map(h => ({ ...h, when: h.submittedAt || dateOf(h.session) }))
+    const hwRows = hw.map(h => ({ ...h, when: h.submittedAt || dateOf(homeworkSessionKey(h)) }))
         .sort((a, b) => String(b.when).localeCompare(String(a.when)));
 
     mdTitle.textContent =
@@ -1492,7 +1493,7 @@ function renderPrintPreview() {
         const rows = members.map((m, i) => {
             const id = m.id || (String(m.name || '') + String(m.phone || ''));
             const kb = session.label_norm ? getKimbapDetail(id)[session.label_norm] : null;
-            const hw = getHomeworkList(id).some(h => prNormalizeSession(h.session) === sessionKey);
+            const hw = getHomeworkList(id).some(h => homeworkSessionKey(h) === sessionKey);
             // 역할은 이름 아래 줄에. 옆에 붙이면 이름 칸이 길어지고,
             // 튜터가 누구인지 세로로 훑을 때 눈에 안 들어온다.
             const role = m.role && m.role !== '조원'
@@ -1719,7 +1720,7 @@ function abRows() {
         // 이번 기수에 빠지고 메운 사람이다.
         const hwKeys = new Set(
             getHomeworkList(m.id || (String(m.name || '') + String(m.phone || '')))
-                .map(h => prNormalizeSession(h.session)).filter(Boolean));
+                .map(h => homeworkSessionKey(h)).filter(Boolean));
 
         // 한 주차의 상태: 'absent' 순수 결석 · 'makeup' 대체됨 · '' 그 외
         //

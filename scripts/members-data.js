@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=117';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=117';
+import { matches as hangulMatches } from './hangul.js?v=118';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=118';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -279,7 +279,14 @@ async function fetchFromServer(cohortId) {
     if (!h.members) continue;
     const key = `${h.members.name}${h.members.phone || ''}`;
     (homeworkMap[key] ||= []).push({
+      // session       화면에 보여 줄 시트 원문 ('13강 성경적비폭력대화1')
+      // sessionLabel  맞추는 데 쓸 값. 동기화가 정한 정규 라벨 ('성경적대화1')
+      //
+      // 원문만 담았더니 앱이 커리큘럼 규칙(13~16강 = 성경적대화1~4)을 다시
+      // 풀어야 했고, 그 규칙이 동기화에만 있어서 13~16강 과제가 화면에서
+      // 통째로 안 뜨는 버그가 났다. 라벨은 이미 받아 오고 있었다.
       session: h.session_raw || h.session_label,
+      sessionLabel: h.session_label || '',
       type: h.type || '',
       url: h.url || '',
       submittedAt: h.submitted_at || '',

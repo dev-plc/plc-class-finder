@@ -14,7 +14,7 @@ import {
     getKimbapDetail,
     getHomeworkList,
     getCompletionOutlook,
-} from './members-data.js?v=117';
+} from './members-data.js?v=118';
 
 // ============================================================================
 // 세션명 정규화
@@ -27,7 +27,7 @@ import {
 // 폼 응답과 시트 강의명이 다르게 적히므로 양쪽을 이걸로 통과시킨 뒤 비교한다.
 export function normalizeSessionKey(s) {
     const raw = String(s || '').trim();
-    let m = raw.match(/^성경적대화\s*(\d+)/) || raw.match(/^대화\s*(\d+)/);
+    let m = raw.match(/^성경적(?:비폭력)?대화\s*(\d+)/) || raw.match(/^대화\s*(\d+)/);
     if (m) return '대화' + m[1];
     m = raw.match(/^교리\s*(\d+)/) || raw.match(/^(\d+)\s*강/);
     if (m) return '교리' + m[1];
@@ -36,11 +36,22 @@ export function normalizeSessionKey(s) {
     return raw;
 }
 
+// 과제 한 건을 어느 주차로 볼 것인가.
+//
+// 맞추는 값은 DB 가 정한 sessionLabel 이다. hw.session 은 시트 원문이라
+// ('13강 성경적비폭력대화1') 앱이 커리큘럼 규칙을 다시 풀어야 하는데,
+// 그 규칙(13~16강 = 성경적대화1~4)은 동기화의 labelFromSerial 한 곳에만 둔다.
+// 두 곳에 두었다가 동기화만 고쳐지고 앱이 남아 13~16강이 안 뜬 적이 있다.
+// 커리큘럼 상수를 여기로 다시 들고 오면 그 사고가 되돌아온다.
+export function homeworkSessionKey(hw) {
+    return normalizeSessionKey(hw?.sessionLabel || hw?.session || '');
+}
+
 // 특정 세션명에 매칭되는 과제 제출 목록
 export function homeworkForSession(homeworkList, sessionName) {
     if (!homeworkList?.length || !sessionName) return [];
     const target = normalizeSessionKey(sessionName);
-    return homeworkList.filter(hw => normalizeSessionKey(hw.session) === target);
+    return homeworkList.filter(hw => homeworkSessionKey(hw) === target);
 }
 
 // ============================================================================

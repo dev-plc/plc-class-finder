@@ -96,7 +96,10 @@ function labelFromSerial(n) {
 // 세션명 정규화: '3강 예수...' → '교리3', '13강 ...' → '성경적대화1'
 function normalizeSession(raw) {
   const s = String(raw || '').trim();
-  let m = s.match(/^성경적대화\s*(\d+)/) || s.match(/^대화\s*(\d+)/);
+  // '성경적비폭력대화1' 도 받는다 — 과제 폼이 쓰는 이름이다.
+  // 접두('13강 ')를 떼고 이름만 적으면 이 갈래로 와야 하고,
+  // 안 받으면 그대로 통과해 '성경적대화1' 과 다른 라벨로 갈린다.
+  let m = s.match(/^성경적(?:비폭력)?대화\s*(\d+)/) || s.match(/^대화\s*(\d+)/);
   if (m) return '성경적대화' + m[1];
   m = s.match(/^(\d+)\s*강/) || s.match(/^교리\s*(\d+)/);
   if (m) {
