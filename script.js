@@ -27,8 +27,8 @@ import {
     subscribe,
     isTutorRole,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=120';
-import { registerServiceWorker } from './scripts/sw-update.js?v=120';
+} from './scripts/members-data.js?v=121';
+import { registerServiceWorker } from './scripts/sw-update.js?v=121';
 // 조별 전체 출석표. 관리자 화면과 같은 코드를 쓴다 —
 // 한때 admin.js 가 세션명 정규화를 자기 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -37,7 +37,7 @@ import {
     classifyStatus,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=120';
+} from './scripts/attendance-matrix.js?v=121';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -709,8 +709,9 @@ function renderStatusDetail(member) {
             총 <strong>${classTotal}</strong>강 ·
             <strong style="color:#059669">출석 ${classAttended}</strong> ·
             <strong style="color:#dc2626">결석 ${absenceFromData}</strong>
-            ${p?.makeupUsed ? ` · <strong style="color:#b45309" title="결석한 주차에 과제·소감문을 내 출석으로 인정된 횟수 (최대 ${MAKEUP_LIMIT}회)">과제·소감문으로 ${p.makeupUsed}회 인정</strong>` : ''}
-            ${p?.makeupOverflow ? ` · <strong style="color:#b45309" title="과제·소감문을 냈으나 ${MAKEUP_LIMIT}회 한도를 넘은 건. 담당자가 참작 여부를 판단합니다">한도 초과 ${p.makeupOverflow}</strong>` : ''}
+            ${(p?.makeupUsed || p?.makeupOverflow)
+                ? ` · <strong style="color:#b45309" title="결석한 주차에 과제·소감문을 내 출석으로 인정된 횟수입니다 (최대 ${MAKEUP_LIMIT}회).${p.makeupOverflow ? ` 초과한 ${p.makeupOverflow}회는 담당자가 참작 여부를 판단합니다.` : ''}">과제소감문(인정 ${p.makeupUsed}/${MAKEUP_LIMIT}회${p.makeupOverflow ? `, 초과 ${p.makeupOverflow}회` : ''})</strong>`
+                : ''}
             ${classOnline ? ` · <strong style="color:#6d28d9">이월 ${classOnline}</strong>` : ''}
             ${kimbapAppliedCount ? ` · <strong style="color:#d97706">🍙 ${kimbapAppliedCount}회 신청</strong>` : ''}
             ${homeworkSubmittedCount ? ` · <strong style="color:#2563eb">📝 ${homeworkSubmittedCount}건 제출</strong>` : ''}
@@ -1324,7 +1325,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=120';
+                window.location.href = 'admin.html?v=121';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

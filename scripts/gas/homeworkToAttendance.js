@@ -1,6 +1,10 @@
 // 과제 탭 → 출석부(DB) 자동 반영 (시트에 붙는 스크립트)
 //
-// 과제+소감문을 낸 사람의 결석(X)과 옛 이월표시(◎)를 보충(과제)으로 바꾼다.
+// 과제+소감문을 낸 사람의 결석(X)을 보충(과제)으로 바꾼다.
+//
+// ⚠️ '◎' 는 건드리지 않는다. 지난 기수 이수 표시이고, 그 주차에 과제 제출이
+//    있다는 것은 '지난 기수에 그렇게 이수했다' 는 뜻이다 — 근거가 아니라 내력이다.
+//    자세한 이유는 htaShouldReplace_ 주석에 있다.
 // 폼 제출(onFormSubmit)과 수기 입력(onEdit) 둘 다에서 돈다.
 //
 // ⚠️ 이 파일을 고쳐도 웹앱 재배포는 필요 없다. 트리거가 저장된 코드를 그대로 부른다.
@@ -152,13 +156,42 @@ function htaLectureColMap_(dbData, layout) {
 }
 
 /**
- * 강의명 → 출석부 헤더 이름. '9강 …' → '교리9'.
- * 숫자+강 이 없으면 적힌 그대로 쓴다 ('대화1' · '교제' 등은 헤더와 같은 말이다).
+ * 강의명 → 출석부 강의명 행의 값. '9강 …' → '교리9', '13강 …' → '성경적대화1'.
+ *
+ * htaLectureColMap_ 이 시트의 강의명을 **날것 그대로** 키로 쓰므로,
+ * 여기서 시트에 적힌 말(교리N · 성경적대화N · 교제 · 나눔)을 그대로 만들어야 한다.
+ *
+ * ⚠️ 과제 폼은 '13강' 처럼 1~16 통합 번호를 쓰는데 커리큘럼에 교리13~16 은 없다.
+ *    13강부터는 성경적대화1~4 다. 한때 (\d+)강 을 전부 '교리N' 으로 붙여
+ *    13~16강 과제가 어느 열도 못 찾고 조용히 건너뛰어졌다.
+ *    같은 버그가 sync-sheet-to-db.mjs · attendance-matrix.js 에도 있었다 —
+ *    같은 규칙이 네 곳에 살고 있다.
+ *
+ * ⚠️ 강 수가 바뀌면 sync-sheet-to-db.mjs 의 DOCTRINE_COUNT · DIALOG_COUNT 와
+ *    아래 두 상수를 **같이** 고친다. GAS 는 저장소에서 가져올 수 없어 어쩔 수 없다.
  */
+var HTA_DOCTRINE_COUNT = 12;   // 교리1~12
+var HTA_DIALOG_COUNT   = 4;    // 성경적대화1~4
+
 function htaLectureKey_(raw) {
   var s = String(raw || '').trim();
-  var m = s.match(/(\d+)강/);
-  return m ? ('교리' + m[1]) : s;
+  // '성경적비폭력대화1' 도 받는다 — 과제 폼이 쓰는 이름이다
+  var m = s.match(/^성경적(?:비폭력)?대화\s*(\d+)/) || s.match(/^대화\s*(\d+)/);
+  if (m) return '성경적대화' + m[1];
+  m = s.match(/(\d+)\s*강/) || s.match(/^교리\s*(\d+)/);
+  if (m) {
+    var n = parseInt(m[1], 10);
+    if (n >= 1 && n <= HTA_DOCTRINE_COUNT) return '교리' + n;
+    if (n <= HTA_DOCTRINE_COUNT + HTA_DIALOG_COUNT) {
+      return '성경적대화' + (n - HTA_DOCTRINE_COUNT);
+    }
+    return '교리' + n;   // 범위 밖 — 열을 못 찾아 unmatched 로 샌다 (조용히 바꾸지 않는다)
+  }
+  if (/^교제/.test(s) || /^교재/.test(s)) return '교제';
+  // '교리교육 나눔 소감문' 처럼 앞에 말이 붙어도 받는다.
+  // 위의 번호 갈래가 먼저 걸리므로 '5강 나눔의 기쁨' 같은 제목은 여기로 안 샌다.
+  if (/나눔/.test(s)) return '나눔';
+  return s;
 }
 
 /** 과제유형이 보충 인정 대상인가 — 과제와 소감문을 둘 다 낸 것만 */
@@ -169,18 +202,37 @@ function htaIsMakeup_(assignment) {
 /**
  * 이 칸을 '과제' 로 바꿔야 하는가.
  *
- * X  결석. 근거가 있으면 보충으로 바꾼다
- * ◎  옛 자동화가 찍어 둔 보충이거나 진짜 이월이다. 근거가 있으면 보충 —
- *    '◎' 는 present 로 세어져 3회 한도를 통째로 우회하므로, 근거가 있는데
- *    '◎' 로 두면 규정보다 후하게 인정된다.
- *    근거가 없는 '◎' 는 진짜 이월이라 이 함수가 false 를 준다 (호출부가
- *    이미 과제+소감문 제출을 확인한 뒤에만 부른다).
- * O  이미 출석. 안 건드린다
+ * X   결석. 근거가 있으면 보충으로 바꾼다
+ * ◎   **건드리지 않는다.** 지난 기수 이수 표시다 (아래 참고)
+ * O   이미 출석. 안 건드린다
+ * 과제 이미 보충으로 적혀 있다
  * 빈칸 아직 안 찍었을 뿐 결석이 아니다. 그 주차 출석체크를 하면 X 로 채워진다
+ *
+ * ── '◎' 를 왜 뺐나 ────────────────────────────────────────────────────
+ *
+ * 한때 이 함수는 '◎' 도 바꿨다. '◎' 하나가 '이월' 과 '과제 대체' 를 겸하던
+ * 시절, 옛 자동화가 찍어 둔 '◎' 를 '과제' 로 옮겨 3회 한도를 태우게 하는
+ * **일회성 정리**였다. 그 정리는 2026-09-03 에 17칸을 바꿔 끝났다.
+ *
+ * 그 뒤 전제가 둘 바뀌어 같은 규칙이 정반대로 해로워졌다.
+ *
+ *   1. 이월 스크립트(carry-over-attendance.mjs)가 '◎' 를 찍는다
+ *   2. 과제가 기수를 넘어 매칭된다. 그런데 이월 스크립트는 "지난 기수에
+ *      결석했지만 과제로 인정받은 주차도 이수로 친다" 며 그런 주차에도 '◎' 를 찍는다
+ *
+ * 그래서 이제 **정당한 '◎' 일수록 과제+소감문 제출이 딸려 있다.** 그걸 근거로
+ * 보고 '과제' 로 바꾸면, 이미 이수한 주차를 결석으로 되돌리고 그 사람의 보충
+ * 한도까지 태운다. 두 스크립트가 서로 싸우게 된다 —
+ * 이월은 X·과제 → ◎ 로 되돌리고 이쪽은 ◎ → 과제 로 민다.
+ *
+ * 실제로 한 사람(이월 ◎ 7칸 + 지난 기수 과제+소감문)에게 돌리면
+ * credited 14/16 이 7/16 으로 떨어졌을 상황이었다.
+ *
+ * '◎' 가 잘못 적힌 것을 고쳐야 하면 시트에서 손으로 고친다. 자동으로 밀지 않는다.
  */
 function htaShouldReplace_(current) {
   var v = String(current || '').trim();
-  return v === 'X' || v === 'x' || v === '◎';
+  return v === 'X' || v === 'x';
 }
 
 /**
@@ -276,10 +328,9 @@ function processAttendance(sheet, row) {
 // plcPreviewAttendance  아무것도 안 바꾸고 몇 칸이 바뀔지만 센다
 // syncAllAttendance     실제로 바꾼다
 //
-// 미리보기를 먼저 두는 이유: '◎' 를 '과제' 로 바꾸면 그 사람의 인정 방식이
-// 달라진다. '◎' 는 present 로 세어져 3회 한도를 안 거치는데, '과제' 는 거친다.
-// 네 번 이상 보충한 사람은 이 변경으로 관리자확인 대상이 될 수 있다 —
-// 몇 명인지 모르고 누르면 안 된다.
+// 미리보기를 먼저 두는 이유: 결석을 보충으로 바꾸는 것은 그 사람의 판정을
+// 움직인다. 몇 칸이 바뀌는지 모르고 누르면 안 된다.
+// 보고에 '이월(◎) → 과제' 같은 줄이 보이면 옛 코드가 도는 것이다 — 멈춰야 한다.
 
 function plcPreviewAttendance() { return htaApply_(false); }
 function syncAllAttendance()    { return htaApply_(true); }
@@ -311,7 +362,7 @@ function htaApply_(apply) {
   var idToRowMap      = htaIdRowMap_(dbData, layout);
   var lectureToColMap = htaLectureColMap_(dbData, layout);
 
-  var fromX = 0, fromCarry = 0, unmatched = 0;
+  var fromX = 0, unmatched = 0;
   var samples = [];
   var seen = {};
 
@@ -336,7 +387,7 @@ function htaApply_(apply) {
     var current = String(dbData[targetRow - 1][targetCol - 1]).trim();
     if (!htaShouldReplace_(current)) continue;
 
-    if (current === '◎') fromCarry++; else fromX++;
+    fromX++;
     if (samples.length < 10) {
       samples.push(lectureKey + ' ' + String(rawId).trim() + ' ' + current + '→과제');
     }
@@ -347,19 +398,12 @@ function htaApply_(apply) {
     }
   }
 
-  var total = fromX + fromCarry;
+  var total = fromX;
   var msg = apply
     ? total + '칸을 과제로 바꿨습니다.'
     : total + '칸이 바뀝니다. (아무것도 바꾸지 않았습니다)';
-  msg += '\n  결석(X) → 과제 : ' + fromX +
-         '\n  이월(◎) → 과제 : ' + fromCarry;
-
-  if (fromCarry > 0) {
-    msg += "\n\n⚠️ ◎ 였던 " + fromCarry + '칸은 인정 방식이 달라집니다.\n' +
-           '◎ 는 3회 한도를 안 거치지만 과제는 거칩니다 —\n' +
-           '네 번 이상 보충한 사람은 관리자확인 대상이 될 수 있습니다.';
-  }
-  msg += '\n\n제출 기록이 없는 ◎ 는 진짜 이월이라 건드리지 않았습니다.';
+  msg += '\n  결석(X) → 과제 : ' + fromX;
+  msg += '\n\n◎ 는 건드리지 않습니다 (지난 기수 이수 표시).';
   // 과제 탭은 기수를 넘어 쌓인다. 지난 기수 사람은 지금 출석부에 없으므로
   // 여기 숫자는 늘 크고 기수가 갈수록 늘어난다 — 고장이 아니다.
   // 그 사실을 안 적어 두면 볼 때마다 뭔가 깨진 줄 알게 된다.
