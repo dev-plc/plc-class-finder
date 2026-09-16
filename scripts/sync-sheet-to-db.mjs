@@ -595,9 +595,38 @@ function prevMonthEnd(isoDate) {
 const homeworkCutoff = getArg('homework-since')
   || (cohortStart ? prevMonthEnd(cohortStart) : null);
 
+// 기수 경계표. 제출 시각으로 '어느 기수 것인지' 를 정하는 데 쓴다.
+//
+// 기준일이 오래 두 가지 일을 겸했다 — ① 어느 기수 것으로 적을까,
+// ② 저장할까 말까. ②가 문제였다. 지난 기수 제출을 통째로 버리는 바람에
+// 4~6월에 낸 10건이 어느 기수 DB 에도 없어 화면에서 사라졌다 (한보연8164).
+// 낸 것은 사실이므로 버리지 않는다. 기수만 가려 적는다.
+const cohortBounds = [];
+if (sb) {
+  const { data } = await sb.from('cohorts')
+    .select('id, started_at').order('started_at', { ascending: true });
+  for (const c of (data || [])) {
+    if (!c.started_at) continue;
+    cohortBounds.push({ id: c.id, boundary: prevMonthEnd(String(c.started_at).slice(0, 10)) });
+  }
+}
+const knownCohorts = new Set(cohortBounds.map(c => c.id));
+
+// 제출일이 속한 기수. 경계 규칙은 기준일과 같다 — 시작 달 1일부터 그 기수 것이다.
+// 모든 기수보다 이르면 가장 오래된 기수로 적는다.
+// cohort_id 가 not null + references cohorts(id) 라 빈 값을 못 쓰고,
+// 없는 기수 이름을 적으면 외래키에 걸려 배치 전체가 실패한다.
+function cohortOf(iso) {
+  if (!cohortBounds.length) return COHORT_ID;
+  const d = String(iso).slice(0, 10);
+  let hit = null;
+  for (const c of cohortBounds) if (c.boundary < d) hit = c;   // 오름차순 — 마지막이 가장 늦다
+  return hit ? hit.id : cohortBounds[0].id;
+}
+
 if (homeworkCutoff) {
   const src = getArg('homework-since') ? '직접 지정' : '기수 시작 달의 1일 기준';
-  console.log(`ℹ️  과제 기준일: ${homeworkCutoff} (${src}). 그 뒤 제출만 이 기수 것으로 본다`);
+  console.log(`ℹ️  과제 기준일: ${homeworkCutoff} (${src}). 그 뒤 제출은 이 기수 것으로 적는다`);
 } else {
   console.warn('⚠️  세션이 없어 과제를 제출 시각으로 거르지 않습니다.\n');
 }
@@ -620,7 +649,9 @@ function readSubmittedAt(raw) {
 
 const homeworkByKey = new Map();
 let homeworkDupes = 0;
-let homeworkStale = 0;
+let homeworkPrior = 0;      // 지난 기수 것으로 적은 수 (버리지 않는다)
+let homeworkUnknownTag = 0; // 제출 시각에 모르는 기수가 적힌 수
+const homeworkPriorBy = new Map();
 let homeworkNoDate = 0;
 let homeworkTagged = 0;
 const homeworkNoDateSample = new Set();
@@ -639,11 +670,17 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       submitted_at: ts.kind === 'date' ? ts.iso : null,
     };
     if (ts.kind === 'cohort') {
-      // 기수를 직접 적어 둔 건 — 날짜보다 확실하다
-      if (ts.cohort !== COHORT_ID) { homeworkStale++; continue; }
-      homeworkTagged++;
+      // 기수를 직접 적어 둔 건 — 날짜보다 확실하다.
+      // 다만 cohorts 에 없는 이름이면 외래키에 걸리므로 이 기수로 둔다.
+      if (knownCohorts.has(ts.cohort)) {
+        row.cohort_id = ts.cohort;
+        if (ts.cohort === COHORT_ID) homeworkTagged++;
+      } else {
+        // cohorts 에 없는 이름 — 외래키에 걸리므로 이 기수로 두고 숫자만 남긴다
+        homeworkUnknownTag++;
+      }
     } else if (ts.kind === 'date') {
-      if (homeworkCutoff && ts.iso.slice(0, 10) <= homeworkCutoff) { homeworkStale++; continue; }
+      row.cohort_id = cohortOf(ts.iso);
     } else {
       // 제출 시각이 없는 행 = 수기(오프라인) 제출을 담당자가 손으로 옮겨 적은 것.
       // 폼 응답에는 타임스탬프가 자동으로 붙으므로, 날짜가 없다는 것은 곧
@@ -665,6 +702,11 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       }
     }
 
+    if (row.cohort_id !== COHORT_ID) {
+      homeworkPrior++;
+      homeworkPriorBy.set(row.cohort_id, (homeworkPriorBy.get(row.cohort_id) || 0) + 1);
+    }
+
     const key = `${gasId}|${norm}|${row.type ?? ''}`;
     const prev = homeworkByKey.get(key);
     if (!prev) { homeworkByKey.set(key, row); continue; }
@@ -679,8 +721,15 @@ const homeworkRows = [...homeworkByKey.values()];
 if (homeworkDupes) {
   console.log(`ℹ️  과제 중복 제출 ${homeworkDupes}건 → 최신 제출만 반영`);
 }
-if (homeworkStale) {
-  console.log(`ℹ️  ${homeworkCutoff} 이전 제출 ${homeworkStale}건 제외 (지난 기수 응답)`);
+if (homeworkPrior) {
+  const by = [...homeworkPriorBy.entries()].map(([c, n]) => `${c} ${n}건`).join(' · ');
+  console.log(`ℹ️  지난 기수로 적은 과제 ${homeworkPrior}건 (${by})`);
+  console.log('    버리지 않는다 — 낸 것은 사실이고, 화면에도 보여야 한다.');
+  console.log('    보충 인정은 결석 주차에만 붙고 3회를 넘으면 관리자확인으로 간다.');
+}
+if (homeworkUnknownTag) {
+  console.log(`⚠️  제출 시각 칸에 cohorts 에 없는 기수가 적힌 과제 ${homeworkUnknownTag}건 —`);
+  console.log(`    ${COHORT_ID} 것으로 적었습니다. 오타이거나 그 기수를 아직 안 만든 것입니다.`);
 }
 if (homeworkTagged) {
   console.log(`ℹ️  제출 시각 칸에 '${COHORT_ID}' 라고 적힌 과제 ${homeworkTagged}건 반영 (오프라인·사후 제출)`);
