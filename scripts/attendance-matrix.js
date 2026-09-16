@@ -14,7 +14,7 @@ import {
     getKimbapDetail,
     getHomeworkList,
     getCompletionOutlook,
-} from './members-data.js?v=118';
+} from './members-data.js?v=119';
 
 // ============================================================================
 // 세션명 정규화
@@ -32,7 +32,9 @@ export function normalizeSessionKey(s) {
     m = raw.match(/^교리\s*(\d+)/) || raw.match(/^(\d+)\s*강/);
     if (m) return '교리' + m[1];
     if (/^교제/.test(raw) || /^교재/.test(raw)) return '교제';
-    if (/^나눔/.test(raw)) return '나눔';
+    // '교리교육 나눔 소감문' 처럼 앞에 말이 붙어도 받는다 (동기화와 같은 규칙).
+    // 번호 갈래가 먼저 걸리므로 강의 제목이 여기로 새지 않는다.
+    if (/나눔/.test(raw)) return '나눔';
     return raw;
 }
 

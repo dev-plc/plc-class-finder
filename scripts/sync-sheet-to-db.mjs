@@ -107,7 +107,11 @@ function normalizeSession(raw) {
     return labelFromSerial(n) || ('교리' + n);   // 범위 밖은 그대로 두고 상위에서 경고
   }
   if (/^교제/.test(s) || /^교재/.test(s)) return '교제';
-  if (/^나눔/.test(s)) return '나눔';
+  // '나눔' 은 앞에 붙지 않아도 받는다. 과제 폼의 선택지가
+  // '교리교육 나눔 소감문' 이라 ^나눔 으로는 안 걸려 어느 주차에도 안 붙었다.
+  // 위의 번호 갈래(^N강 · ^교리N)가 먼저 걸리므로 '5강 나눔의 기쁨' 같은
+  // 강의 제목이 여기로 새지는 않는다.
+  if (/나눔/.test(s)) return '나눔';
   return s;
 }
 
