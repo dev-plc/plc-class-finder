@@ -320,8 +320,15 @@ with base as (
     on s.cohort_id = m.cohort_id and s.is_class is true
   left join attendance a
     on a.member_id = m.id and a.session_date = s.session_date
+  -- 사람은 기수마다 다른 uuid 를 받으므로 member_id 로 맺으면 지난 기수에 낸
+  -- 것이 통째로 빠진다. 이름+전화(뒷자리)로 찾는다 — v_attendance_summary ·
+  -- v_homework_required 와 같은 규칙이다.
+  --
+  -- 기수 간 매칭을 열 때 그 둘만 고치고 여기를 빠뜨려, 같은 규칙을 쓴다는
+  -- 세 뷰가 서로 다른 답을 내고 있었다 (CLAUDE.md 가 경고한 바로 그것이다).
+  join members hm2 on hm2.name = m.name and hm2.phone = m.phone
   join homework_submissions h
-    on h.member_id = m.id and h.session_label = s.label_norm
+    on h.member_id = hm2.id and h.session_label = s.label_norm
    and is_makeup_type(h.type)
   where is_absent(a.status)
   order by m.id, s.session_date, h.submitted_at nulls last

@@ -11,6 +11,7 @@ import {
     isAnnouncementRoomName,
     getKimbapDetail,
     getHomeworkList,
+    getMakeupDetail,
     splitLinks,
     getCompletionOutlook,
     ONTRACK_WITHIN,
@@ -26,8 +27,8 @@ import {
     subscribe,
     isTutorRole,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=119';
-import { registerServiceWorker } from './scripts/sw-update.js?v=119';
+} from './scripts/members-data.js?v=120';
+import { registerServiceWorker } from './scripts/sw-update.js?v=120';
 // 조별 전체 출석표. 관리자 화면과 같은 코드를 쓴다 —
 // 한때 admin.js 가 세션명 정규화를 자기 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -36,7 +37,7 @@ import {
     classifyStatus,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=119';
+} from './scripts/attendance-matrix.js?v=120';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -611,9 +612,12 @@ function renderStatusDetail(member) {
         };
     }).filter(e => e.mmdd);
 
+    // 결석인데 인정된 주차. DB(v_makeup_detail)가 정한다 — 여기서 다시 세지 않는다.
+    const makeupDetail = getMakeupDetail(member);
+
     const grid = document.getElementById('attendanceGrid');
     const summary = document.getElementById('attendanceSummary');
-    let classAttended = 0, classAbsent = 0, classOnline = 0, classMakeup = 0;
+    let classAttended = 0, classAbsent = 0, classOnline = 0;
     let kimbapAppliedCount = 0, homeworkSubmittedCount = 0;
 
     // 통합 그리드 렌더
@@ -627,13 +631,25 @@ function renderStatusDetail(member) {
                 else if (s.cls === 'online') { classAttended++; classOnline++; }
                 // '과제' 는 결석이다. 인정 여부는 제출 기록이 정하므로 여기서 단정하지 않고
                 // '결석 · 과제로 대체 N' 으로 나눠 적는다 (views.sql 의 is_absent 와 같은 취급).
-                else if (s.cls === 'makeup') { classAbsent++; classMakeup++; }
+                // '과제' 도 결석이다. 인정 여부는 DB 가 정하므로 여기서 세지 않는다.
+                else if (s.cls === 'makeup') classAbsent++;
                 else if (s.cls === 'absent' || s.cls === 'empty') classAbsent++;
             }
 
             const hw = sessionName ? homeworkForSession(homeworkList, sessionName) : [];
             if (kimbapApplied) kimbapAppliedCount++;
             if (hw.length) homeworkSubmittedCount++;
+
+            // 결석이지만 과제·소감문으로 인정된 주차임을 칸에서 알 수 있게 한다.
+            // 시트에 'X' 로 적혀 있어도 인정되는 경우가 있어, 글자만 보면
+            // '그냥 결석' 으로 읽힌다 — 실제로 그렇게 오해가 났다.
+            const mk = sessionName ? makeupDetail[sessionName] : null;
+            const mkCls = mk ? (mk.counted ? ' makeup-ok' : ' makeup-over') : '';
+            const mkTitle = mk
+                ? (mk.counted
+                    ? ' · 과제·소감문으로 출석 인정됨'
+                    : ` · 과제·소감문을 냈으나 ${MAKEUP_LIMIT}회 한도를 넘어 인정되지 않음 (담당자 확인)`)
+                : '';
 
             const badges = [];
             if (kimbapApplied) badges.push('<span class="badge-kimbap" title="김밥 신청">🍙</span>');
@@ -657,7 +673,7 @@ function renderStatusDetail(member) {
             const isTeacher = sessionName === '교제' || sessionName === '나눔';
 
             return `
-                <div class="attendance-cell ${s.cls} ${isTeacher ? 'kyoje' : ''}" title="${mmdd}${sessionName ? ' · ' + sessionName : ''} · ${s.title}${!isClass ? ' (강의 외)' : ''}">
+                <div class="attendance-cell ${s.cls}${mkCls} ${isTeacher ? 'kyoje' : ''}" title="${mmdd}${sessionName ? ' · ' + sessionName : ''} · ${s.title}${mkTitle}${!isClass ? ' (강의 외)' : ''}">
                     <span class="cell-date">${mmdd}</span>
                     ${sessionName ? `<span class="cell-session">${sessionName}</span>` : ''}
                     <span class="cell-status">${s.label}</span>
@@ -677,19 +693,29 @@ function renderStatusDetail(member) {
     }
 
     // 요약 - 교리/성경적대화만 카운트
+    //
+    // 보충 인정 숫자는 DB(v_completion_status)가 준다. 여기서 다시 세지 않는다.
+    // 한때 격자에서 세었는데, 그건 '칸에 글자가 과제 인 수' 라서 판정과 뜻이 달랐다.
+    // 시트에 'X' 로 적혀 있어도 과제+소감문 제출이 있으면 DB 는 인정한다 —
+    // 한보연8164 가 credited 14(보충 3회 인정)인데 화면은 '과제로 대체 2' 라고만
+    // 말해, 인정이 안 되는 것처럼 보였다.
     if (summary) {
         const classTotal = enriched.filter(e => e.isClass).length;
         const absenceFromData = member['결석횟수'] != null && String(member['결석횟수']).trim() !== ''
             ? Number(member['결석횟수'])
             : classAbsent;
+        const p = getProgress(member);
         summary.innerHTML = `
             총 <strong>${classTotal}</strong>강 ·
             <strong style="color:#059669">출석 ${classAttended}</strong> ·
             <strong style="color:#dc2626">결석 ${absenceFromData}</strong>
-            ${classMakeup ? ` · <strong style="color:#b45309">과제로 대체 ${classMakeup}</strong>` : ''}
+            ${p?.makeupUsed ? ` · <strong style="color:#b45309" title="결석한 주차에 과제·소감문을 내 출석으로 인정된 횟수 (최대 ${MAKEUP_LIMIT}회)">과제·소감문으로 ${p.makeupUsed}회 인정</strong>` : ''}
+            ${p?.makeupOverflow ? ` · <strong style="color:#b45309" title="과제·소감문을 냈으나 ${MAKEUP_LIMIT}회 한도를 넘은 건. 담당자가 참작 여부를 판단합니다">한도 초과 ${p.makeupOverflow}</strong>` : ''}
             ${classOnline ? ` · <strong style="color:#6d28d9">이월 ${classOnline}</strong>` : ''}
             ${kimbapAppliedCount ? ` · <strong style="color:#d97706">🍙 ${kimbapAppliedCount}회 신청</strong>` : ''}
             ${homeworkSubmittedCount ? ` · <strong style="color:#2563eb">📝 ${homeworkSubmittedCount}건 제출</strong>` : ''}
+            ${p ? `<br><strong style="color:#2563eb">인정 출석 ${p.credited}/${p.required}</strong>
+                   <span style="color:#6B7280">(출석 + 인정된 보충)</span>` : ''}
         `;
     }
 
@@ -1298,7 +1324,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=119';
+                window.location.href = 'admin.html?v=120';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

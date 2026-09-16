@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=119';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=119';
+import { matches as hangulMatches } from './hangul.js?v=120';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=120';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -48,6 +48,7 @@ const CK = {
   sessions:    `plc_sessions_v${CACHE_VERSION}`,
   progress:    `plc_progress_v${CACHE_VERSION}`,
   needHomework:`plc_need_hw_v${CACHE_VERSION}`,
+  makeup:      `plc_makeup_v${CACHE_VERSION}`,
   cohort:      `plc_cohort_v${CACHE_VERSION}`,
 };
 
@@ -64,6 +65,10 @@ const state = {
   kimbap: {},        // { id: { '교리1': {applied, date}, ... } }
   progress: {},      // { uuid: {credited, required, remaining_needed, ...} }
   needHomework: {},  // { uuid: [{session_label, session_date}, ...] }
+  // 결석인데 과제·소감문으로 인정된 주차. counted=false 는 3회 한도를 넘은 건.
+  // 화면이 '이 결석은 메워졌다' 를 말하려면 이 값이 있어야 한다 — 격자의 글자만
+  // 보고는 알 수 없다. 시트에 'X' 로 적혀 있어도 인정되는 경우가 있기 때문이다.
+  makeup: {},        // { uuid: { '교리8': {counted, attStatus, date}, ... } }
   loaded: false,
 };
 const subscribers = new Set();
@@ -93,6 +98,7 @@ function readCacheSync() {
     state.kimbap      = get(CK.kimbap, {});
     state.progress     = get(CK.progress, {});
     state.needHomework = get(CK.needHomework, {});
+    state.makeup       = get(CK.makeup, {});
     state.cohortId     = localStorage.getItem(CK.cohort) || getCachedCohortId();
     state.loaded = true;
     return true;
@@ -112,6 +118,7 @@ function writeCacheSync() {
     localStorage.setItem(CK.kimbap,      JSON.stringify(state.kimbap));
     localStorage.setItem(CK.progress,     JSON.stringify(state.progress));
     localStorage.setItem(CK.needHomework, JSON.stringify(state.needHomework));
+    localStorage.setItem(CK.makeup,       JSON.stringify(state.makeup));
     if (state.cohortId) localStorage.setItem(CK.cohort, state.cohortId);
   } catch (e) {
     console.warn('캐시 쓰기 실패, 무시:', e);
@@ -183,8 +190,12 @@ const PROGRESS_QUERY =
   `unrecorded_count,verdict&cohort_id=eq.`;
 const NEED_HW_QUERY =
   `v_homework_required?select=member_id,session_label,session_date&cohort_id=eq.`;
+// 인정된 보충의 주차별 내역. counted 는 3회 한도 안쪽인지를 DB 가 정해 준다 —
+// 앱이 다시 세지 않는다 (세면 화면과 판정이 갈린다. 실제로 갈려 있었다).
+const MAKEUP_QUERY =
+  `v_makeup_detail?select=member_id,session_label,session_date,att_status,counted&cohort_id=eq.`;
 
-function indexProgress(progress, needHomework) {
+function indexProgress(progress, needHomework, makeup = []) {
   const progressMap = {};
   for (const p of progress) progressMap[p.member_id] = p;
 
@@ -199,14 +210,23 @@ function indexProgress(progress, needHomework) {
   for (const list of Object.values(needHomeworkMap)) {
     list.sort((a, b) => String(b.sessionDate).localeCompare(String(a.sessionDate)));
   }
-  return { progress: progressMap, needHomework: needHomeworkMap };
+  const makeupMap = {};
+  for (const d of makeup) {
+    (makeupMap[d.member_id] ||= {})[d.session_label] = {
+      counted:    d.counted === true,
+      attStatus:  d.att_status || '',
+      sessionDate: d.session_date || '',
+    };
+  }
+
+  return { progress: progressMap, needHomework: needHomeworkMap, makeup: makeupMap };
 }
 
 async function fetchFromServer(cohortId) {
   const enc = encodeURIComponent(cohortId);
 
   const [members, sessions, attendance, kimbap, homework, teamLinks, locationMaps,
-         progress, needHomework] =
+         progress, needHomework, makeup] =
     await Promise.all([
       // 행 수가 늘어나는 것은 전부 나눠 받는다 (아래 order 는 페이징에 필수)
       //
@@ -234,6 +254,7 @@ async function fetchFromServer(cohortId) {
       // 판정 결과는 DB 뷰에서 그대로 읽는다 (규칙이 views.sql 한 곳에만 있도록)
       sbSelectAll(PROGRESS_QUERY + enc + '&order=member_id'),
       sbSelectAll(NEED_HW_QUERY + enc + '&order=member_id,session_date'),
+      sbSelectAll(MAKEUP_QUERY + enc + '&order=member_id,session_date'),
     ]);
 
   // 출결을 member_id → (session_date → status) 로 정리
@@ -293,8 +314,8 @@ async function fetchFromServer(cohortId) {
     });
   }
 
-  const { progress: progressMap, needHomework: needHomeworkMap } =
-    indexProgress(progress, needHomework);
+  const { progress: progressMap, needHomework: needHomeworkMap, makeup: makeupMap } =
+    indexProgress(progress, needHomework, makeup);
 
   const teamLinkMap = {};
   for (const t of teamLinks) if (t.team) teamLinkMap[t.team] = t.chat_url || '';
@@ -315,6 +336,7 @@ async function fetchFromServer(cohortId) {
     kimbap: kimbapMap,
     progress: progressMap,
     needHomework: needHomeworkMap,
+    makeup: makeupMap,
   };
 }
 
@@ -362,11 +384,12 @@ export async function ensureLoaded({ forceRefresh = false, onBackgroundRefreshEr
  */
 export async function refreshProgress() {
   const enc = encodeURIComponent(state.cohortId || await getActiveCohortId());
-  const [progress, needHomework] = await Promise.all([
+  const [progress, needHomework, makeup] = await Promise.all([
     sbSelectAll(PROGRESS_QUERY + enc + '&order=member_id'),
     sbSelectAll(NEED_HW_QUERY + enc + '&order=member_id,session_date'),
+    sbSelectAll(MAKEUP_QUERY + enc + '&order=member_id,session_date'),
   ]);
-  Object.assign(state, indexProgress(progress, needHomework));
+  Object.assign(state, indexProgress(progress, needHomework, makeup));
   writeCacheSync();
   notify({ type: 'progress-refresh' });
 }
@@ -615,6 +638,24 @@ export function getKimbapDetail(memberId) {
 
 export function getHomeworkList(memberId) {
   return state.homework[memberId] || [];
+}
+
+/**
+ * 결석인데 과제·소감문으로 인정된 주차.
+ *
+ * 화면이 '이 결석은 메워졌다' 를 말하려면 이 값이 있어야 한다.
+ * 격자의 글자만으로는 알 수 없다 — 시트에 `X` 로 적혀 있어도 제출 기록이 있으면
+ * DB 가 인정한다 (한보연8164: `X` 인 교리8·교리11 이 인정돼 credited 14 였는데
+ * 화면은 '과제로 대체 2' 라고만 말해 인정이 안 된 것처럼 보였다).
+ *
+ * counted=false 는 3회 한도를 넘어 인정받지 못한 건이다. 한도는 DB 가 정한다.
+ *
+ * @returns {{[sessionLabel: string]: {counted: boolean, attStatus: string, sessionDate: string}}}
+ */
+export function getMakeupDetail(member) {
+  const uuid = member?._uuid;
+  if (!uuid) return {};
+  return state.makeup[uuid] || {};
 }
 
 /**
