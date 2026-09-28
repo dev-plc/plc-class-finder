@@ -648,7 +648,20 @@ function readSubmittedAt(raw) {
   if (tag) return { kind: 'cohort', cohort: `${tag[1]}기` };
   const t = Date.parse(v);
   if (Number.isNaN(t)) return { kind: 'unparsed', raw: v };
-  return { kind: 'date', iso: new Date(t).toISOString() };
+
+  // Date.parse 는 너무 관대하다. '260920' (YYMMDD 로 적은 것)을 NaN 이 아니라
+  // **연도 260920** 으로 읽는다 → '+260920-01-01T00:00:00.000Z'.
+  // Postgres 는 그 값을 거부하고(time zone displacement out of range),
+  // 그 한 칸이 동기화 **전체**를 죽인다. 2026-09-21~28 에 8일간 그랬다.
+  //
+  // 읽을 수 없는 날짜는 '날짜가 없는 것' 과 같이 다룬다 — 행은 그대로 넣고
+  // submitted_at 만 비운다. 낸 사실은 잃지 않으면서 동기화가 죽지 않는다.
+  // 원문은 아래 로그에 찍히므로 시트에서 찾아 고칠 수 있다.
+  const d = new Date(t);
+  const year = d.getUTCFullYear();
+  if (year < 2000 || year > 2100) return { kind: 'unparsed', raw: v };
+
+  return { kind: 'date', iso: d.toISOString() };
 }
 
 const homeworkByKey = new Map();
@@ -741,7 +754,9 @@ if (homeworkTagged) {
 if (homeworkNoDate) {
   // 손입력(오프라인 제출)이다. 반영하되 건수는 남긴다 —
   // 갑자기 수백 건으로 뛰면 시트에 잘못 붙여넣은 것이므로 숫자가 보여야 안다.
-  console.log(`ℹ️  제출 시각이 없는 과제 ${homeworkNoDate}건 반영 (수기 입력)`);
+  console.log(`ℹ️  제출 시각이 없거나 읽을 수 없는 과제 ${homeworkNoDate}건 반영`);
+  console.log('    (수기 입력이거나, 날짜 칸에 이상한 값이 들어간 것입니다.');
+  console.log("     예시에 원문이 따옴표로 붙습니다 — '260920' 처럼 적으면 못 읽습니다)");
   console.log(`    예: ${[...homeworkNoDateSample].join(' / ')}`);
 }
 
