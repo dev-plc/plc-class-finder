@@ -11,8 +11,8 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <link rel="stylesheet" href="style.css?v=121">
-    <link rel="stylesheet" href="admin.css?v=121">
+    <link rel="stylesheet" href="style.css?v=122">
+    <link rel="stylesheet" href="admin.css?v=122">
 </head>
 <body>
     <div class="admin-container">
@@ -78,7 +78,10 @@
                  지금은 다르다 — 동기화 스크립트가 시트를 읽어 출석까지 직접 넣는다.
                  ⟳ 도 출석을 가져온다. 다만 '지우기'(시트에서 비운 칸)는 못 하고
                  그건 여전히 10분 트리거 몫이다. -->
-            <span class="sync-info" id="syncInfo">⟳ 를 누르면 출석까지 함께 가져옵니다 (1~2분). 저절로도 들어옵니다 — 출석은 10분마다, 그 밖은 하루 한 번(정오).</span>
+            <!-- 기본 문구는 중립으로 둔다. showLastSynced() 가 곧 실제 값으로 덮어쓴다.
+                 여기에 '저절로도 들어옵니다' 같은 말을 박아 두면, 스크립트가 안 돌거나
+                 동기화가 죽어 있어도 화면이 멀쩡해 보인다 — 실제로 8일을 그렇게 놓쳤다. -->
+            <span class="sync-info" id="syncInfo">마지막 동기화: 확인 중…</span>
         </div>
 
         <!-- 출석 관리 (DB 가 원본. 시트에서 고치지 않는다) -->
@@ -347,7 +350,7 @@
         </div>
     </div>
 
-    <script type="module" src="admin.js?v=121"></script>
+    <script type="module" src="admin.js?v=122"></script>
 </body>
 </html>
 

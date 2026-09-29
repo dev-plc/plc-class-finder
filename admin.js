@@ -19,10 +19,10 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=121';
-import { matches as hangulMatches } from './scripts/hangul.js?v=121';
-import { registerServiceWorker } from './scripts/sw-update.js?v=121';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=121';
+} from './scripts/members-data.js?v=122';
+import { matches as hangulMatches } from './scripts/hangul.js?v=122';
+import { registerServiceWorker } from './scripts/sw-update.js?v=122';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=122';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -30,7 +30,7 @@ import {
     homeworkSessionKey,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=121';
+} from './scripts/attendance-matrix.js?v=122';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -2321,27 +2321,61 @@ function agoText(iso) {
     return `${Math.floor(hr / 24)}일 전`;
 }
 
+// 하루가 넘으면 크론이 죽었을 수 있다. 여유를 두 시간 둔다 —
+// 실행 시각이 조금씩 밀리는 것까지 경고로 칠 이유는 없다.
+const SYNC_STALE_MS = 26 * 60 * 60 * 1000;
+
+/**
+ * 동기화 상태를 한 줄로 말한다.
+ *
+ * **어느 경우에도 말을 한다.** 값이 없거나 못 읽었을 때 조용히 물러나면
+ * 기본 문구가 남는데, 그 문구는 '저절로도 들어옵니다' 라고 안심시킨다.
+ * 죽어 있는 것과 멀쩡한 것이 화면에서 똑같아 보이면 볼 이유가 없는 자리가 된다.
+ */
 async function showLastSynced() {
-    const at = await readSyncedAt();
-    if (!at) return;                 // 아직 칸이 없거나 한 번도 안 돌았다 — 기본 문구를 둔다
-    // 하루가 넘었으면 크론이 죽었을 수 있다. 눈에 걸리게 한다.
-    const stale = Date.now() - Date.parse(at) > 26 * 60 * 60 * 1000;
-    // 뒷문장은 admin.html 의 기본 문구와 같은 뜻이어야 한다 — 저절로 되는 것을 먼저.
-    setSyncInfo(`마지막 동기화: ${agoText(at)}` +
-        (stale ? ' — 하루가 넘었습니다. 일 1회 동기화를 확인해 주세요.' : '') +
-        ' · ⟳ 를 누르면 출석까지 함께 가져옵니다. 저절로도 들어옵니다 —'
-        + ' 출석은 10분마다, 그 밖은 하루 한 번.', stale ? 'fail' : '');
+    const { at, error } = await readSyncedAt();
+
+    // 꼬리말은 늘 같다 — 저절로 되는 것을 먼저 적는다.
+    const tail = ' · ⟳ 를 누르면 출석까지 함께 가져옵니다.'
+               + ' 저절로도 들어옵니다 — 출석은 10분마다, 그 밖은 하루 한 번(정오).';
+
+    if (error) {
+        setSyncInfo(`마지막 동기화 시각을 확인하지 못했습니다 (${error}).` + tail, 'fail');
+        return;
+    }
+    if (!at) {
+        setSyncInfo('동기화 기록이 없습니다 — 한 번도 돌지 않았거나'
+            + ' supabase/add_synced_at.sql 을 아직 안 돌린 것입니다.' + tail, 'fail');
+        return;
+    }
+
+    const stale = Date.now() - Date.parse(at) > SYNC_STALE_MS;
+    setSyncInfo(`마지막 동기화: ${agoText(at)}`
+        + (stale ? ' — 하루가 넘었습니다. 일 1회 동기화를 확인해 주세요.' : '')
+        + tail, stale ? 'fail' : '');
 }
 
+/**
+ * cohorts.synced_at 을 읽는다.
+ *
+ * '기록이 없다' 와 '못 읽었다' 를 갈라서 돌려준다 — 화면이 둘을 다르게 말해야 한다.
+ * 한때 둘 다 null 로 뭉뚱그렸고, 그래서 showLastSynced 가 조용히 물러나
+ * '저절로도 들어옵니다' 라는 **안심시키는 붙박이 문구**가 그대로 남았다.
+ * 2026-09-21~28 에 동기화가 8일 죽어 있었을 때, 이 자리가 그 사실을 말할 수 있는
+ * 유일한 곳이었다.
+ *
+ * @returns {Promise<{at: string|null, error: string|null}>}
+ */
 async function readSyncedAt() {
     const id = getCohortId();
-    if (!id) return null;
+    if (!id) return { at: null, error: '기수를 아직 모릅니다' };
     try {
         const rows = await sbSelect(
             `cohorts?select=synced_at&id=eq.${encodeURIComponent(id)}&limit=1`);
-        return rows?.[0]?.synced_at ?? null;
-    } catch {
-        return null;   // 조회가 잠깐 실패해도 폴링은 계속한다
+        return { at: rows?.[0]?.synced_at ?? null, error: null };
+    } catch (e) {
+        // 폴링은 계속 돌아야 하므로 던지지 않는다. 다만 이유는 잃지 않는다.
+        return { at: null, error: e?.message || '조회 실패' };
     }
 }
 
@@ -2381,7 +2415,7 @@ function watchSync(before) {
             setSyncInfo('아직 끝나지 않았습니다. 잠시 뒤 [화면 새로 고침] 을 눌러 주세요.' + gasNote, 'fail');
             return;
         }
-        const now = await readSyncedAt();
+        const { at: now } = await readSyncedAt();
         if (now && now !== before) {
             await syncDone('가져오기가 끝나 화면을 새로 그렸습니다.' + gasTail());
             return;
@@ -2401,7 +2435,7 @@ syncBtn?.addEventListener('click', async () => {
     setSyncInfo('요청하는 중입니다…');
 
     // 누르기 전 값을 먼저 잡아 둔다. 이 값이 바뀌면 끝난 것이다.
-    const before = await readSyncedAt();
+    const { at: before } = await readSyncedAt();
 
     try {
         const res = await sbPostGas({ action: 'sync' });
