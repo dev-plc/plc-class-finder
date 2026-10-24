@@ -19,10 +19,10 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=123';
-import { matches as hangulMatches } from './scripts/hangul.js?v=123';
-import { registerServiceWorker } from './scripts/sw-update.js?v=123';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=123';
+} from './scripts/members-data.js?v=124';
+import { matches as hangulMatches } from './scripts/hangul.js?v=124';
+import { registerServiceWorker } from './scripts/sw-update.js?v=124';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=124';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -30,7 +30,7 @@ import {
     homeworkSessionKey,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=123';
+} from './scripts/attendance-matrix.js?v=124';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1488,7 +1488,7 @@ function renderPrintPreview() {
             (cols.homework ? '<th class="pr-c-mark">과제</th>' : '') +
             (cols.status ? '<th class="pr-c-mark">김밥</th>' : '') +
             (cols.kimbap ? '<th class="pr-c-mark pr-c-wide">김밥신청</th>' : '') +
-            (cols.memo ? `<th class="pr-c-memo">${memoHead}</th>` : '<th class="pr-c-fill"></th>');
+            (cols.memo ? `<th class="pr-c-memo">${memoHead}</th>` : '');
 
         const rows = members.map((m, i) => {
             const id = m.id || (String(m.name || '') + String(m.phone || ''));
@@ -1508,7 +1508,7 @@ function renderPrintPreview() {
                     ${cols.homework ? `<td class="pr-c-mark">${hw ? '✓' : ''}</td>` : ''}
                     ${cols.status ? `<td class="pr-c-mark">${kb?.applied === 1 ? 'O' : ''}</td>` : ''}
                     ${cols.kimbap ? '<td class="pr-c-mark pr-c-wide pr-blank"></td>' : ''}
-                    ${cols.memo ? '<td class="pr-c-memo pr-blank"></td>' : '<td class="pr-c-fill"></td>'}
+                    ${cols.memo ? '<td class="pr-c-memo pr-blank"></td>' : ''}
                 </tr>`;
         }).join('');
 
@@ -1521,7 +1521,7 @@ function renderPrintPreview() {
                     <div class="pr-session">${escapeHtml(sessionLabel)}</div>
                 </div>
                 <div class="pr-sub">${st.location ? escapeHtml(st.location) + ' · ' : ''}인원 ${st.count}명${cols.status ? ` · 김밥 ${st.applied}명` : ''}</div>
-                <table class="pr-table">
+                <table class="pr-table${cols.memo ? '' : ' pr-nomemo'}">
                     <thead><tr>${head}</tr></thead>
                     <tbody>${rows}</tbody>
                 </table>

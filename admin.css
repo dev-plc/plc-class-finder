@@ -1137,7 +1137,10 @@ body.dark-mode .att-locked.s-h    { background: #3a2c12; color: #fcd34d; }
 /* 쓰던 시트의 기호 표기 — 안내일 뿐이라 옅게 둔다 */
 .pr-memo-mark { color: #98a2b3; font-weight: 400; letter-spacing: 0.12em; }
 
-.pr-table .pr-c-fill { width: auto; border: none !important; background: none !important; }
+/* 메모를 끄면 남는 폭을 먹을 칸이 없다 — 표를 칸 폭만큼만 세운다.
+   한때 빈 칸(.pr-c-fill)으로 채웠는데, 진한 겉선은 칸이 아니라 표의 outline 이라
+   빈 자리까지 둘러쌌다. width:auto 면 table-layout:fixed 는 풀리고 위의 칸 폭대로 선다. */
+.pr-table.pr-nomemo { width: auto; }
 
 /* 손으로 쓰는 줄 높이 — A4 한 장을 채우도록 JS 가 인원수에 맞춰 정한다 */
 .pr-table tbody td { height: var(--pr-row, 22px); }
