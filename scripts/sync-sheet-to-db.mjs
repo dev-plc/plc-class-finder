@@ -366,8 +366,9 @@ function mmddKey(v) {
 }
 
 // 커리큘럼 세션인지 (김밥 탭에는 '신규', '수료자 김밥' 같은 운영용 컬럼도 섞여 있다)
+// 교제·나눔 은 한 기수에 두 번 올 수 있어 '나눔2' 처럼 번호가 붙는다 (아래 '같은 이름의 주차')
 const isCurriculumLabel = (norm) =>
-  /^교리\d+$/.test(norm) || /^성경적대화\d+$/.test(norm) || norm === '교제' || norm === '나눔';
+  /^교리\d+$/.test(norm) || /^성경적대화\d+$/.test(norm) || /^(교제|나눔)\d*$/.test(norm);
 
 // 세션명의 1순위는 출석부(DB) 의 '강의명 행' (GAS v23+).
 // 김밥 탭은 인원 데이터에서 유추하는 방식이라 새 기수처럼 탭이 비면 아무것도 못 준다.
@@ -477,6 +478,40 @@ if (unmapped.length) {
   console.warn('    강의 카운트에서 제외됩니다 (팬텀 컬럼일 수 있음).\n');
 }
 
+// 같은 이름의 주차 — 두 번째부터 번호를 붙인다 (나눔, 나눔2, 나눔3 …)
+//
+// 3기는 나눔이 11/08 · 12/13 두 번이다. 김밥은 (사람, 라벨) 로 저장되고 앱도
+// 라벨로 찾으므로, 이름이 같으면 두 주차의 신청이 한 칸으로 겹친다.
+// 실제로 11/08 김밥이 39개가 아니라 12/13 칸의 4개로 나왔다.
+// 강의(교리N · 성경적대화N) 가 겹치는 것은 시트를 잘못 적은 것이라 경고만 한다.
+//
+// 번호를 붙이기 전 이름은 baseLabel 에 따로 둔다 — 세션 행에 필드를 달면
+// 그대로 upsert 되어 '없는 컬럼' 으로 동기화가 죽는다.
+const baseLabel = new Map();   // session → 번호 붙이기 전 라벨
+{
+  const seenLabel = new Map();
+  const renamed = [];
+  for (const s of sessions) {
+    if (!s.label_norm) continue;
+    baseLabel.set(s, s.label_norm);
+    const n = (seenLabel.get(s.label_norm) || 0) + 1;
+    seenLabel.set(s.label_norm, n);
+    if (n === 1) continue;
+    if (s.is_class) {
+      console.warn(`⚠️  같은 강의가 두 번 적혀 있습니다: ${s.label_norm} (${s.label}) — 출석부(DB) 강의명 행을 확인하세요.`);
+      continue;
+    }
+    s.label_norm = `${s.label_norm}${n}`;
+    renamed.push(s);
+  }
+  if (renamed.length) {
+    const firsts = sessions.filter(s => renamed.some(r => baseLabel.get(r) === s.label_norm));
+    console.log(`ℹ️  같은 이름의 주차: ${[...firsts, ...renamed].map(s => `${s.label_norm}(${s.label})`).join(' · ')}`);
+  }
+}
+// 김밥 칸을 주차에 붙일 때 쓴다 — 이름이 같아도 날짜는 다르다
+const sessionByDate = new Map(sessions.filter(s => s.session_date).map(s => [s.session_date, s]));
+
 const classList = sessions.filter(s => s.is_class);
 console.log(`ℹ️  강의 ${classList.length}개: ${classList.map(s => `${s.label}=${s.label_norm}`).join(', ')}`);
 const nonClass = sessions.filter(s => s.label_norm && !s.is_class);
@@ -546,11 +581,15 @@ const kimbapOpsLabels = new Set();   // '신규', '수료자 김밥' 등 운영�
 const kimbapExtraLabels = new Set(); // 커리큘럼이지만 출석부에 없는 것
 for (const [gasId, detail] of Object.entries(kimbapIn)) {
   for (const [rawName, info] of Object.entries(detail || {})) {
-    const norm = normalizeSession(rawName);
+    let norm = normalizeSession(rawName);
     if (!norm) continue;
+    // 칸의 날짜가 같은 이름의 주차를 가리키면 그 주차의 라벨을 쓴다 ('나눔' → 12/13 이면 '나눔2').
+    // 이름이 다르면(신규 · 수료자 김밥 같은 운영용 칸) 날짜가 겹쳐도 건드리지 않는다.
+    const key = mmddKey(info?.date);
+    const at = key && sessionByDate.get(dateOf.get(key));
+    if (at && baseLabel.get(at) === norm) norm = at.label_norm;
     if (!isCurriculumLabel(norm)) { kimbapOpsLabels.add(norm); }
     else if (!labelToDate.has(norm)) { kimbapExtraLabels.add(norm); }
-    const key = mmddKey(info?.date);
     const date = (key && dateOf.get(key)) || labelToDate.get(norm) || null;
     kimbapRows.push({
       _gasId: gasId,

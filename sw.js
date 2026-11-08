@@ -12,21 +12,21 @@
 //   한 겹만으로는 새지 않는다는 보장이 없어 둘 다 둔다.
 //   실제로 members-data 가 v33 에서 안 올라가는 일이 있었다.
 
-const CACHE_VERSION = 'plc-v111';
+const CACHE_VERSION = 'plc-v112';
 
 const PRECACHE_URLS = [
   './',
   './index.html',
   './admin.html',
-  './style.css?v=125',
-  './admin.css?v=125',
-  './script.js?v=125',
-  './admin.js?v=125',
-  './scripts/members-data.js?v=125',
-  './scripts/supabase-config.js?v=125',
-  './scripts/hangul.js?v=125',
-  './scripts/sw-update.js?v=125',
-  './scripts/attendance-matrix.js?v=125',
+  './style.css?v=126',
+  './admin.css?v=126',
+  './script.js?v=126',
+  './admin.js?v=126',
+  './scripts/members-data.js?v=126',
+  './scripts/supabase-config.js?v=126',
+  './scripts/hangul.js?v=126',
+  './scripts/sw-update.js?v=126',
+  './scripts/attendance-matrix.js?v=126',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

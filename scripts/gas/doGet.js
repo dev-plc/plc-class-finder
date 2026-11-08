@@ -435,7 +435,7 @@ function plcAuthorize() {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 33;
+  var currentVersion = 34;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -612,7 +612,7 @@ function plcCheckToken_(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 33; // + doGet 토큰 · 권한 점검 · 아이디 정형화 · '과제' 값
+  var currentVersion = 34; // + 김밥 탭의 같은 머리글(나눔 ×2)을 따로 담는다
 
   if (!plcCheckToken_(e)) {
     return output.setContent(JSON.stringify({
@@ -688,6 +688,7 @@ function doGet(e) {
 
         // 세션 컬럼 목록 (세션명이 있는 컬럼만)
         var sessionCols = [];
+        var usedNames = {};
         for (var c = idCol + 1; c < sessionRow.length; c++) {
           var sRaw = sessionRow[c];
           var sName = "";
@@ -714,7 +715,16 @@ function doGet(e) {
               dateStr = s;
             }
           }
-          sessionCols.push({ col: c, name: sName, date: dateStr });
+          // 같은 머리글이 또 나오면 날짜를 붙여 따로 담는다 ('나눔 (12/13)').
+          // 사람마다 detail[이름] 에 담으므로, 그대로 두면 뒤 칸이 앞 칸을 덮는다.
+          // 3기는 나눔이 11/08 · 12/13 두 번이라 11/08 신청(39명)이 12/13 칸(4명)으로
+          // 바뀌어 들어갔다. 어느 주차인지는 동기화가 날짜로 다시 맞춘다.
+          var key = sName;
+          for (var n = 2; usedNames[key]; n++) {
+            key = sName + " (" + (dateStr || n) + ")" + (n > 2 && dateStr ? n : "");
+          }
+          usedNames[key] = true;
+          sessionCols.push({ col: c, name: key, date: dateStr });
         }
 
         // 오늘 이후 가장 가까운 세션 인덱스 (기존 호환)

@@ -19,10 +19,10 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=125';
-import { matches as hangulMatches } from './scripts/hangul.js?v=125';
-import { registerServiceWorker } from './scripts/sw-update.js?v=125';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=125';
+} from './scripts/members-data.js?v=126';
+import { matches as hangulMatches } from './scripts/hangul.js?v=126';
+import { registerServiceWorker } from './scripts/sw-update.js?v=126';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=126';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -30,7 +30,7 @@ import {
     homeworkSessionKey,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=125';
+} from './scripts/attendance-matrix.js?v=126';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
