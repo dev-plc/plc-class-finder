@@ -19,10 +19,10 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=124';
-import { matches as hangulMatches } from './scripts/hangul.js?v=124';
-import { registerServiceWorker } from './scripts/sw-update.js?v=124';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=124';
+} from './scripts/members-data.js?v=125';
+import { matches as hangulMatches } from './scripts/hangul.js?v=125';
+import { registerServiceWorker } from './scripts/sw-update.js?v=125';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=125';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -30,7 +30,7 @@ import {
     homeworkSessionKey,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=124';
+} from './scripts/attendance-matrix.js?v=125';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1133,12 +1133,22 @@ const PR_KIMBAP_KEEP = 40;      // 주차별 기록은 이만큼만 남긴다
 
 let prKimbapBy = {};            // { '2026-08-16': true|false }
 
+// 출력에서 뺀 장(場). 조 이름 또는 '__summary__'.
+//
+// 저장한다. 한때 메모리에만 두고 주차를 바꾸면 비웠는데('범위가 바뀌면 뜻을
+// 잃는다'), 실제로 빼는 조는 매주 같다 — 따로 뽑는 조, 종이가 필요 없는 조.
+// 들어올 때마다 다시 끄게 했더니 안 끈 채로 그냥 인쇄됐다.
+// 키가 조 이름이라 지금 없는 조가 남아 있어도 아무 데도 안 걸린다.
+const prSkip = new Set();
+
 function loadPrintPrefs() {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(PR_PREF_KEY) || '{}'); }
     catch { /* 깨진 값은 버린다 */ }
 
     prKimbapBy = (saved.kimbapBy && typeof saved.kimbapBy === 'object') ? saved.kimbapBy : {};
+    prSkip.clear();
+    if (Array.isArray(saved.skip)) saved.skip.forEach(k => typeof k === 'string' && prSkip.add(k));
 
     const cols = saved.cols || {};
     for (const key of PR_SAVED_COLS) {
@@ -1156,16 +1166,11 @@ function savePrintPrefs() {
     const cols = {};
     for (const key of PR_SAVED_COLS) if (prOpt[key]) cols[key] = prOpt[key].checked;
 
-    try { localStorage.setItem(PR_PREF_KEY, JSON.stringify({ cols, kimbapBy: prKimbapBy })); }
+    try { localStorage.setItem(PR_PREF_KEY, JSON.stringify({ cols, kimbapBy: prKimbapBy, skip: [...prSkip] })); }
     catch { /* 저장 실패는 무시 */ }
 }
 
 loadPrintPrefs();
-
-// 출력에서 뺀 장(場). 조 이름 또는 '__summary__'.
-// 칸 토글로 다시 그릴 때는 유지하고, 주차·조를 바꾸면 비운다 —
-// 고른 범위가 달라지면 뺐던 것도 뜻을 잃는다.
-const prSkip = new Set();
 
 const PR_LOC_PREFIX = 'loc:';
 
@@ -1379,13 +1384,14 @@ function prSetPageOn(key, on) {
                        prPagePicks?.querySelector(`.pr-pagepick-input${sel}`)]) {
         if (box && box.checked !== on) box.checked = on;
     }
+    savePrintPrefs();
 }
 
 function prRenderPagePicks() {
     if (!prPagePicks) return;
     prPagePicks.innerHTML = prPageKeys.map(k => `
         <label class="pr-chip pr-page-chip">
-            <input type="checkbox" class="pr-pagepick-input" data-page="${escapeHtml(k)}"${prSkip.has(k) ? '' : ' checked'}>
+            <input type="checkbox" class="pr-pagepick-input" autocomplete="off" data-page="${escapeHtml(k)}"${prSkip.has(k) ? '' : ' checked'}>
             <span>${escapeHtml(prPageLabel(k))}</span>
         </label>`).join('');
 }
@@ -1394,7 +1400,7 @@ function prRenderPagePicks() {
 function prPickBox(key) {
     const on = !prSkip.has(key);
     return `<label class="pr-pick">
-        <input type="checkbox" class="pr-pick-input" data-page="${escapeHtml(key)}"${on ? ' checked' : ''}>
+        <input type="checkbox" class="pr-pick-input" autocomplete="off" data-page="${escapeHtml(key)}"${on ? ' checked' : ''}>
         <span>출력</span>
     </label>`;
 }
@@ -1543,12 +1549,14 @@ function renderPrintPreview() {
 
 function updatePrintInfo() {
     updatePrPickToggle();          // 켜고 끌 때마다 버튼이 지금 상태의 반대를 보여야 한다
-    if (!prInfo || !prPreview) return;
-    const pages = prPreview.querySelectorAll('.pr-sheet');
-    const on = prPreview.querySelectorAll('.pr-sheet:not(.pr-skip)').length;
-    prInfo.textContent = pages.length === 0 ? ''
-        : (on === pages.length ? `${pages.length}장 출력`
-                               : `${pages.length}장 중 ${on}장 출력 (${pages.length - on}장 제외)`);
+    if (!prInfo) return;
+    // 세는 기준은 prSkip 하나다. 화면의 .pr-skip 클래스는 그걸 그린 결과일 뿐 —
+    // 둘을 따로 세면 어긋났을 때 숫자와 인쇄가 서로 다른 말을 한다.
+    const total = prPageKeys.length;
+    const on = prPageKeys.filter(k => !prSkip.has(k)).length;
+    prInfo.textContent = total === 0 ? ''
+        : (on === total ? `${total}장 출력`
+                        : `${total}장 중 ${on}장 출력 (${total - on}장 제외)`);
 }
 
 // 장 위의 체크, 조작부의 체크 — 어느 쪽을 눌러도 같은 곳으로 간다
@@ -1606,10 +1614,9 @@ prPickToggle?.addEventListener('click', () => {
     updatePrintInfo();
 });
 
-// 범위가 바뀌면 뺐던 것도 뜻을 잃는다
+// 뺀 장은 그대로 둔다 — 주차가 바뀌어도 빼는 조는 같다 (prSkip 주석 참고)
 prSessionSelect?.addEventListener('change', (e) => {
     prSessionDate = e.target.value;
-    prSkip.clear();
     syncKimbapDefault();
     renderPrintPreview();
 });
@@ -1628,20 +1635,45 @@ prOpt.kimbap?.addEventListener('change', () => {
 [prOpt.status, prOpt.homework, prOpt.memo, prOpt.summary].forEach(el =>
     el?.addEventListener('change', () => { savePrintPrefs(); renderPrintPreview(); }));
 
-document.getElementById('prPrintBtn')?.addEventListener('click', () => {
-    const live = [...(prPreview?.querySelectorAll('.pr-sheet:not(.pr-skip)') || [])];
-    if (live.length === 0) { alert('출력할 장이 없습니다. 체크를 하나 이상 켜세요.'); return; }
+// 인쇄 준비. 🖨️ 버튼과 Ctrl+P(브라우저 메뉴) 가 같이 쓴다.
+//
+// 한때 버튼에만 있었다. 끈 장을 숨기는 인쇄 CSS 는 body.printing 아래에서만
+// 걸리므로, Ctrl+P 로 뽑으면 끈 장에 조작부까지 전부 찍혔다.
+// 출력할 장 수를 돌려준다.
+function prPreparePrint() {
+    const live = [...(prPreview?.querySelectorAll('.pr-sheet') || [])]
+        .filter(el => !prSkip.has(el.dataset.page));
+    if (live.length === 0) return 0;
+
+    // 화면 클래스를 prSkip 에 다시 맞춘다 — 인쇄 CSS 는 클래스를 본다
+    prPreview.querySelectorAll('.pr-sheet').forEach(el =>
+        el.classList.toggle('pr-skip', prSkip.has(el.dataset.page)));
 
     // 마지막 장 뒤에는 빈 장이 붙지 않게 표시해 둔다.
     // :last-child 로는 안 된다 — 뺀 장은 숨겨질 뿐 여전히 마지막일 수 있다.
-    prPreview?.querySelectorAll('.pr-last').forEach(el => el.classList.remove('pr-last'));
+    prPreview.querySelectorAll('.pr-last').forEach(el => el.classList.remove('pr-last'));
     live[live.length - 1].classList.add('pr-last');
 
     // 인쇄 대상은 미리보기다. 나머지 화면은 인쇄 CSS 가 숨긴다.
     document.body.classList.add('printing');
+    return live.length;
+}
+
+document.getElementById('prPrintBtn')?.addEventListener('click', () => {
+    if (prPreparePrint() === 0) { alert('출력할 장이 없습니다. 체크를 하나 이상 켜세요.'); return; }
     window.print();
-    setTimeout(() => document.body.classList.remove('printing'), 0);
 });
+
+// Ctrl+P · 브라우저 메뉴. 출석부 출력 탭을 보고 있을 때만 끼어든다 —
+// 다른 탭에서 화면을 그대로 찍는 것까지 막으면 안 된다.
+window.addEventListener('beforeprint', () => {
+    if (document.body.classList.contains('printing')) return;   // 버튼이 이미 준비했다
+    if (!document.getElementById('printTab')?.classList.contains('active')) return;
+    prPreparePrint();
+});
+// 떼는 것은 인쇄가 끝난 뒤에. print() 직후 떼면(setTimeout 0) print() 가 바로
+// 돌아오는 브라우저에서는 인쇄 전에 떨어져 끈 장까지 찍힌다.
+window.addEventListener('afterprint', () => document.body.classList.remove('printing'));
 
 
 // ============================================================================
