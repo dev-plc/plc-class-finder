@@ -152,6 +152,11 @@ function htaLectureColMap_(dbData, layout) {
     var lec = String(row[j] || '').trim();
     if (lec) map[lec] = j + 1;
   }
+  // 과제 폼은 번호 없이 '나눔' 으로 적는데 시트는 나눔1 · 나눔2 다 (한 기수에 두 번).
+  // 번호 없는 것은 첫 번째로 — 앱·동기화와 같은 규칙이다.
+  ['교제', '나눔'].forEach(function (base) {
+    if (!map[base] && map[base + '1']) map[base] = map[base + '1'];
+  });
   return map;
 }
 
@@ -187,9 +192,14 @@ function htaLectureKey_(raw) {
     }
     return '교리' + n;   // 범위 밖 — 열을 못 찾아 unmatched 로 샌다 (조용히 바꾸지 않는다)
   }
+  // 교제·나눔 은 번호를 남긴다 (시트의 나눔1 · 나눔2). 번호가 없으면 htaLectureColMap_ 이 첫 번째로 보낸다
+  m = s.match(/^(?:교제|교재)\s*(\d+)/);
+  if (m) return '교제' + m[1];
   if (/^교제/.test(s) || /^교재/.test(s)) return '교제';
   // '교리교육 나눔 소감문' 처럼 앞에 말이 붙어도 받는다.
   // 위의 번호 갈래가 먼저 걸리므로 '5강 나눔의 기쁨' 같은 제목은 여기로 안 샌다.
+  m = s.match(/나눔\s*(\d+)/);
+  if (m) return '나눔' + m[1];
   if (/나눔/.test(s)) return '나눔';
   return s;
 }

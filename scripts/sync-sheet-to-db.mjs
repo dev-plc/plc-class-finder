@@ -106,11 +106,18 @@ function normalizeSession(raw) {
     const n = parseInt(m[1], 10);
     return labelFromSerial(n) || ('교리' + n);   // 범위 밖은 그대로 두고 상위에서 경고
   }
+  // 교제·나눔 은 한 기수에 두 번 올 수 있어 시트에 '나눔1' · '나눔2' 로 적는다.
+  // 번호는 남긴다 — 한때 '나눔' 으로 접어서 두 주차의 김밥이 한 칸으로 겹쳤다.
+  // 번호 없는 '나눔' 은 과제 쪽에서 첫 번째 나눔 주차로 붙인다 (아래 firstNonClass).
+  m = s.match(/^(?:교제|교재)\s*(\d+)/);
+  if (m) return '교제' + m[1];
   if (/^교제/.test(s) || /^교재/.test(s)) return '교제';
   // '나눔' 은 앞에 붙지 않아도 받는다. 과제 폼의 선택지가
   // '교리교육 나눔 소감문' 이라 ^나눔 으로는 안 걸려 어느 주차에도 안 붙었다.
   // 위의 번호 갈래(^N강 · ^교리N)가 먼저 걸리므로 '5강 나눔의 기쁨' 같은
   // 강의 제목이 여기로 새지는 않는다.
+  m = s.match(/나눔\s*(\d+)/);
+  if (m) return '나눔' + m[1];
   if (/나눔/.test(s)) return '나눔';
   return s;
 }
@@ -397,8 +404,8 @@ function sessionOrder(norm) {
   if (m) return 200 + parseInt(m[1], 10);
   m = String(norm).match(/^교리(\d+)$/);
   if (m) return parseInt(m[1], 10);
-  if (norm === '교제') return 100;
-  if (norm === '나눔') return 101;
+  if (/^교제\d*$/.test(norm)) return 100;
+  if (/^나눔\d*$/.test(norm)) return 101;
   return 999;
 }
 
@@ -416,7 +423,7 @@ const CURRICULUM = [
 
 // 김밥 탭에서 확인된 비강의 주차 (교제·나눔)
 const nonClassKeys = new Set(
-  [...mmddToLabel].filter(([, v]) => v === '교제' || v === '나눔').map(([k]) => k)
+  [...mmddToLabel].filter(([, v]) => /^(교제|나눔)\d*$/.test(v)).map(([k]) => k)
 );
 
 if (explicitLabels.size) {
@@ -509,6 +516,15 @@ const baseLabel = new Map();   // session → 번호 붙이기 전 라벨
     console.log(`ℹ️  같은 이름의 주차: ${[...firsts, ...renamed].map(s => `${s.label_norm}(${s.label})`).join(' · ')}`);
   }
 }
+// 번호 없는 '교제' · '나눔' 이 갈 곳 — 이 기수의 첫 번째 그 주차.
+// 과제 폼은 '교리교육 나눔 소감문' 처럼 번호 없이 적는데 시트는 나눔1 · 나눔2 다.
+// 시트도 번호 없이 '나눔' 이면 그대로 '나눔' 이 된다.
+const firstNonClass = {};
+for (const base of ['교제', '나눔']) {
+  const hit = sessions.find(s => new RegExp(`^${base}\\d*$`).test(s.label_norm || ''));
+  if (hit) firstNonClass[base] = hit.label_norm;
+}
+
 // 김밥 칸을 주차에 붙일 때 쓴다 — 이름이 같아도 날짜는 다르다
 const sessionByDate = new Map(sessions.filter(s => s.session_date).map(s => [s.session_date, s]));
 
@@ -587,7 +603,9 @@ for (const [gasId, detail] of Object.entries(kimbapIn)) {
     // 이름이 다르면(신규 · 수료자 김밥 같은 운영용 칸) 날짜가 겹쳐도 건드리지 않는다.
     const key = mmddKey(info?.date);
     const at = key && sessionByDate.get(dateOf.get(key));
-    if (at && baseLabel.get(at) === norm) norm = at.label_norm;
+    // 번호는 빼고 비교한다 — 김밥 탭이 '나눔', 출석부가 '나눔1' 처럼 달리 적혀도 같은 주차다
+    const bare = (l) => String(l || '').replace(/^(교제|나눔)\d*$/, '$1');
+    if (at && bare(baseLabel.get(at)) === bare(norm)) norm = at.label_norm;
     if (!isCurriculumLabel(norm)) { kimbapOpsLabels.add(norm); }
     else if (!labelToDate.has(norm)) { kimbapExtraLabels.add(norm); }
     const date = (key && dateOf.get(key)) || labelToDate.get(norm) || null;
@@ -713,8 +731,9 @@ let homeworkTagged = 0;
 const homeworkNoDateSample = new Set();
 for (const [gasId, list] of Object.entries(homeworkIn)) {
   for (const h of (list || [])) {
-    const norm = normalizeSession(h.session);
+    let norm = normalizeSession(h.session);
     if (!norm) continue;
+    if (firstNonClass[norm]) norm = firstNonClass[norm];   // '나눔' → '나눔1'
     const ts = readSubmittedAt(h.submittedAt);
     const row = {
       _gasId: gasId,

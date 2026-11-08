@@ -14,7 +14,7 @@ import {
     getKimbapDetail,
     getHomeworkList,
     getCompletionOutlook,
-} from './members-data.js?v=126';
+} from './members-data.js?v=127';
 
 // ============================================================================
 // 세션명 정규화
@@ -22,7 +22,7 @@ import {
 // 과제 session 필드에서 정규화 키 추출.
 // "1강 XXX" → "교리1", "교리1" → "교리1"
 // "대화1 XXX", "성경적대화1" → "대화1"
-// "교제" → "교제", "나눔" → "나눔"
+// "교제" → "교제", "나눔1" → "나눔1", "나눔" → "나눔"
 //
 // 폼 응답과 시트 강의명이 다르게 적히므로 양쪽을 이걸로 통과시킨 뒤 비교한다.
 export function normalizeSessionKey(s) {
@@ -31,9 +31,16 @@ export function normalizeSessionKey(s) {
     if (m) return '대화' + m[1];
     m = raw.match(/^교리\s*(\d+)/) || raw.match(/^(\d+)\s*강/);
     if (m) return '교리' + m[1];
+    // 교제·나눔 의 번호는 남긴다. 한 기수에 두 번이라 시트가 나눔1 · 나눔2 로 적는다.
+    // '나눔' 으로 접으면 나눔 소감문 📝 가 두 주차에 다 떴다.
+    // 번호 없는 과제('교리교육 나눔 소감문')는 동기화가 나눔1 로 붙여 sessionLabel 에 준다.
+    m = raw.match(/^(?:교제|교재)\s*(\d+)/);
+    if (m) return '교제' + m[1];
     if (/^교제/.test(raw) || /^교재/.test(raw)) return '교제';
     // '교리교육 나눔 소감문' 처럼 앞에 말이 붙어도 받는다 (동기화와 같은 규칙).
     // 번호 갈래가 먼저 걸리므로 강의 제목이 여기로 새지 않는다.
+    m = raw.match(/나눔\s*(\d+)/);
+    if (m) return '나눔' + m[1];
     if (/나눔/.test(raw)) return '나눔';
     return raw;
 }
