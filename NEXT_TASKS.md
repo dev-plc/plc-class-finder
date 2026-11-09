@@ -179,6 +179,19 @@
 
 ### 지금 사람이 해야 하는 것
 
+- [ ] **GAS v35 · DGfinder 에서 가져온 것 (v128, 2026-11-09)** — 순서대로
+  1. 웹앱 프로젝트에 새 `doGet.js` → 배포 관리 → 기존 배포 **버전만** 올리기.
+     응답 `version` 이 **35** 면 최신
+  2. 시트 프로젝트에 `pullAttendance.js` · `homeworkToAttendance.js` 교체 +
+     `checkHomeworkIds.js` 새 파일 → 시트 새로고침 → **PLC → 과제 아이디 점검**
+  3. 긴 임의 문자열을 웹앱 프로젝트 **스크립트 속성 `API_TOKEN`** 과
+     **GitHub Secrets `GAS_API_TOKEN`** 에 똑같이 → ⟳ 로 동기화가 되는지
+  4. 시크릿 창에서 웹앱 /exec 주소를 열어 '토큰이 필요합니다' 가 나오는지
+  5. Actions → **지난 로그 지우기** (확인란에 '지운다') — 2026-11 까지의 로그에 실명이 있다
+  - 바뀐 것: 로그에 실명 대신 건수 · doGet 내보낼 열 고정 · 시트가 먼저 바뀐 칸을
+    앱이 안 덮음(seen/changed · ◎과제- kept) · 머리글 10줄 · 김밥 못 읽은 이유 ·
+    과제 아이디 연락처 보완 · NFC
+
 - [x] **`과제` 값 켜기 (v104)** — **2026-09-03 완료.**
       `views.sql` · `rpc_attendance.sql` 재실행 + GAS 두 파일(`PLC_ALLOWED_STATUS` ·
       `PLC_PUSH_ALLOWED`) + 웹앱 재배포까지 끝났다. 시트의 `과제` 가 앱에 노란

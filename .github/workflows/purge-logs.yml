@@ -1,0 +1,58 @@
+name: 지난 로그 지우기 (실명 정리)
+
+# 2026-11 까지의 동기화·조회·이월 로그에는 실명+전화뒷4 가 찍혀 있었다.
+# 저장소가 public 이라 Actions 로그는 누구나 본다. 코드를 고쳐 앞으로는 안 찍히지만
+# 이미 남은 로그는 따로 지워야 한다.
+#
+# 손으로만 돈다. 실행 기록(성공·실패 표시)은 남고 **로그 내용만** 지운다.
+# 되돌릴 수 없다 — 지난 실패 원인을 로그로 다시 볼 수 없게 된다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "지우려면 '지운다' 라고 적으세요"
+        required: true
+        default: ''
+      before:
+        description: '이 날짜(YYYY-MM-DD) 전 실행만 (비우면 오늘 전 전부)'
+        required: false
+        default: ''
+
+permissions:
+  actions: write
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event.inputs.confirm == '지운다' }}
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const before = (context.payload.inputs.before || new Date().toISOString().slice(0, 10));
+            // 실명이 찍히던 워크플로만. 화면 제목이 아니라 파일명이다.
+            const files = ['sync-db.yml', 'query-db.yml', 'carry-over.yml', 'run-sql.yml'];
+            let deleted = 0, skipped = 0;
+            for (const workflow_id of files) {
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                ...context.repo, workflow_id, per_page: 100,
+              }).catch(e => { core.warning(`${workflow_id}: ${e.message}`); return []; });
+              for (const run of runs) {
+                if (run.id === context.runId) continue;
+                if (run.created_at.slice(0, 10) >= before) { skipped++; continue; }
+                if (run.status !== 'completed') { skipped++; continue; }
+                try {
+                  await github.request('DELETE /repos/{owner}/{repo}/actions/runs/{run_id}/logs', {
+                    ...context.repo, run_id: run.id,
+                  });
+                  deleted++;
+                } catch (e) {
+                  // 이미 지워졌거나 만료된 로그는 404/410 — 건너뛴다
+                  if (![404, 410].includes(e.status)) core.warning(`run ${run.id}: ${e.message}`);
+                }
+              }
+            }
+            core.summary.addRaw(`로그를 지운 실행 ${deleted}개 · 건너뜀 ${skipped}개 (기준일 ${before} 전)`).write();
+            console.log(`로그를 지운 실행 ${deleted}개 · 건너뜀 ${skipped}개 (기준일 ${before} 전)`);

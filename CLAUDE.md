@@ -65,6 +65,10 @@ git grep -n "from '\./[^']*\.js'" -- '*.js'             # 아무것도 안 나�
 ```
 
 - **앱은 DB 를 직접 쓰지 않는다.** `updateAttendanceBatch` 는 `sbPostGas` 로만 간다
+- **앱은 저장할 때 화면에 떠 있던 값(`seen`)을 같이 보낸다 (GAS v35~).** 앱은 최대 10분
+  늦은 DB 를 보므로, 시트의 지금 칸이 `seen` 과 다르면 GAS 는 쓰지 않고 `changed` 로
+  돌려준다. 시트 칸이 `◎ · 과제 · -` 이면 앱 값으로 덮지 않고 `kept` 로 돌려준다.
+  두고 온 칸의 시트 값은 GAS 가 DB 에도 바로 밀고, 앱은 그 칸을 시트 값으로 다시 그린다
 - ② 가 실패해도 저장은 성공이다. 원본에 들어갔고 트리거가 곧 맞춘다
 - `pullAttendanceFromDb`(DB → 시트)는 **기수 시작 때만**. 평소에 돌리면 원본을 덮는다
 - **동기화도 출석을 가져온다 — 단 값이 있는 칸만.** 빈칸을 보내면 앱이 찍은 출석을
@@ -126,6 +130,15 @@ GAS 웹앱은 `application/json` 을 받으면 preflight 때문에 CORS 로 막�
   실명 토큰 319개를 `git filter-repo` 로 잘라내고 `main` 을 재작성했다.
   **재작성해도 GitHub 은 옛 커밋을 SHA 로 한동안 돌려준다** — 지원팀에 gc 를
   따로 요청해야 한다. 애초에 안 올리는 것 말고 싸게 되돌리는 방법은 없다
+- **Actions 로그·아티팩트에도 실명을 남기지 않는다.** 공개 저장소의 로그는 누구나 본다.
+  2026-11 까지 동기화 로그가 '명단에 없는 190명: 실명+전화뒷4 …' 를 그대로 찍었다.
+  로그에는 건수·조별 집계만. 누구인지는 시트 메뉴 **PLC → 과제 아이디 점검**
+  ('과제ID점검' 탭, `gas/checkHomeworkIds.js`)이 알려 준다. 사람별 결과가 꼭 필요한
+  워크플로(query-db · run-sql · carry-over)는 아티팩트로만, `retention-days: 1`.
+  지난 로그는 Actions → '지난 로그 지우기' 로 지운다
+- **doGet 은 동기화가 쓰는 열만 내보낸다** (`PLC_EXPORT_COLS` + 날짜 열). 열을 새로 쓰려면
+  거기에 넣는다. 그리고 `API_TOKEN`(스크립트 속성) = `GAS_API_TOKEN`(Secrets) 을 켜 둔다 —
+  웹앱 URL 은 이 저장소에 적혀 있다
 - `service_role` 키는 GitHub Secrets 에만 둔다. 채팅·코드·로그 어디에도 남기지 않는다
 - `anon` 키는 공개돼도 안전하다 — RLS 가 막고, 쓰기는 `set_attendance_batch` RPC 로만 된다
 

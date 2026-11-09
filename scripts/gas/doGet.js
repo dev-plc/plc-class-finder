@@ -10,6 +10,19 @@
 //    승인 창을 띄울 자리가 없고, 권한이 없으면 조용히 실패한다.
 //    승인 → 재배포 순서를 지킬 것.
 //
+// 핵심 변경 (v35): DGfinder v29~v32 에서 가져온 것
+//   - doGet 이 출석부의 **동기화가 쓰는 열만** 내보낸다 (PLC_EXPORT_COLS + 날짜 열).
+//     예전에는 모든 열을 그대로 내보내서, 시트에 열을 더 만들면 그 개인정보가
+//     인증 없는 URL 로 바로 나갔다. 토큰(API_TOKEN)도 켤 것 — 아래 plcCheckToken_.
+//   - doPost 가 시트에서 먼저 바뀐 칸을 덮지 않는다. 앱이 저장할 때 화면에 떠 있던
+//     값(seen)을 같이 보내고, 시트의 지금 칸이 그것과 다르면 쓰지 않고 changed 로
+//     돌려준다. 시트 칸이 ◎ · 과제 · - 이면 앱 값으로 덮지 않고 kept 로 돌려준다.
+//     앱은 최대 10분 늦은 DB 를 보기 때문에 생기던 일이다.
+//   - 머리글을 위 10줄까지 찾는다 (예전 5~6줄). DG 는 김밥 탭 위에 줄이 하나 붙자
+//     김밥을 열흘 못 읽었다. 못 읽으면 kimbapReason 으로 이유를 준다.
+//   - 과제 아이디에 번호가 없으면 같은 줄 연락처 뒤 4자리로 보완 (plcHomeworkId_).
+//   - 아이디 정형화에 자모 합치기(NFC).
+//
 // 핵심 변경 (v33): v32 의 '⟳ 가 출석까지' 를 물린다
 //   GAS 프로젝트가 둘이라는 것을 몰랐다. 웹앱(이 파일)은 독립 프로젝트이고
 //   pullAttendance.js 는 스프레드시트에 붙은 프로젝트에 있다. 전역을 공유하지
@@ -147,15 +160,39 @@ var TAB_HOMEWORK = "과제";
 //    그래서 이 함수를 아이디를 만들고 맞추는 모든 자리에서 쓴다.
 // ============================================================================
 function plcNormalizeId_(v) {
-  return String(v == null ? "" : v)
+  var s = String(v == null ? "" : v);
+  if (s.normalize) s = s.normalize("NFC");               // 풀린 자모 → 한 글자 (맥에서 낸 폼)
+  return s
     .replace(/[\uFF10-\uFF19]/g, function (d) {          // 전각 0-9 → 반각
       return String.fromCharCode(d.charCodeAt(0) - 0xFEE0);
     })
     .replace(/[^0-9A-Za-z\uAC00-\uD7A3]/g, "");          // 한글·영문·숫자만
 }
 
+// 과제 탭 아이디. 번호 없이 이름만 적은 건은 같은 줄 '연락처' 의 뒤 4자리를 붙인다.
+// 그대로 두면 명단과 짝이 안 맞아 그 사람의 과제가 조용히 버려진다 (DGfinder v20).
+// ⚠️ 시트 프로젝트의 htaHomeworkId_ (homeworkToAttendance.js) 와 같은 규칙이다.
+function plcHomeworkId_(rawId, rawPhone) {
+  var id = plcNormalizeId_(rawId);
+  if (!id || /\d{4}$/.test(id)) return id;
+  var tail = String(rawPhone == null ? "" : rawPhone).replace(/[^0-9]/g, "").slice(-4);
+  return tail.length === 4 ? id + tail : id;
+}
 
 var TAB_LINKS    = "새가족링크";
+
+// 머리글('id' 가 적힌 줄)을 위에서 몇 줄까지 찾는가.
+// DGfinder 는 5줄이었는데 김밥 탭 위에 안내 줄이 하나 붙자 김밥 탭을 통째로 못 읽고
+// 열흘을 돌았다 (새 신청도 취소도 안 들어왔다). 칸 값이 정확히 'id' 여야 걸리므로
+// 넓혀도 데이터 줄과 헷갈리지 않는다.
+var PLC_HEADER_SCAN_ROWS = 10;
+
+// doGet 이 출석부에서 내보내는 열. **동기화(sync-sheet-to-db.mjs)가 쓰는 것만.**
+// 예전에는 모든 열을 그대로 내보냈다 — 시트에 열을 하나 더 만들면 그 개인정보가
+// 인증 없는 URL 로 바로 나갔다. 날짜 열(MM/DD)은 아래에서 따로 받는다.
+var PLC_EXPORT_COLS = ["team", "location", "role", "gen", "age", "연락처", "결혼",
+                       "담당교역자", "no.", ".note", "수료", "김밥1차", "김밥2차",
+                       "telegram", "안내문자"];
 
 // 가장 최근 지난 (오늘 포함) 세션 컬럼 index. 없으면 -1.
 // 유일 기준: '출석부(DB)' 시트의 헤더 행 (외부 필터 없음).
@@ -209,6 +246,9 @@ var PLC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdX
 
 // DB(set_attendance_batch)가 받는 값과 같아야 한다.
 var PLC_ALLOWED_STATUS = { "O": 1, "X": 1, "\u25ce": 1, "\uacfc\uc81c": 1, "-": 1, "": 1 };
+
+// 앱이 덮을 수 없는 시트 값 — ◎ · 과제 · - (시트에서만 고친다). U+2212 '−' 도 같은 뜻으로 본다.
+var PLC_LOCKED_STATUS = { "\u25ce": 1, "\uacfc\uc81c": 1, "-": 1, "\u2212": 1 };
 
 function plcSbHeaders_() {
   return {
@@ -435,7 +475,7 @@ function plcAuthorize() {
 
 function doPost(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 34;
+  var currentVersion = 35;
   var fail = function (msg) {
     return output.setContent(JSON.stringify({ success: false, version: currentVersion, message: msg }));
   };
@@ -487,7 +527,8 @@ function doPost(e) {
     // 헤더 행의 'id' 칸을 찾는다. 컬럼 순서가 바뀌어도 따라간다.
     // 폭을 26(A~Z)으로 고정하면 ID 열이 그 뒤로 밀렸을 때 못 찾는다 —
     // 출석부는 정보 16칸 + 주차 18칸이라 금방 Z 를 넘는다.
-    var idCell = sheet.getRange(1, 1, 5, Math.max(sheet.getLastColumn(), 1))
+    var idCell = sheet.getRange(1, 1, Math.min(PLC_HEADER_SCAN_ROWS, Math.max(sheet.getLastRow(), 1)),
+                                Math.max(sheet.getLastColumn(), 1))
       .createTextFinder("id").matchCase(false).matchEntireCell(true).findNext();
     if (!idCell) throw new Error("'id' 열을 찾을 수 없습니다.");
 
@@ -533,11 +574,37 @@ function doPost(e) {
     var updated = 0;
     var notFound = [];
     var wrote = [];       // DB 로 넘길 목록
+    var kept = [];        // 시트의 ◎ · 과제 · - 라 두었다 [{ id, current }]
+    var changed = [];     // 앱이 본 값과 시트가 달라 두었다 [{ id, current }]
     for (var j = 0; j < entries.length; j++) {
       var en = entries[j] || {};
       var targetId = plcNormalizeId_(String(en.name || "") + String(en.phone || ""));
       var rowNum = idToRow[targetId];
       if (!rowNum) { notFound.push(targetId); continue; }
+
+      var cell = colValues[rowNum - (headerRow + 1)][0];
+      var current = cell instanceof Date ? Utilities.formatDate(cell, tz, "yyyy-MM-dd")
+                                         : String(cell == null ? "" : cell).trim().toUpperCase();
+
+      // ◎ · 과제 · - 는 시트에서만 고친다. 앱 화면에서도 잠겨 있지만, 앱은 최대
+      // 10분 늦은 DB 를 보므로 방금 시트에 적힌 ◎ 를 모를 수 있다. 실제로 그렇게
+      // 이수자가 결석으로 저장된 일이 있었다. 여기서 한 번 더 막는다.
+      if (PLC_LOCKED_STATUS.hasOwnProperty(current) && current !== en.status) {
+        kept.push({ id: targetId, current: current });
+        continue;
+      }
+      // seen — 저장할 때 앱 화면에 떠 있던 값 (v35, DGfinder v32).
+      // 시트가 그 사이 바뀌었으면(손으로 넣은 O 등) 덮지 않는다. 앱은 DB 를 읽고
+      // DB 는 시트보다 최대 10분 늦다 — 그 틈에 시트의 O 가 앱의 X 로 말없이 덮였다.
+      // seen 을 안 보내는 옛 화면은 예전처럼 쓴다. 보내려는 값이 이미 시트에 있으면 쓴다.
+      if (en.seen !== undefined && en.seen !== null) {
+        var seen = String(en.seen).trim().toUpperCase();
+        if (current !== seen && current !== en.status) {
+          changed.push({ id: targetId, current: current });
+          continue;
+        }
+      }
+
       colValues[rowNum - (headerRow + 1)][0] = en.status;
       wrote.push({ id: targetId, status: en.status });
       updated++;
@@ -548,17 +615,23 @@ function doPost(e) {
     }
 
     // ── 2) DB 에 밀어넣는다 (사본). 실패해도 저장 자체는 성공이다.
+    // 두고 온 칸(kept · changed)의 시트 값도 같이 민다 — DB 가 늦어서 생긴 일이니
+    // 10분 트리거를 기다리지 않고 지금 맞춘다. 그래야 앱이 다시 읽어도 같은 값이다.
+    var toDb = wrote.slice();
+    kept.concat(changed).forEach(function (x) {
+      if (PLC_ALLOWED_STATUS.hasOwnProperty(x.current)) toDb.push({ id: x.id, status: x.current });
+    });
     var dbSynced = 0;
     var dbError = "";
-    if (updated > 0) {
+    if (toDb.length > 0) {
       try {
         var refs = plcRefs_();
         var iso = wantIso || refs.dates[sessionKey];
         if (!iso) throw new Error(sessionKey + " 에 해당하는 세션이 DB 에 없습니다.");
         var payload = [];
-        for (var w = 0; w < wrote.length; w++) {
-          var uuid = refs.byId[wrote[w].id];
-          if (uuid) payload.push({ member_id: uuid, status: wrote[w].status });
+        for (var w = 0; w < toDb.length; w++) {
+          var uuid = refs.byId[toDb[w].id];
+          if (uuid) payload.push({ member_id: uuid, status: toDb[w].status });
         }
         if (payload.length) {
           var r = plcSbRpc_("set_attendance_batch", { p_session_date: iso, p_entries: payload });
@@ -570,18 +643,23 @@ function doPost(e) {
     }
 
     return output.setContent(JSON.stringify({
-      success: updated > 0,
+      // 두고 온 칸은 실패가 아니다 — 지킨 것이다. 앱이 시트 값으로 다시 그린다.
+      success: updated > 0 || kept.length > 0 || changed.length > 0,
       version: currentVersion,
       updated: updated,
       total: entries.length,
       notFound: notFound,
+      kept: kept,
+      changed: changed,
       session: sessionKey,
       sessionDate: wantIso || sessionKey,
       dbSynced: dbSynced,
       dbError: dbError,
       message: updated > 0
         ? (sessionKey + " 출석 " + updated + "건 저장" + (dbError ? " (DB 반영은 잠시 뒤)" : ""))
-        : "일치하는 ID가 없습니다."
+        : (kept.length || changed.length)
+          ? "시트에서 먼저 바뀐 칸이라 그대로 두었습니다."
+          : "일치하는 ID가 없습니다."
     }));
   } catch (err) {
     return fail(err.message);
@@ -612,7 +690,7 @@ function plcCheckToken_(e) {
 
 function doGet(e) {
   var output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  var currentVersion = 34; // + 김밥 탭의 같은 머리글(나눔 ×2)을 따로 담는다
+  var currentVersion = 35; // + 내보낼 열 고정 · 시트가 먼저 바뀐 칸 안 덮기 · 김밥 못 읽은 이유
 
   if (!plcCheckToken_(e)) {
     return output.setContent(JSON.stringify({
@@ -632,19 +710,24 @@ function doGet(e) {
     // =========================================================
     var kimbapMap = {};    // 기존 호환: { id: "O"|"X" } (가장 가까운 예정 세션)
     var kimbapDetail = {}; // 신규: { id: { "교리1": {applied, date}, ... } }
+    // 못 읽었으면 왜인지 — 'no-sheet' · 'no-header'. 동기화가 로그에 알린다.
+    // 예전에는 빈 값만 줘서 김밥이 조용히 0건이 됐다.
+    var kimbapReason = "";
     var kimbapSheet = ss.getSheetByName(TAB_KIMBAP);
+    if (!kimbapSheet) kimbapReason = "no-sheet";
     if (kimbapSheet) {
       var kbData = kimbapSheet.getDataRange().getValues();
 
       // "ID" 라벨이 있는 행 = 세션명 행
       var kbHeaderRow = -1;
-      for (var i = 0; i < Math.min(6, kbData.length); i++) {
+      for (var i = 0; i < Math.min(PLC_HEADER_SCAN_ROWS, kbData.length); i++) {
         var idPos = kbData[i]
           .map(function(h){ return String(h).trim().toLowerCase(); })
           .indexOf("id");
         if (idPos !== -1) { kbHeaderRow = i; break; }
       }
 
+      if (kbHeaderRow === -1) kimbapReason = "no-header";
       if (kbHeaderRow !== -1) {
         var idCol = kbData[kbHeaderRow]
           .map(function(h){ return String(h).trim().toLowerCase(); })
@@ -787,9 +870,11 @@ function doGet(e) {
         var hwLower = hwHeaders.map(function(h){ return h.toLowerCase(); });
 
         var idIdx = -1, sessionIdx = -1, typeIdx = -1, urlIdx = -1, tsIdx = -1, completionIdx = -1;
+        var phoneIdx = -1;
         for (var k = 0; k < hwHeaders.length; k++) {
           var lh = hwLower[k];
           if (lh === "아이디" || lh === "id") idIdx = k;
+          else if (lh.indexOf("연락처") !== -1 && phoneIdx === -1) phoneIdx = k;
           else if (lh.indexOf("몇 강") !== -1 || lh === "강") sessionIdx = k;
           else if (lh.indexOf("어떤 과제") !== -1 || lh === "과제유형") typeIdx = k;
           else if (lh.indexOf("제출") !== -1 && urlIdx === -1) urlIdx = k;
@@ -800,7 +885,7 @@ function doGet(e) {
         if (idIdx !== -1) {
           for (var i = 1; i < hwData.length; i++) {
             var row = hwData[i];
-            var id = plcNormalizeId_(row[idIdx]);
+            var id = plcHomeworkId_(row[idIdx], phoneIdx !== -1 ? row[phoneIdx] : "");
             if (!id) continue;
 
             var sub = {
@@ -831,7 +916,7 @@ function doGet(e) {
       var telValues = telegramSheet.getDataRange().getValues();
       if (telValues.length > 0) {
         var telHeaderIdx = -1, tTeamIdx = -1, tLinkIdx = -1, tLocIdx = -1, tMapIdx = -1;
-        for (var i = 0; i < Math.min(5, telValues.length); i++) {
+        for (var i = 0; i < Math.min(PLC_HEADER_SCAN_ROWS, telValues.length); i++) {
           var tempHeaders = telValues[i].map(function(h){ return String(h).trim().toLowerCase(); });
           tTeamIdx = tempHeaders.indexOf("team");
           tLinkIdx = tempHeaders.indexOf("link");
@@ -864,7 +949,7 @@ function doGet(e) {
     var data = sheet.getDataRange().getValues();
 
     var headerRowIdx = -1;
-    for (var i = 0; i < Math.min(5, data.length); i++) {
+    for (var i = 0; i < Math.min(PLC_HEADER_SCAN_ROWS, data.length); i++) {
       var tempStrs = data[i].map(function(h){ return String(h).trim().toLowerCase(); });
       if (tempStrs.indexOf("id") !== -1) { headerRowIdx = i; break; }
     }
@@ -952,8 +1037,9 @@ function doGet(e) {
       var attVal = (todayIdx !== -1) ? data[i][todayIdx] : "";
       obj["attendance"] = attVal instanceof Date ? Utilities.formatDate(attVal, tz, "yyyy-MM-dd") : String(attVal).trim();
 
+      // 동기화가 쓰는 열(PLC_EXPORT_COLS)과 날짜 열만 내보낸다
       headers.forEach(function(h, idx){
-        if (h && h !== "id") {
+        if (h && h !== "id" && (PLC_EXPORT_COLS.indexOf(h) !== -1 || /^\d{2}\/\d{2}$/.test(h))) {
           var cellVal = data[i][idx];
           obj[h] = cellVal instanceof Date ? Utilities.formatDate(cellVal, tz, "yyyy-MM-dd") : String(cellVal).trim();
         }
@@ -973,6 +1059,7 @@ function doGet(e) {
       kimbap: kimbapDetail,     // 신규
       homework: homeworkMap,    // 신규
       sessionLabels: sessionLabels, // { "03/15": "교리1", ... } 출석부의 강의명 행
+      kimbapReason: kimbapReason,   // 김밥을 못 읽었으면 왜인지 (v35)
       cohortHint: cohortHint        // '3기' — 시트가 어느 기수인지
     }));
   } catch (e) {

@@ -60,7 +60,9 @@ function normalizeString(str) {
     return plcNormalizeId_(str).toLowerCase();
   }
   // doGet.js 가 없는 프로젝트를 위한 폴백 (같은 규칙을 그대로 적는다)
-  return String(str)
+  var s = String(str);
+  if (s.normalize) s = s.normalize("NFC");   // 풀린 자모 → 한 글자
+  return s
     .replace(/[０-９]/g, function (d) {
       return String.fromCharCode(d.charCodeAt(0) - 0xFEE0);
     })
@@ -74,14 +76,28 @@ function normalizeString(str) {
 
 /** 과제 탭의 열 위치. doGet.js 의 과제 탭 파싱과 같은 규칙이다. */
 function htaFindHomeworkCols_(header) {
-  var out = { id: -1, lecture: -1, type: -1 };
+  var out = { id: -1, lecture: -1, type: -1, phone: -1, time: -1 };
   for (var k = 0; k < header.length; k++) {
     var lh = String(header[k] || '').trim().toLowerCase();
     if (lh === "아이디" || lh === "id") out.id = k;
+    else if (lh.indexOf("연락처") !== -1 && out.phone === -1) out.phone = k;
+    else if ((lh === "타임스탬프" || lh.indexOf("timestamp") !== -1) && out.time === -1) out.time = k;
     else if (lh.indexOf("몇 강") !== -1 || lh === "강") out.lecture = k;
     else if (lh.indexOf("어떤 과제") !== -1 || lh === "과제유형") out.type = k;
   }
   return out;
+}
+
+/**
+ * 과제 한 줄의 아이디. 번호 없이 이름만 적었으면 같은 줄 '연락처' 뒤 4자리를 붙인다.
+ * 그대로 두면 명단과 짝이 안 맞아 그 사람의 과제가 조용히 버려진다.
+ * ⚠️ doGet.js 의 plcHomeworkId_ 와 같은 규칙이다 (여기는 소문자 — normalizeString).
+ */
+function htaHomeworkId_(rowVals, cols) {
+  var id = normalizeString(rowVals[cols.id]);
+  if (!id || /\d{4}$/.test(id) || cols.phone === -1) return id;
+  var tail = String(rowVals[cols.phone] == null ? '' : rowVals[cols.phone]).replace(/[^0-9]/g, '').slice(-4);
+  return tail.length === 4 ? id + tail : id;
 }
 
 /** 'MM/DD' · 날짜값 · '2026. 9. 6' 을 날짜 헤더로 본다 (강의명 행을 고를 때 쓴다) */
@@ -111,7 +127,7 @@ function htaLooksLikeSessionName_(v) {
  */
 function htaReadRosterLayout_(dbData) {
   var headerRow = -1, idIdx = -1;
-  for (var i = 0; i < Math.min(6, dbData.length) && headerRow === -1; i++) {
+  for (var i = 0; i < Math.min(10, dbData.length) && headerRow === -1; i++) {   // 위 10줄
     for (var c = 0; c < dbData[i].length; c++) {
       if (String(dbData[i][c] || '').trim().toLowerCase() === 'id') {
         headerRow = i; idIdx = c; break;
@@ -318,7 +334,7 @@ function processAttendance(sheet, row) {
     return;
   }
 
-  var targetRow = htaIdRowMap_(dbData, layout)[normalizeString(rawId)];
+  var targetRow = htaIdRowMap_(dbData, layout)[htaHomeworkId_(rowVals, cols)];
   var targetCol = htaLectureColMap_(dbData, layout)[htaLectureKey_(rawLecture)];
   if (!targetRow || !targetCol) {
     Logger.log("짝을 못 찾음: " + String(rawId).trim() + " · " + htaLectureKey_(rawLecture));
@@ -385,7 +401,7 @@ function htaApply_(apply) {
     if (!htaIsMakeup_(assignment)) continue;
 
     var lectureKey = htaLectureKey_(rawLecture);
-    var targetRow = idToRowMap[normalizeString(rawId)];
+    var targetRow = idToRowMap[htaHomeworkId_(submitData[r], cols)];
     var targetCol = lectureToColMap[lectureKey];
     if (!targetRow || !targetCol) { unmatched++; continue; }
 

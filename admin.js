@@ -19,10 +19,10 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=127';
-import { matches as hangulMatches } from './scripts/hangul.js?v=127';
-import { registerServiceWorker } from './scripts/sw-update.js?v=127';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=127';
+} from './scripts/members-data.js?v=128';
+import { matches as hangulMatches } from './scripts/hangul.js?v=128';
+import { registerServiceWorker } from './scripts/sw-update.js?v=128';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=128';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -30,7 +30,7 @@ import {
     homeworkSessionKey,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=127';
+} from './scripts/attendance-matrix.js?v=128';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -829,12 +829,28 @@ attSaveBtn?.addEventListener('click', async () => {
     attSaving = false;
     if (result.success) {
         // 데이터 계층이 인원 행을 이미 갱신했다. 그 값을 새 기준으로 삼는다.
-        for (const c of changes) attBaseline.set(c.memberUuid, c.status);
+        // 시트에서 먼저 바뀌어 두고 온 사람(heldBack)은 시트의 지금 값이 기준이다 —
+        // 데이터 계층이 그 칸을 시트 값으로 바꿔 두었다.
+        const held = new Set(result.heldBack || []);
+        const members = getMembers();
+        const key = getSessionKey(attSessionDate);
+        for (const c of changes) {
+            if (held.has(c.memberUuid)) {
+                const m = members.find(x => x._uuid === c.memberUuid);
+                const cur = normStatus(m?.[key]);
+                attBaseline.set(c.memberUuid, cur);
+                attDraft.set(c.memberUuid, cur);
+            } else {
+                attBaseline.set(c.memberUuid, c.status);
+            }
+        }
         renderAttList();
         const skipped = result.skipped?.length ?? 0;
-        attSaveInfo.textContent = skipped
-            ? `${result.updated}명 저장 · ${skipped}명 실패`
-            : `${result.updated}명 저장했습니다`;
+        attSaveInfo.textContent = [
+            `${result.updated}명 저장했습니다`,
+            skipped ? `${skipped}명 실패` : '',
+            held.size ? `${held.size}명은 시트에서 먼저 바뀌어 시트 값으로 맞췄습니다` : '',
+        ].filter(Boolean).join(' · ');
         attSaveInfo.classList.add('ok');
         setTimeout(() => attSaveInfo.classList.remove('ok'), 2500);
     } else {

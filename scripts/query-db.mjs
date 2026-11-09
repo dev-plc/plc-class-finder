@@ -89,17 +89,19 @@ const header = `${preset.title}${TEAM ? ` — ${TEAM}조` : ''}`;
 console.log(`\n📋 ${header}`);
 console.log(`   ${data.length}건\n`);
 
+// 로그에는 조별 건수만 적는다.
+//
+// 저장소가 public 이라 Actions 로그는 누구나 본다. 한때 이름·전화뒷4 가 든 표를
+// 통째로 찍었다. 사람별 내용은 아래 아티팩트(하루만 보관)로 받거나,
+// Supabase SQL 편집기에서 같은 뷰를 조회한다.
 if (data.length === 0) {
   console.log('   (해당 없음)');
 } else {
-  // 콘솔 표
-  const cols = preset.columns.filter(c => c in data[0]);
-  const widths = cols.map(c =>
-    Math.max(c.length, ...data.map(r => String(r[c] ?? '').length)));
-  const line = (cells) => cells.map((v, i) => String(v ?? '').padEnd(widths[i])).join('  ');
-  console.log('   ' + line(cols));
-  console.log('   ' + widths.map(w => '─'.repeat(w)).join('  '));
-  for (const r of data) console.log('   ' + line(cols.map(c => r[c])));
+  const byTeam = new Map();
+  for (const r of data) byTeam.set(r.team || '-', (byTeam.get(r.team || '-') || 0) + 1);
+  for (const [team, n] of byTeam) console.log(`   ${team.padEnd(6)} ${n}건`);
+  console.log('\n   사람별 내용은 이 실행의 아티팩트 query-result (하루 보관) 또는');
+  console.log(`   Supabase SQL 편집기: select * from ${preset.view} …`);
 }
 
 // 아티팩트

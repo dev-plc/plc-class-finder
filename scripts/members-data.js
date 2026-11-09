@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=127';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=127';
+import { matches as hangulMatches } from './hangul.js?v=128';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=128';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -744,10 +744,31 @@ export async function updateAttendanceBatch(entries, sessionDate) {
     // 출결의 원본은 시트다. DB 를 직접 쓰지 않고 GAS 를 거친다 —
     // GAS 가 시트에 먼저 쓰고, 같은 값을 DB 에 밀어넣는다.
     // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
+    // seen — 이 화면에 떠 있던 값. GAS(v35~)는 시트의 지금 칸이 이것과 다르면
+    // 쓰지 않고 changed 로 돌려준다. 앱은 최대 10분 늦은 DB 를 보므로, 그 사이
+    // 시트에 손으로 넣은 값을 모른 채 덮을 수 있었다 (DGfinder v32 에서 가져왔다).
     const result = await sbPostGas({
       session: target,
-      batch: payload.map(p => ({ name: p.name, phone: p.phone, status: p.status })),
+      batch: payload.map((p, i) => ({
+        name: p.name, phone: p.phone, status: p.status, seen: previous[i].value,
+      })),
     });
+
+    // 시트가 먼저 바뀌어 두고 온 사람(changed) · ◎ 과제 - 라 두고 온 사람(kept) 은
+    // 낙관적으로 바꿔 둔 값을 시트의 지금 값으로 되돌린다. GAS 가 그 값을 DB 에도
+    // 바로 밀어 두므로 다시 읽어도 같다.
+    const heldBack = [...(result?.changed || []), ...(result?.kept || [])];
+    const heldIds = new Set();
+    for (const h of heldBack) {
+      const p = previous.find(x => normalizeSheetId(x.row.name + x.row.phone) === h.id);
+      if (!p) continue;
+      p.row[p.mmdd] = h.current ?? '';
+      heldIds.add(p.row._uuid);
+    }
+    if (heldIds.size) {
+      writeCacheSync();
+      notify({ type: 'attendance-held-back', count: heldIds.size });
+    }
     // GAS 는 시트에 썼지만 DB 반영에 실패할 수 있다. 그래도 저장은 성공이다 —
     // 원본에 들어갔고, 10분 트리거(pushAttendanceToDb)가 곧 맞춰 준다.
     if (result.dbError) console.warn('DB 반영은 잠시 뒤에 됩니다:', result.dbError);
@@ -759,6 +780,8 @@ export async function updateAttendanceBatch(entries, sessionDate) {
       updated: result?.updated ?? payload.length,
       session: mmdd,
       skipped: result?.skipped ?? [],
+      // 시트에서 먼저 바뀌어 저장하지 않은 사람 (uuid). 그 칸은 이미 시트 값으로 바꿔 두었다.
+      heldBack: [...heldIds],
     };
   } catch (err) {
     for (const p of previous) p.row[p.mmdd] = p.value;
@@ -766,6 +789,14 @@ export async function updateAttendanceBatch(entries, sessionDate) {
     notify({ type: 'attendance-batch-rollback' });
     return { success: false, error: err };
   }
+}
+
+// GAS 의 plcNormalizeId_ 와 같은 규칙 — 응답의 id 와 맞출 때 쓴다
+function normalizeSheetId(v) {
+  return String(v ?? '')
+    .normalize('NFC')
+    .replace(/[\uFF10-\uFF19]/g, d => String.fromCharCode(d.charCodeAt(0) - 0xFEE0))
+    .replace(/[^0-9A-Za-z\uAC00-\uD7A3]/g, '');
 }
 
 /**

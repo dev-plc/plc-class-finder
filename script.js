@@ -27,8 +27,8 @@ import {
     subscribe,
     isTutorRole,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=127';
-import { registerServiceWorker } from './scripts/sw-update.js?v=127';
+} from './scripts/members-data.js?v=128';
+import { registerServiceWorker } from './scripts/sw-update.js?v=128';
 // 조별 전체 출석표. 관리자 화면과 같은 코드를 쓴다 —
 // 한때 admin.js 가 세션명 정규화를 자기 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -37,7 +37,7 @@ import {
     classifyStatus,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=127';
+} from './scripts/attendance-matrix.js?v=128';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -1088,8 +1088,20 @@ async function saveAttendanceBatch() {
     btn.disabled = true;
     btn.textContent = '저장 중…';
 
-    const { success, updated, session, error } =
+    const { success, updated, session, error, heldBack = [] } =
         await updateAttendanceBatch(entries, teamSessionDate || undefined);
+
+    if (success && heldBack.length && currentRenderedTeam) {
+        // 시트에서 먼저 바뀐 사람이 있다 — 그 칸은 데이터 계층이 시트 값으로 바꿔 두었다.
+        // 체크 상태를 그 값으로 다시 그려야 화면과 시트가 맞는다.
+        renderTeamMembers(getTeamMembers(currentRenderedTeam.name),
+                          currentRenderedTeam.name, currentRenderedTeam.role);
+        const msg = document.getElementById('attendanceSaveInfo');
+        if (msg) {
+            msg.textContent = `✅ ${updated ?? 0}건 저장 · ${heldBack.length}명은 시트에서 먼저 바뀌어 시트 값으로 맞췄습니다`;
+        }
+        return;
+    }
 
     if (success) {
         // 저장 성공 → 지금 화면 상태를 새 기준선으로.
@@ -1326,7 +1338,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=127';
+                window.location.href = 'admin.html?v=128';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

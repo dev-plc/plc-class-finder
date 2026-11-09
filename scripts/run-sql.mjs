@@ -89,6 +89,18 @@ if (rows.length === 0) {
   console.log('   (결과 없음)');
 } else {
   const cols = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  // 사람을 가리키는 열이 있으면 표를 찍지 않는다 — 저장소가 public 이라 이 로그는
+  // 누구나 본다. 집계(건수·조별 합계 등)는 그대로 찍는다. 사람별 결과는 아티팩트로.
+  const PERSONAL = /^(name|phone|full_phone|연락처|marital|결혼|age|member_name|이름)$/i;
+  const personal = cols.filter(c => PERSONAL.test(c));
+  if (personal.length) {
+    console.log(`   열: ${cols.join(', ')}`);
+    console.log(`   ⚠️ 사람을 가리키는 열(${personal.join(', ')})이 있어 로그에는 찍지 않습니다.`);
+    console.log('      결과는 이 실행의 아티팩트 sql-result (하루 보관) 또는 Supabase SQL 편집기에서 봅니다.');
+    writeFileSync('sql-result.json', JSON.stringify(rows, null, 2));
+    console.log('\n💾 sql-result.json 저장됨');
+    process.exit(0);
+  }
   const width = cols.map(c =>
     Math.max(c.length, ...rows.map(r => String(r[c] ?? '').length)));
   const line = cells => cells.map((v, i) => String(v ?? '').padEnd(width[i])).join('  ');

@@ -175,6 +175,17 @@ function gasFailHint(status) {
 //
 // 응답이 아예 안 오고 매달리는 경우도 있어 시도마다 시간을 끊는다
 // (실패한 그 요청은 404 를 받기까지 55초를 썼다).
+// 토큰이 있으면 붙인다 (GitHub Secrets GAS_API_TOKEN = GAS 스크립트 속성 API_TOKEN).
+// doGet 은 명단 전체를 돌려주는데 웹앱 URL 은 이 공개 저장소에 적혀 있다 — 토큰이
+// 없으면 누구나 받아 간다. 예전에는 '?t=' 를 문자열로 붙여서 URL 에 이미 쿼리가
+// 있으면 깨졌다. URL 객체로 조립한다.
+function gasRequestUrl() {
+  const u = new URL(GAS_API_URL);
+  u.searchParams.set('t', String(Date.now()));
+  if (process.env.GAS_API_TOKEN) u.searchParams.set('token', process.env.GAS_API_TOKEN);
+  return u.toString();
+}
+
 const GAS_TRIES = 3;
 const GAS_TRY_TIMEOUT_MS = 90_000;
 const RETRIABLE = new Set([404, 408, 429, 500, 502, 503, 504]);
@@ -183,7 +194,7 @@ let res = null;
 for (let attempt = 1; attempt <= GAS_TRIES; attempt++) {
   let why = '';
   try {
-    res = await fetch(GAS_API_URL + '?t=' + Date.now(),
+    res = await fetch(gasRequestUrl(),
                       { signal: AbortSignal.timeout(GAS_TRY_TIMEOUT_MS) });
     if (res.ok) break;
     why = `HTTP ${res.status}`;
@@ -257,6 +268,13 @@ const homeworkIn = gas.homework || {};
 }
 
 console.log(`   GAS v${gas.version} · ${rows.length}명 · kimbap ${Object.keys(kimbapIn).length} · homework ${Object.keys(homeworkIn).length}\n`);
+// 김밥 탭을 못 읽었으면 GAS(v35~)가 이유를 준다. 예전에는 조용히 0건이라
+// DG 에서는 열흘 동안 새 신청도 취소도 안 들어온 것을 아무도 몰랐다.
+if (gas.kimbapReason) {
+  const why = { 'no-sheet': "'김밥' 탭이 없습니다 (이름이 바뀌었나요?)",
+                'no-header': "'김밥' 탭 위 10줄 안에 'ID' 머리글이 없습니다" }[gas.kimbapReason] || gas.kimbapReason;
+  console.warn(`⚠️  김밥을 읽지 못했습니다: ${why} — 김밥은 이번에 갱신되지 않습니다.\n`);
+}
 
 // ---------------------------------------------------------------- 기수 결정
 // 우선순위
@@ -772,8 +790,10 @@ for (const [gasId, list] of Object.entries(homeworkIn)) {
       // 건수는 계속 센다 — 손입력이 갑자기 수백 건 늘면 잘못 붙여넣은 것이라
       // 숫자가 보여야 알아챈다.
       homeworkNoDate++;
-      if (homeworkNoDateSample.size < 5) {
-        homeworkNoDateSample.add(`${gasId} ${norm}${ts.raw ? ` ("${ts.raw}")` : ''}`);
+      // 예시에는 적힌 값만 남긴다 — 이 로그는 공개 저장소의 Actions 로그다.
+      // 누구의 것인지는 시트 메뉴 PLC → 과제 아이디 점검 이 '과제ID점검' 탭에 적는다.
+      if (ts.raw && homeworkNoDateSample.size < 5) {
+        homeworkNoDateSample.add(`${norm} ("${ts.raw}")`);
       }
     }
 
@@ -815,7 +835,8 @@ if (homeworkNoDate) {
   console.log(`ℹ️  제출 시각이 없거나 읽을 수 없는 과제 ${homeworkNoDate}건 반영`);
   console.log('    (수기 입력이거나, 날짜 칸에 이상한 값이 들어간 것입니다.');
   console.log("     예시에 원문이 따옴표로 붙습니다 — '260920' 처럼 적으면 못 읽습니다)");
-  console.log(`    예: ${[...homeworkNoDateSample].join(' / ')}`);
+  if (homeworkNoDateSample.size) console.log(`    예: ${[...homeworkNoDateSample].join(' / ')}`);
+  console.log('    누구의 것인지는 시트 메뉴 PLC → 과제 아이디 점검 (과제ID점검 탭)');
 }
 
 // 아직 하지 않은 강의에 찍힌 값. 시트만 보면 알 수 있으므로 uuid 가 필요 없다 —
@@ -828,24 +849,25 @@ const todayIso = new Date().toISOString().slice(0, 10);
 
 function futureMarkSummary(rows) {
   const n = { O: 0, X: 0, '과제': 0 };
-  const sample = [];
+  // 예시는 주차별 칸 수로 — 이름을 적으면 공개 로그에 남는다
+  const byWeek = new Map();
   for (const a of rows) {
     if (!(a.session_date > todayIso)) continue;
     const st = String(a.status ?? '').trim();
     const k = st.toUpperCase() === 'O' ? 'O' : (st === 'X' || st === '과제' ? st : null);
     if (!k) continue;                       // ◎ · - · 빈칸은 볼 것 없다
     n[k]++;
-    if (sample.length < 6) {
-      sample.push(`${String(a._key || '').split('|')[0]} ${toMMDD(a.session_date) || a.session_date}=${st}`);
-    }
+    const wk = toMMDD(a.session_date) || a.session_date;
+    byWeek.set(wk, (byWeek.get(wk) || 0) + 1);
   }
+  const sample = [...byWeek].map(([wk, c]) => `${wk} ${c}칸`);
   return { ...n, total: n.O + n.X + n['과제'], sample };
 }
 
 function printFutureMarks(sum) {
   if (!sum.total) return;
   console.log(`   미래 주차 표시: ◎ 로 옮길 O ${sum.O}개 · 그대로 넣을 X ${sum.X}개 · 과제 ${sum['과제']}개`);
-  console.log(`      예: ${sum.sample.join(' / ')}`);
+  console.log(`      주차별: ${sum.sample.join(' / ')}`);
   console.log('      ⚠️ 이어 듣는 분의 지난 기수 기록이 맞는지 보세요.');
   console.log('         새로 오는 분 칸이 여기 있으면 시트를 안 비운 것입니다.');
 }
@@ -859,10 +881,18 @@ console.log(`   homework   ${homeworkRows.length}\n`);
 
 if (dryRun) {
   console.log('🔍 DRY RUN — write 없음\n');
+  // 샘플에서 사람을 가리키는 값은 가린다 — dry-run 도 Actions 에서 돌면 공개 로그다
+  const mask = (o) => {
+    const out = { ...o };
+    for (const k of ['_key', '_id', '_gasId', 'name', 'phone', 'full_phone', 'marital', 'age', 'note']) {
+      if (k in out) out[k] = out[k] == null || out[k] === '' ? out[k] : '…';
+    }
+    return out;
+  };
   console.log('sessions 샘플:', sessions.slice(0, 3));
-  console.log('member 샘플:', (({_key,_id,...r}) => r)(members[0] || {}));
-  console.log('kimbap 샘플:', kimbapRows.slice(0, 2));
-  console.log('homework 샘플:', homeworkRows.slice(0, 2));
+  console.log('member 샘플:', mask(members[0] || {}));
+  console.log('kimbap 샘플:', kimbapRows.slice(0, 2).map(mask));
+  console.log('homework 샘플:', homeworkRows.slice(0, 2).map(mask));
   // 출석은 --import-attendance 를 켤 때만 들어가지만, 그때 무엇이 들어갈지는
   // 여기서 미리 봐야 한다. 실제 실행은 되돌릴 수 없다.
   printFutureMarks(futureMarkSummary(attendance));
@@ -950,7 +980,7 @@ const savedMembers = await upsert(
   const sheetKeys = new Set(members.map(m => `${m.name}|${m.phone || ''}`));
   const { data: dbMembers, error } = await sb
     .from('members')
-    .select('id, name, phone, status')
+    .select('id, name, phone, status, team')
     .eq('cohort_id', COHORT_ID);
   if (error) throw new Error(`members 조회 실패: ${error.message}`);
 
@@ -963,7 +993,8 @@ const savedMembers = await upsert(
       .update({ status: 'inactive' })
       .in('id', gone.map(m => m.id));
     if (upErr) throw new Error(`inactive 처리 실패: ${upErr.message}`);
-    console.log(`   시트에서 빠진 ${gone.length}명 → status=inactive: ${gone.map(m => m.name).join(', ')}`);
+    // 이름은 적지 않는다 — 공개 로그다. 누가 빠졌는지는 시트에서 보인다.
+    console.log(`   시트에서 빠진 ${gone.length}명 → status=inactive (조: ${[...new Set(gone.map(m => m.team || '-'))].join(', ')})`);
   }
 
   // 다시 시트에 나타난 사람은 위 upsert에서 status='active'로 복귀됨
@@ -976,6 +1007,7 @@ const keyToUuid = new Map();
 // 맞추는 양쪽을 같은 규칙으로 다듬지 않으면 짝이 안 맞아 조용히 버려진다.
 function normalizeId(v) {
   return String(v ?? '')
+    .normalize('NFC')   // 자모가 풀린 채로 오면 한 글자로 (맥에서 낸 폼)
     .replace(/[\uFF10-\uFF19]/g, d => String.fromCharCode(d.charCodeAt(0) - 0xFEE0))
     .replace(/[^0-9A-Za-z\uAC00-\uD7A3]/g, '');
 }
@@ -987,13 +1019,12 @@ for (const m of savedMembers) {
 }
 console.log(`   ${savedMembers.length}명`);
 
-// 무시된 인원을 보여줄 때 목록이 너무 길어지지 않게
-function namesOf(set, limit = 12) {
-  const list = [...set];
-  return list.length <= limit
-    ? list.join(', ')
-    : `${list.slice(0, limit).join(', ')} 외 ${list.length - limit}명`;
-}
+// 짝을 못 찾은 인원은 **건수만** 적는다.
+//
+// 이 로그는 공개 저장소의 Actions 로그라 누구나 본다. 한때 이름+전화뒷4 를
+// 12명씩 그대로 적었다. 누구를 고쳐야 하는지는 이름을 봐도 되는 곳 —
+// 시트 메뉴 PLC → 과제 아이디 점검('과제ID점검' 탭) — 이 알려 준다.
+const SKIP_HINT = '      누구인지는 시트 메뉴 PLC → 과제 아이디 점검 (과제ID점검 탭) 에서 봅니다.';
 
 console.log('▶ attendance');
 
@@ -1074,7 +1105,7 @@ if (kimbapRows.length) {
   await upsert('kimbap_signups', kb, 'member_id,session_label');
   console.log(`   ${kb.length}건`);
   if (kbSkipped.size) {
-    console.log(`   ⚠️ 명단에 없는 ${kbSkipped.size}명 무시: ${namesOf(kbSkipped)}`);
+    console.log(`   ⚠️ 명단에 없는 ${kbSkipped.size}명 무시 (김밥 탭 아이디가 출석부와 다름)`);
   }
 }
 
@@ -1091,9 +1122,10 @@ if (homeworkRows.length) {
   await upsert('homework_submissions', hw, 'member_id,session_label,type');
   console.log(`   ${hw.length}건`);
   if (hwSkipped.size) {
-    console.log(`   ⚠️ 명단에 없는 ${hwSkipped.size}명 무시: ${namesOf(hwSkipped)}`);
+    console.log(`   ⚠️ 명단에 없는 ${hwSkipped.size}명 무시`);
     console.log('      과제 탭의 아이디가 출석부(DB) 의 아이디와 글자 하나까지 같아야 합니다.');
     console.log('      (이름+전화 뒷4자리. 폼에 다른 번호를 적으면 짝이 안 맞습니다)');
+    console.log(SKIP_HINT);
   }
 }
 

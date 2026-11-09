@@ -31,3 +31,5 @@ jobs:
           name: sql-result
           path: sql-result.json
           if-no-files-found: ignore
+          # 실명이 들 수 있다. 공개 저장소의 아티팩트는 로그인한 사용자면 받을 수 있어 하루만 둔다.
+          retention-days: 1

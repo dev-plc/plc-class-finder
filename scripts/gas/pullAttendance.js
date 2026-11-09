@@ -92,7 +92,9 @@ var PLC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdX
 //  소문자 변환은 하지 않는다 — doGet.js 의 plcRefs_ 와 같아야 한다)
 function pullNormalizeId_(v) {
   if (typeof plcNormalizeId_ === "function") return plcNormalizeId_(v);
-  return String(v == null ? "" : v)
+  var s = String(v == null ? "" : v);
+  if (s.normalize) s = s.normalize("NFC");   // 풀린 자모 → 한 글자 (doGet.js 와 같은 규칙)
+  return s
     .replace(/[\uFF10-\uFF19]/g, function (d) {
       return String.fromCharCode(d.charCodeAt(0) - 0xFEE0);
     })
@@ -150,6 +152,7 @@ function plcAddMenu() {
       .addItem('자동 올리기 끄기', 'plcRemovePushTrigger')
       .addSeparator()
       .addItem('연결 점검', 'plcCheckKey')
+      .addItem('과제 아이디 점검', 'plcCheckHomeworkIds')
       .addItem('⚠️ DB에서 출석 가져오기 (기수 시작 때만)', 'pullAttendanceFromDb')
       .addToUi();
   } catch (e) {
@@ -257,7 +260,7 @@ function pullAttendanceFromDb() {
 
   // ---- 헤더 행 찾기
   var headerRowIdx = -1;
-  for (var i = 0; i < Math.min(5, data.length); i++) {
+  for (var i = 0; i < Math.min(10, data.length); i++) {   // 위 10줄 (doGet.js PLC_HEADER_SCAN_ROWS)
     var lowered = data[i].map(function (h) { return String(h).trim().toLowerCase(); });
     if (lowered.indexOf("id") !== -1) { headerRowIdx = i; break; }
   }
@@ -513,7 +516,7 @@ function pushAttendanceToDb() {
 
     // 헤더 행
     var headerRowIdx = -1;
-    for (var i = 0; i < Math.min(5, data.length); i++) {
+    for (var i = 0; i < Math.min(10, data.length); i++) {   // 위 10줄 (doGet.js PLC_HEADER_SCAN_ROWS)
       var lowered = data[i].map(function (h) { return String(h).trim().toLowerCase(); });
       if (lowered.indexOf("id") !== -1) { headerRowIdx = i; break; }
     }

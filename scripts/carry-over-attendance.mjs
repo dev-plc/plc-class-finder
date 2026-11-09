@@ -25,6 +25,7 @@
 //
 // 환경변수: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
+import { writeFileSync } from 'node:fs';
 import { config as loadEnv } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 
@@ -259,28 +260,31 @@ console.log(`◎  새로 찍을 칸: ${rows.length}개 · 대상 ${report.length
 
 // matched 와 report.length 가 다르면 왜 다른지 밝힌다.
 // 조용히 넘어가면 '왜 23명 중 10명만 찍히지?' 하고 헤매게 된다.
+// 로그에는 조별 숫자만 — 저장소가 public 이라 Actions 로그는 누구나 본다.
+// 사람별 내용은 carry-over-report.json (이 실행의 아티팩트, 하루 보관).
+const byTeam = (list, f) => {
+  const m = new Map();
+  for (const r of list) m.set(r.team || '-', (m.get(r.team || '-') || 0) + f(r));
+  return [...m].map(([t, n]) => `${t} ${n}`).join(' · ');
+};
 if (alreadyFilled.length) {
-  console.log(`ℹ️  나머지 ${alreadyFilled.length}명은 찍을 칸이 없습니다:`);
-  for (const r of alreadyFilled.slice(0, 30)) {
-    console.log(r.collided > 0
-      ? `   ${r.team || '-'} ${r.name}${r.phone || ''}  이미 그 ${r.collided}개 주차에 기록이 있음`
-      : `   ${r.team || '-'} ${r.name}${r.phone || ''}  ${TO} 커리큘럼과 겹치는 주차 없음`);
-  }
-  if (alreadyFilled.length > 30) console.log(`   … 외 ${alreadyFilled.length - 30}명`);
+  const collided = alreadyFilled.filter(r => r.collided > 0).length;
+  console.log(`ℹ️  나머지 ${alreadyFilled.length}명은 찍을 칸이 없습니다 ` +
+              `(이미 기록 있음 ${collided}명 · ${TO} 커리큘럼과 겹치는 주차 없음 ${alreadyFilled.length - collided}명)`);
   console.log('');
 }
 
 if (report.length) {
   const totalMakeup = report.reduce((n, r) => n + (r.makeupMarks || 0), 0);
   const totalOver = report.reduce((n, r) => n + (r.overwrites || 0), 0);
-  console.log(`상세:  (* 는 ${FROM} 에서 과제로 인정받은 주차 — ${totalMakeup}개` +
+  console.log(`조별 인원: ${byTeam(report, () => 1)}`);
+  console.log(`조별 칸:   ${byTeam(report, r => r.marks.length)}`);
+  console.log(`(${FROM} 에서 과제로 인정받은 주차 ${totalMakeup}개` +
               (totalOver ? `, 그중 X·과제 → ◎ 로 바꾼 것 ${totalOver}개` : '') + ')');
-  for (const r of report.slice(0, 60)) {
-    console.log(`   ${r.team || '-'} ${r.name}${r.phone || ''}  ${r.marks.length}개 · ${r.marks.join(', ')}`);
-  }
-  if (report.length > 60) console.log(`   … 외 ${report.length - 60}명`);
+  console.log('사람별 내용: 이 실행의 아티팩트 carry-over-report (하루 보관)');
   console.log('');
 }
+writeFileSync('carry-over-report.json', JSON.stringify({ from: FROM, to: TO, report, alreadyFilled }, null, 2));
 
 // 이수 이력은 있는데 새 기수 커리큘럼에 없는 주차 → 커리큘럼이 바뀐 신호
 const nextLabels = new Set(nextClassSessions.map(s => s.label_norm));

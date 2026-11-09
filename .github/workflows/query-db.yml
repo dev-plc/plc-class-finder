@@ -44,3 +44,6 @@ jobs:
           name: query-result
           path: query-result.*
           if-no-files-found: ignore
+          # 실명이 든 파일이다. 공개 저장소의 아티팩트는 로그인한 GitHub 사용자면
+          # 누구나 받을 수 있으므로 하루만 둔다.
+          retention-days: 1
