@@ -27,8 +27,8 @@ import {
     subscribe,
     isTutorRole,
     MODULE_VERSION,
-} from './scripts/members-data.js?v=128';
-import { registerServiceWorker } from './scripts/sw-update.js?v=128';
+} from './scripts/members-data.js?v=129';
+import { registerServiceWorker } from './scripts/sw-update.js?v=129';
 // 조별 전체 출석표. 관리자 화면과 같은 코드를 쓴다 —
 // 한때 admin.js 가 세션명 정규화를 자기 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -37,7 +37,7 @@ import {
     classifyStatus,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=128';
+} from './scripts/attendance-matrix.js?v=129';
 
 // 어느 버전이 돌고 있는지 한눈에. 캐시가 옛 파일을 내주면 여기서 바로 드러난다.
 // 손으로 적지 않는다 — v62 에 멈춰 있는 걸 v72 에서야 발견했다.
@@ -698,7 +698,7 @@ function renderStatusDetail(member) {
     // 보충 인정 숫자는 DB(v_completion_status)가 준다. 여기서 다시 세지 않는다.
     // 한때 격자에서 세었는데, 그건 '칸에 글자가 과제 인 수' 라서 판정과 뜻이 달랐다.
     // 시트에 'X' 로 적혀 있어도 과제+소감문 제출이 있으면 DB 는 인정한다 —
-    // 한보연8164 가 credited 14(보충 3회 인정)인데 화면은 '과제로 대체 2' 라고만
+    // 한 참가자가 credited 14(보충 3회 인정)인데 화면은 '과제로 대체 2' 라고만
     // 말해, 인정이 안 되는 것처럼 보였다.
     if (summary) {
         const classTotal = enriched.filter(e => e.isClass).length;
@@ -1338,7 +1338,7 @@ function initEventListeners() {
                 // ?x=1 처럼 고정값을 쓰면 안 된다 — 그 주소도 곧 캐시된다.
                 // 배포마다 숫자가 바뀌어야 매번 새 주소가 된다.
                 // (아래 ?v= 는 버전 올릴 때 나머지와 함께 자동으로 바뀐다)
-                window.location.href = 'admin.html?v=128';
+                window.location.href = 'admin.html?v=129';
             } else if (errorElement) {
                 errorElement.style.display = 'block';
                 errorElement.textContent = "아이디 또는 비밀번호가 틀렸습니다.";

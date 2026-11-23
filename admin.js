@@ -19,10 +19,10 @@ import {
     ONTRACK_WITHIN,
     subscribe,
     isTutorRole,
-} from './scripts/members-data.js?v=128';
-import { matches as hangulMatches } from './scripts/hangul.js?v=128';
-import { registerServiceWorker } from './scripts/sw-update.js?v=128';
-import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=128';
+} from './scripts/members-data.js?v=129';
+import { matches as hangulMatches } from './scripts/hangul.js?v=129';
+import { registerServiceWorker } from './scripts/sw-update.js?v=129';
+import { sbPostGas, sbSelect } from './scripts/supabase-config.js?v=129';
 // 조별 전체 출석표. 튜터 화면(script.js)과 같은 코드를 쓴다 —
 // 세션명 정규화를 여기서 prNormalizeSession 이라는 이름으로 한 벌 더 갖고 있었다.
 import {
@@ -30,7 +30,7 @@ import {
     homeworkSessionKey,
     renderTeamMatrix,
     renderMatrixFold,
-} from './scripts/attendance-matrix.js?v=128';
+} from './scripts/attendance-matrix.js?v=129';
 
 // 로그인 확인
 if (!sessionStorage.getItem('adminLoggedIn')) {
@@ -1703,7 +1703,7 @@ window.addEventListener('afterprint', () => document.body.classList.remove('prin
 //
 // 지난 기수 참석자는 시트에 앞으로의 주차까지 X 가 미리 들어 있는 경우가 있다.
 // 기수 전체를 세면 아직 하지도 않은 수업이 결석으로 잡혀, 실제로는 한 번도
-// 안 빠진 사람이 '4회 이상' 으로 떴다 (이현주 사례).
+// 안 빠진 사람이 '4회 이상' 으로 떴다 (실제로 있었던 일이다).
 // 아직 하지 않은 수업은 결석이 아니다.
 //
 // 이 화면은 아무것도 고치지 않는다. 볼 사람을 추려 줄 뿐이다 —
@@ -2182,7 +2182,7 @@ function renderCompletion() {
     }
 
     // 아직 하지 않은 주차에 X 가 미리 들어 있으면 판정이 낮게 잡힌다.
-    // 지난 기수 참석자에게 실제로 있었던 일이라(이현주 5630) 조용히 두지 않는다.
+    // 지난 기수 참석자에게 실제로 있었던 일이라 조용히 두지 않는다.
     if (cpWarn) {
         const today = cpTodayIso();
         const future = getSessions().filter(s => s.is_class !== false && s.session_date > today);

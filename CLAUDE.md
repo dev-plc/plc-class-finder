@@ -140,7 +140,18 @@ GAS 웹앱은 `application/json` 을 받으면 preflight 때문에 CORS 로 막�
   거기에 넣는다. 그리고 `API_TOKEN`(스크립트 속성) = `GAS_API_TOKEN`(Secrets) 을 켜 둔다 —
   웹앱 URL 은 이 저장소에 적혀 있다
 - `service_role` 키는 GitHub Secrets 에만 둔다. 채팅·코드·로그 어디에도 남기지 않는다
-- `anon` 키는 공개돼도 안전하다 — RLS 가 막고, 쓰기는 `set_attendance_batch` RPC 로만 된다
+- **`anon` 키는 공개돼 있고, 그 키로 읽히는 것은 전부 공개다.** 한때 "RLS 가 막는다" 고 적었는데
+  사실이 아니었다 — 정책이 `for select using (true)` 라 막는 것이 없다. 2026-11 까지
+  members 의 연락처 전체·결혼·메모가 누구에게나 읽혔다.
+  - members 는 **화면이 쓰는 열만** anon 에 준다 (`supabase/lock_member_columns.sql`).
+    새 열을 화면에서 쓰려면 그 grant 목록과 `members-data.js` 의 `MEMBER_COLS` 에 같이 넣는다.
+    `select=*` 는 거절된다 — 쓰지 않는다
+  - **뷰는 만든 사람 권한으로 돌아 표의 잠금을 건너뛴다.** 뷰에 민감한 열을 넣으면 뷰에서 따로
+    막아야 한다 (`v_completion_status` 의 `admin_note` 처럼)
+  - 이름·뒤 4자리·조·출결은 아직 공개로 읽힌다. 관리자 로그인 · 조회를 서버 함수로 옮기는
+    단계(인수인계 C · D)에서 닫는다
+  - `set_attendance_batch` 도 anon 이 부를 수 있다 (GAS 가 anon 키로 부른다). DB 사본이라
+    10분 트리거가 시트 값으로 되돌리지만, 거두려면 GAS 를 service 키로 먼저 옮겨야 한다
 
 ## 개발 기록 (옵시디언 연동)
 

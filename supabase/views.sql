@@ -255,7 +255,20 @@ group by team, cohort_id;
 -- GRANT
 -- ===================================================================
 grant select on v_attendance_summary to anon, authenticated, service_role;
-grant select on v_completion_status  to anon, authenticated, service_role;
+-- v_completion_status 는 admin_note 를 뺀 열만 공개한다 (lock_member_columns.sql 과 같다).
+-- 뷰는 만든 사람 권한으로 돌아 members 의 열 잠금을 건너뛰므로 여기서 따로 막는다.
+-- 표 단위로 grant 하면 이 파일을 다시 돌릴 때마다 잠금이 풀린다.
+grant select on v_completion_status  to service_role;
+revoke select on v_completion_status from anon, authenticated;
+do $$
+declare cols text;
+begin
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into cols
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'v_completion_status'
+     and column_name <> 'admin_note';
+  execute format('grant select (%s) on v_completion_status to anon, authenticated', cols);
+end $$;
 grant select on v_homework_required  to anon, authenticated, service_role;
 grant select on v_completion_risk    to anon, authenticated, service_role;
 grant select on v_team_report        to anon, authenticated, service_role;

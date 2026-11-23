@@ -46,7 +46,7 @@ create table members (
   id            uuid primary key default gen_random_uuid(),
   cohort_id     text references cohorts(id) on delete restrict not null,
   name          text not null,
-  phone         text,                      -- 뒷 4자리 (강선형 케이스 위해 nullable)
+  phone         text,                      -- 뒷 4자리 (전화번호가 없는 참가자가 있어 nullable)
   full_phone    text,                      -- 연락처 원본 010-XXXX-XXXX
   team          text,
   team_no       int,                       -- 조 내 순번
@@ -106,10 +106,13 @@ create index attendance_session_idx on attendance(session_date);
 -- 3. GRANTs (auto-expose OFF 대응)
 -- ===================================================================
 
--- 공개 읽기 (RLS 정책이 실제 접근 제어)
+-- 공개 읽기
+-- ⚠️ 아래 RLS 정책이 'using (true)' 라 사실상 누구나 다 읽는다 — RLS 가 막아 주지 않는다.
+--    members 는 처음 구축 뒤 lock_member_columns.sql 로 **쓰는 열만** 공개하도록 바꾼다
+--    (sheet_row 같은 열이 나중에 더해지므로 여기서 열 단위로 줄 수 없다).
 grant select on public.cohorts       to anon, authenticated;
 grant select on public.sessions      to anon, authenticated;
-grant select on public.members       to anon, authenticated;
+grant select on public.members       to anon, authenticated;   -- → lock_member_columns.sql
 grant select on public.attendance    to anon, authenticated;
 grant select on public.team_links    to anon, authenticated;
 grant select on public.location_maps to anon, authenticated;

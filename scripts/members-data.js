@@ -11,8 +11,8 @@
 // 읽기만 Supabase 에서 바로 한다 (빠르다). 쓰기는 반드시 GAS 를 거친다 —
 // 앱이 DB 를 직접 쓰면 시트와 두 곳에서 쓰는 꼴이 되어 반드시 어긋난다.
 
-import { matches as hangulMatches } from './hangul.js?v=128';
-import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=128';
+import { matches as hangulMatches } from './hangul.js?v=129';
+import { sbSelect, sbSelectAll, sbPostGas, getActiveCohortId, getCachedCohortId } from './supabase-config.js?v=129';
 
 export const MODULE_VERSION = 'members-data v62';
 
@@ -150,6 +150,8 @@ function buildMemberRow(m, sessions, attByMember) {
     gen: m.gender || '',
     age: m.age ?? '',
     status: m.status || 'active',
+    // 연락처·결혼·성별·메모·안내 수신 여부는 이제 받지 않는다 (MEMBER_COLS) — 늘 빈값이다.
+    // 어느 화면도 안 쓰던 값이고, 공개 키로 누구나 읽히고 있었다. 칸은 모양 때문에 남긴다.
     '연락처': m.full_phone || '',
     '결혼': m.marital || '',
     '담당교역자': m.pastor || '',
@@ -222,6 +224,10 @@ function indexProgress(progress, needHomework, makeup = []) {
   return { progress: progressMap, needHomework: needHomeworkMap, makeup: makeupMap };
 }
 
+// 화면이 쓰는 members 열. supabase/lock_member_columns.sql 의 grant 목록과 같아야 한다.
+const MEMBER_COLS = 'id,cohort_id,name,phone,team,team_no,sheet_row,location,role,' +
+                    'age,pastor,lunch1,lunch2,completion,status';
+
 async function fetchFromServer(cohortId) {
   const enc = encodeURIComponent(cohortId);
 
@@ -234,7 +240,13 @@ async function fetchFromServer(cohortId) {
       // 이름으로 짐작하면 새 조가 생길 때마다 어긋난다 ('V3' 가 한글보다 앞서 맨 앞에 왔다).
       // nullslast: 동기화가 아직 안 돌아 sheet_row 가 비어 있으면 뒤의 team,team_no 로
       // 떨어져 예전과 똑같이 동작한다. 배포와 데이터 갱신 사이에 깨지는 구간이 없다.
-      sbSelectAll(`members?select=*&cohort_id=eq.${enc}&status=eq.active` +
+      //
+      // 열은 적어서 받는다 — `select=*` 로 돌리지 말 것.
+      // 연락처 전체·결혼·메모 같은 열은 어느 화면도 쓰지 않는데, 예전에는 `*` 로 받아
+      // 공개 키(anon)로 누구나 읽을 수 있었다. 그 열들은 supabase/lock_member_columns.sql
+      // 이 anon 에서 거둔다. 거둔 뒤 `*` 를 쓰면 요청이 **통째로** 거절돼 화면이 죽는다.
+      // 새 열이 필요하면 여기와 그 SQL 의 grant 목록에 같이 넣는다.
+      sbSelectAll(`members?select=${MEMBER_COLS}&cohort_id=eq.${enc}&status=eq.active` +
                   `&order=sheet_row.asc.nullslast,team.asc,team_no.asc,id.asc`),
       sbSelectAll(`sessions?select=*&cohort_id=eq.${enc}&order=session_date`),
       sbSelectAll(`attendance?select=member_id,session_date,status,members!inner(cohort_id)` +
@@ -645,7 +657,7 @@ export function getHomeworkList(memberId) {
  *
  * 화면이 '이 결석은 메워졌다' 를 말하려면 이 값이 있어야 한다.
  * 격자의 글자만으로는 알 수 없다 — 시트에 `X` 로 적혀 있어도 제출 기록이 있으면
- * DB 가 인정한다 (한보연8164: `X` 인 교리8·교리11 이 인정돼 credited 14 였는데
+ * DB 가 인정한다 (한 참가자: `X` 인 교리8·교리11 이 인정돼 credited 14 였는데
  * 화면은 '과제로 대체 2' 라고만 말해 인정이 안 된 것처럼 보였다).
  *
  * counted=false 는 3회 한도를 넘어 인정받지 못한 건이다. 한도는 DB 가 정한다.
